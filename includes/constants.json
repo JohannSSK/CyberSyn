@@ -1,0 +1,24 @@
+{
+  "HOST": "127.0.0.1",
+  "PORT": 5000,
+
+  "PATHS": {
+    "DB_FILE": "src/backend/app.db",
+    "FRONTEND_DIR": "src/frontend",
+    "BACKEND_DIR": "src/backend",
+    "ML_DIR": "src/MLscripts",
+    "ASSETS_DIR": "assets",
+    "CHECK1_SCRIPT": "src/MLscripts/test_greek_pii.py",
+    "CHECK2_SCRIPT": "src/MLscripts/test_context.py",
+    "CHECK3_SCRIPT": "src/MLscripts/test_injection.py"
+  },
+
+  "ROUTES": {
+    "ADMIN_LOGIN": "/api/admin/login",
+    "ADMIN": "/api/admin",
+    "EMPLOYEE": "/api/admin/employee",
+    "EMPLOYEE_LOGIN": "/api/admin/employee/login",
+    "SETTINGS": "/api/admin/employee/settings",
+    "CHAT": "/api/admin/employee/chat"
+  }
+}
