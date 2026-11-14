@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>API Tester</title>
+  <style>
+    body { font-family: monospace; padding: 20px; background: #111; color: #eee; }
+    .box { border: 1px solid #444; padding: 15px; margin-bottom: 15px; display: flex; gap: 15px; }
+    .col { flex: 1; }
+    textarea { width: 100%; height: 110px; background: #222; color: #0f0; border: 1px solid #555; padding: 8px; }
+    pre { background: #222; color: #0ff; padding: 10px; height: 110px; overflow: auto; margin: 0; border: 1px solid #555; }
+    button { margin-top: 8px; padding: 8px 14px; cursor: pointer; }
+  </style>
+</head>
+<body>
+
+  <h2>API Manual JSON Tester</h2>
+
+  <!-- 1. /api/admin/login -->
+  <div class="box">
+    <div class="col">
+      <strong>1. /api/admin/login</strong>
+      <textarea id="in-1">{"username": "johann", "password": "123"}</textarea>
+      <button onclick="send('/api/admin/login', 'in-1', 'out-1')">Send</button>
+    </div>
+    <div class="col"><strong>Reply:</strong><pre id="out-1"></pre></div>
+  </div>
+
+  <!-- 2. /api/admin -->
+  <div class="box">
+    <div class="col">
+      <strong>2. /api/admin</strong>
+      <textarea id="in-2">{"method": "add", "username": "johann", "password": "123"}</textarea>
+      <button onclick="send('/api/admin', 'in-2', 'out-2')">Send</button>
+    </div>
+    <div class="col"><strong>Reply:</strong><pre id="out-2"></pre></div>
+  </div>
+
+  <!-- 3. /api/admin/employee -->
+  <div class="box">
+    <div class="col">
+      <strong>3. /api/admin/employee</strong>
+      <textarea id="in-3">{"method": "add", "username": "nikos", "password": "456", "Parent_id": "1"}</textarea>
+      <button onclick="send('/api/admin/employee', 'in-3', 'out-3')">Send</button>
+    </div>
+    <div class="col"><strong>Reply:</strong><pre id="out-3"></pre></div>
+  </div>
+
+  <!-- 4. /api/admin/employee/login -->
+  <div class="box">
+    <div class="col">
+      <strong>4. /api/admin/employee/login</strong>
+      <textarea id="in-4">{"Parent_id": "1", "username": "nikos", "password": "456"}</textarea>
+      <button onclick="send('/api/admin/employee/login', 'in-4', 'out-4')">Send</button>
+    </div>
+    <div class="col"><strong>Reply:</strong><pre id="out-4"></pre></div>
+  </div>
+
+  <!-- 5. /api/admin/employee/settings -->
+  <div class="box">
+    <div class="col">
+      <strong>5. /api/admin/employee/settings</strong>
+      <textarea id="in-5">{"Parent_id": "1", "Employee_id": "101", "check1": true, "check2": true, "check3": true, "API_KEY": "sk-123", "MODEL_NAME": "gpt-4o-mini"}</textarea>
+      <button onclick="send('/api/admin/employee/settings', 'in-5', 'out-5')">Send</button>
+    </div>
+    <div class="col"><strong>Reply:</strong><pre id="out-5"></pre></div>
+  </div>
+
+  <!-- 6. /api/admin/employee/chat -->
+  <div class="box">
+    <div class="col">
+      <strong>6. /api/admin/employee/chat</strong>
+      <textarea id="in-6">{"Parent_id": "1", "Employee_id": "101", "check1": true, "check2": true, "check3": true, "API_KEY": "sk-123", "MODEL_NAME": "gpt-4o-mini", "prompt": "Hello", "bypass": false}</textarea>
+      <button onclick="send('/api/admin/employee/chat', 'in-6', 'out-6')">Send</button>
+    </div>
+    <div class="col"><strong>Reply:</strong><pre id="out-6"></pre></div>
+  </div>
+
+  <script>
+    async function send(route, inputId, outputId) {
+      const raw = document.getElementById(inputId).value;
+      const res = await fetch(route, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: raw
+      });
+      const data = await res.json();
+      document.getElementById(outputId).textContent = JSON.stringify(data, null, 2);
+    }
+  </script>
+
+</body>
+</html>
