@@ -1,93 +1,318 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>API Tester</title>
-  <style>
-    body { font-family: monospace; padding: 20px; background: #111; color: #eee; }
-    .box { border: 1px solid #444; padding: 15px; margin-bottom: 15px; display: flex; gap: 15px; }
-    .col { flex: 1; }
-    textarea { width: 100%; height: 110px; background: #222; color: #0f0; border: 1px solid #555; padding: 8px; }
-    pre { background: #222; color: #0ff; padding: 10px; height: 110px; overflow: auto; margin: 0; border: 1px solid #555; }
-    button { margin-top: 8px; padding: 8px 14px; cursor: pointer; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cybersyn — Safe Team AI Workspace</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 </head>
 <body>
+    <div id="toast-container" class="toast-container"></div>
 
-  <h2>API Manual JSON Tester</h2>
+    <!-- LIVE LOADING & SCRIPT SCANNING OVERLAY -->
+    <div id="loading-overlay" class="loading-overlay hidden">
+        <div class="loading-card">
+            <div class="loading-spinner-wrap">
+                <div class="loading-ring"></div>
+                <svg class="loading-shield-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 3l7 3v6c0 5-3.5 8.5-7 9-3.5-.5-7-4-7-9V6l7-3z"/>
+                </svg>
+            </div>
+            <h3 id="loading-title">Checking your message...</h3>
+            <p id="loading-subtitle" class="loading-subtitle">Running local privacy checks before contacting the AI model</p>
 
-  <!-- 1. /api/admin/login -->
-  <div class="box">
-    <div class="col">
-      <strong>1. /api/admin/login</strong>
-      <textarea id="in-1">{"username": "johann", "password": "123"}</textarea>
-      <button onclick="send('/api/admin/login', 'in-1', 'out-1')">Send</button>
+            <div id="loading-steps" class="loading-steps">
+                <div class="loading-step" id="step-check1">
+                    <span class="step-indicator"></span>
+                    <div class="step-text">
+                        <strong>Personal & Greek IDs</strong>
+                        <small>Checking for AFM, AMKA, phone numbers & names</small>
+                    </div>
+                    <span class="step-status" id="status-check1">Waiting</span>
+                </div>
+                <div class="loading-step" id="step-check2">
+                    <span class="step-indicator"></span>
+                    <div class="step-text">
+                        <strong>Company & Confidential Context</strong>
+                        <small>Checking for contracts, NDAs & financial data</small>
+                    </div>
+                    <span class="step-status" id="status-check2">Waiting</span>
+                </div>
+                <div class="loading-step" id="step-check3">
+                    <span class="step-indicator"></span>
+                    <div class="step-text">
+                        <strong>Prompt Safety</strong>
+                        <small>Checking for prompt injection & override attempts</small>
+                    </div>
+                    <span class="step-status" id="status-check3">Waiting</span>
+                </div>
+                <div class="loading-step" id="step-ai">
+                    <span class="step-indicator"></span>
+                    <div class="step-text">
+                        <strong>AI Response</strong>
+                        <small>Sending approved message to model</small>
+                    </div>
+                    <span class="step-status" id="status-ai">Waiting</span>
+                </div>
+            </div>
+
+            <div class="loading-timer">
+                Elapsed time: <span id="loading-elapsed">0.0s</span>
+            </div>
+        </div>
     </div>
-    <div class="col"><strong>Reply:</strong><pre id="out-1"></pre></div>
-  </div>
 
-  <!-- 2. /api/admin -->
-  <div class="box">
-    <div class="col">
-      <strong>2. /api/admin</strong>
-      <textarea id="in-2">{"method": "add", "username": "johann", "password": "123"}</textarea>
-      <button onclick="send('/api/admin', 'in-2', 'out-2')">Send</button>
+    <div id="app" class="app-layout">
+        <!-- VIEW 1: SIGN IN PORTAL -->
+        <section id="portal-view" class="auth-shell">
+    <aside class="auth-brand">
+        <div class="auth-logo">
+            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8.2-7 10-4-1.8-7-5.5-7-10V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg>
+            <span>Cybersyn</span>
+        </div>
+        <div class="auth-brand-body">
+            <h2>Use AI at work without exposing what matters.</h2>
+            <p>Cybersyn reviews every message on your own machine before it reaches an AI model, so sensitive information stays inside your organization.</p>
+            <ul class="auth-points">
+                <li><strong>Screened locally</strong><span>Every check runs on this computer. Nothing is sent out for review.</span></li>
+                <li><strong>Built for Greek data</strong><span>Recognizes AFM, AMKA, phone numbers and company names.</span></li>
+                <li><strong>Administrator controlled</strong><span>Admins manage team access and approve any exceptions.</span></li>
+            </ul>
+        </div>
+        <div class="auth-brand-foot">AI Security Gateway &middot; Running locally</div>
+    </aside>
+
+    <div class="auth-panel">
+        <div id="admin-step" class="auth-step">
+            <div class="auth-progress" aria-hidden="true"><span class="is-active"></span><span></span></div>
+            <div class="auth-eyebrow">Step 1 of 2</div>
+            <h1 class="auth-title">Administrator sign in</h1>
+            <p class="auth-lead">Sign in with your administrator account to manage your workspace.</p>
+
+            <div class="auth-field">
+                <label for="admin-username">Username</label>
+                <input type="text" id="admin-username" placeholder="Enter your username" autocomplete="username">
+            </div>
+            <div class="auth-field">
+                <label for="admin-password">Password</label>
+                <input type="password" id="admin-password" placeholder="Enter your password" autocomplete="current-password">
+            </div>
+
+            <button type="button" id="btn-admin-login" class="auth-btn-primary">Continue</button>
+
+            <div class="auth-secondary">
+                <button type="button" id="btn-admin-register" class="auth-link">Create administrator account</button>
+                <button type="button" id="btn-admin-delete" class="auth-link auth-link-danger">Delete account</button>
+            </div>
+        </div>
+
+        <div id="employee-card" class="auth-step hidden">
+            <div class="auth-progress" aria-hidden="true"><span class="is-active"></span><span class="is-active"></span></div>
+            <div class="auth-eyebrow">Step 2 of 2</div>
+            <h1 class="auth-title">Team member sign in</h1>
+            <p class="auth-lead">Choose the team member account you want to work in.</p>
+
+            <div id="admin-session-badge" class="auth-context hidden">
+                <div class="auth-context-text">
+                    <span class="auth-context-label">Signed in as administrator</span>
+                    <strong id="active-admin-label">Admin</strong>
+                </div>
+                <button type="button" id="btn-admin-logout" class="auth-link">Switch administrator</button>
+            </div>
+
+            <div class="auth-field">
+                <label for="employee-username">Username</label>
+                <input type="text" id="employee-username" placeholder="Enter team member username" autocomplete="off">
+            </div>
+            <div class="auth-field">
+                <label for="employee-password">Password</label>
+                <input type="password" id="employee-password" placeholder="Enter team member password" autocomplete="off">
+            </div>
+
+            <button type="button" id="btn-employee-login" class="auth-btn-primary">Open workspace</button>
+
+            <div class="auth-secondary">
+                <button type="button" id="btn-employee-create" class="auth-link">Add team member</button>
+                <button type="button" id="btn-employee-delete" class="auth-link auth-link-danger">Remove team member</button>
+            </div>
+        </div>
+
+        <div class="auth-footnote">Protected by local Python scanners. Sign-in is required each time you open this page.</div>
     </div>
-    <div class="col"><strong>Reply:</strong><pre id="out-2"></pre></div>
-  </div>
+</section>
 
-  <!-- 3. /api/admin/employee -->
-  <div class="box">
-    <div class="col">
-      <strong>3. /api/admin/employee</strong>
-      <textarea id="in-3">{"method": "add", "username": "nikos", "password": "456", "Parent_id": "1"}</textarea>
-      <button onclick="send('/api/admin/employee', 'in-3', 'out-3')">Send</button>
+        <!-- VIEW 2: WORKSPACE & CHAT -->
+        <main id="workspace-view" class="workspace-view hidden">
+<aside class="workspace-sidebar">
+    <div class="sidebar-top">
+        <div class="brand-mark">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 3l7 3v6c0 5-3.5 8.5-7 9-3.5-.5-7-4-7-9V6l7-3z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4"/>
+            </svg>
+            <span>Cybersyn</span>
+        </div>
     </div>
-    <div class="col"><strong>Reply:</strong><pre id="out-3"></pre></div>
-  </div>
 
-  <!-- 4. /api/admin/employee/login -->
-  <div class="box">
-    <div class="col">
-      <strong>4. /api/admin/employee/login</strong>
-      <textarea id="in-4">{"Parent_id": "1", "username": "nikos", "password": "456"}</textarea>
-      <button onclick="send('/api/admin/employee/login', 'in-4', 'out-4')">Send</button>
+    <details class="side-panel" open>
+        <summary>Profile</summary>
+        <div class="side-panel-body">
+            <div class="user-profile-badge">
+                <div class="avatar" id="user-avatar-letter">U</div>
+                <div class="profile-details">
+                    <span class="profile-name" id="display-employee-user">Member</span>
+                    <span class="profile-sub" id="display-parent-id">Workspace --</span>
+                    <span class="profile-sub" id="display-employee-id">Member --</span>
+                </div>
+            </div>
+        </div>
+    </details>
+
+    <details class="side-panel">
+        <summary>Team</summary>
+        <div class="side-panel-body">
+            <div id="team-list" class="team-list"><span class="profile-sub">Sign in to see members.</span></div>
+        </div>
+    </details>
+
+    <details class="side-panel">
+        <summary>Settings</summary>
+        <div class="side-panel-body">
+            <section class="sidebar-section">
+                <div class="section-header-row">
+                    <span class="section-title">Local Safety Checks</span>
+                    <span class="sync-indicator" id="settings-sync-badge">Saved</span>
+                </div>
+                <div class="toggle-list">
+                    <label class="toggle-item">
+                        <input type="checkbox" id="setting-check1" checked>
+                        <span class="toggle-switch"></span>
+                        <span class="toggle-text"><strong>Personal & Greek IDs</strong><small>AFM, AMKA, phones, emails & names</small></span>
+                    </label>
+                    <label class="toggle-item">
+                        <input type="checkbox" id="setting-check2" checked>
+                        <span class="toggle-switch"></span>
+                        <span class="toggle-text"><strong>Confidential Context</strong><small>Contracts, NDAs, finance & HR data</small></span>
+                    </label>
+                    <label class="toggle-item">
+                        <input type="checkbox" id="setting-check3" checked>
+                        <span class="toggle-switch"></span>
+                        <span class="toggle-text"><strong>Prompt Injection</strong><small>Jailbreaks & hidden instructions</small></span>
+                    </label>
+                </div>
+            </section>
+
+            <section class="sidebar-section">
+                <div class="section-title">AI Model Connection</div>
+                <div class="input-group-compact">
+                    <label for="setting-model-name">Model name</label>
+                    <select id="setting-model-name"><option value="gpt-4o-mini">gpt-4o-mini</option></select>
+                </div>
+                <div class="input-group-compact">
+                    <label for="setting-api-key">API Key</label>
+                    <input type="password" id="setting-api-key" placeholder="Paste your API key..." autocomplete="off">
+                </div>
+            </section>
+
+            <section class="sidebar-section">
+                <div class="section-title">Admin approval</div>
+                <div class="input-group-compact">
+                    <label for="settings-admin-password">Admin password</label>
+                    <input type="password" id="settings-admin-password" placeholder="Required to save changes" autocomplete="off">
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm" id="btn-save-settings">Save Settings</button>
+            </section>
+        </div>
+    </details>
+
+    <div class="sidebar-footer">
+        <button type="button" class="btn btn-outline-danger btn-sm" id="btn-workspace-logout" style="width: 100%;">Sign out</button>
     </div>
-    <div class="col"><strong>Reply:</strong><pre id="out-4"></pre></div>
-  </div>
+</aside>
 
-  <!-- 5. /api/admin/employee/settings -->
-  <div class="box">
-    <div class="col">
-      <strong>5. /api/admin/employee/settings</strong>
-      <textarea id="in-5">{"Parent_id": "1", "Employee_id": "101", "check1": true, "check2": true, "check3": true, "API_KEY": "sk-123", "MODEL_NAME": "gpt-4o-mini"}</textarea>
-      <button onclick="send('/api/admin/employee/settings', 'in-5', 'out-5')">Send</button>
+<section class="workspace-main">
+    <header class="workspace-topbar">
+        <div class="topbar-status">
+            <span class="status-dot active" id="topbar-dot"></span>
+            <span id="active-checks-summary">3 of 3 safety checks active</span>
+        </div>
+        <button type="button" class="btn-link" id="btn-clear-chat">Clear conversation</button>
+    </header>
+    <div id="unprotected-banner" class="unprotected-banner hidden">
+        <strong>Warning: All safety checks are turned off.</strong> Your prompts are currently sent directly to the AI without local scanning.
     </div>
-    <div class="col"><strong>Reply:</strong><pre id="out-5"></pre></div>
-  </div>
+    <div class="chat-viewport" id="chat-stream"></div>
+    <footer class="chat-input-wrapper">
+        <form id="form-chat-send" class="input-box-container">
+            <textarea id="prompt-input" rows="2" placeholder="Ask anything... (Enter to send, Shift+Enter for a new line)" required></textarea>
+            <button type="submit" class="btn btn-primary btn-send" id="btn-send-prompt">Send</button>
+        </form>
+        <div class="input-footnote">Checked locally on this machine before reaching the AI provider.</div>
+    </footer>
+</section>
+</main>
 
-  <!-- 6. /api/admin/employee/chat -->
-  <div class="box">
-    <div class="col">
-      <strong>6. /api/admin/employee/chat</strong>
-      <textarea id="in-6">{"Parent_id": "1", "Employee_id": "101", "check1": true, "check2": true, "check3": true, "API_KEY": "sk-123", "MODEL_NAME": "gpt-4o-mini", "prompt": "Hello", "bypass": false}</textarea>
-      <button onclick="send('/api/admin/employee/chat', 'in-6', 'out-6')">Send</button>
+        <!-- VIEW 3: BLOCKED PROMPT MODAL -->
+        <div id="intercept-modal" class="modal-backdrop hidden">
+            <div class="modal-dialog">
+                <div class="modal-header">
+                    <div class="modal-title-wrap">
+                        <div class="alert-badge">Blocked</div>
+                        <div>
+                            <h2>We paused this message</h2>
+                            <p class="alert-subtitle">Sensitive information was found locally, so nothing was sent to the AI.</p>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close" id="btn-close-modal">&times;</button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="alert-summary-box">
+                        <div class="summary-item">
+                            <span class="summary-label">Stopped by</span>
+                            <span class="summary-value" id="intercept-stage">Check 1</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">Reason</span>
+                            <span class="summary-value warning-text" id="intercept-cause">Sensitive Data</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">Confidence</span>
+                            <span class="summary-value" id="intercept-score">95%</span>
+                        </div>
+                    </div>
+
+                    <div class="matches-section">
+                        <h4>Flagged content in your message</h4>
+                        <div id="intercept-matches" class="matches-list"></div>
+                    </div>
+
+                    <div class="bypass-accordion">
+                        <div class="bypass-header" id="toggle-bypass-controls">
+                            <span>Need to send this anyway? Use Admin Override</span>
+                            <span class="arrow-indicator">▾</span>
+                        </div>
+                        <div class="bypass-content hidden" id="bypass-controls-panel">
+                            <p class="bypass-disclaimer">Enter the workspace admin password to approve sending this one message directly to the AI.</p>
+                            <div class="input-group-compact">
+                                <label for="bypass-admin-password">Admin password</label>
+                                <input type="password" id="bypass-admin-password" placeholder="Enter admin password">
+                            </div>
+                            <button type="button" class="btn btn-warning" id="btn-execute-bypass">Approve & Send Message</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" id="btn-dismiss-modal">Edit my message</button>
+                </div>
+            </div>
+        </div>
     </div>
-    <div class="col"><strong>Reply:</strong><pre id="out-6"></pre></div>
-  </div>
 
-  <script>
-    async function send(route, inputId, outputId) {
-      const raw = document.getElementById(inputId).value;
-      const res = await fetch(route, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: raw
-      });
-      const data = await res.json();
-      document.getElementById(outputId).textContent = JSON.stringify(data, null, 2);
-    }
-  </script>
-
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
 </html>

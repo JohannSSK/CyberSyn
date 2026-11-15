@@ -42,7 +42,7 @@ CODE_SYNTAX = re.compile(
 with contextlib.redirect_stderr(io.StringIO()):
     classifier = pipeline(
         "zero-shot-classification",
-        model="valhalla/distilbart-mnli-12-1",
+        model="valhalla/distilbart-mnli-12-1", local_files_only=True,
     )
 
 

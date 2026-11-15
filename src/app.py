@@ -238,7 +238,7 @@ def load_chat_logs(raw):
         if isinstance(item, dict):
             out.append({
                 "prompt": str(item.get("prompt", "")),
-                "answer": str(item.get("answer", "")),
+                "answer": str(item.get("answer") or item.get("reply") or ""), "reply": str(item.get("reply") or item.get("answer") or ""),
             })
     return out
 
@@ -663,36 +663,16 @@ def build_block_info(stage, result):
 
 
 def call_openai(api_key, model, prompt):
-    body = json.dumps({
-        "model": model,
-        "messages": [{"role": "user", "content": prompt}],
-    }).encode("utf-8")
-    req = urllib.request.Request(
-        OPENAI_URL, data=body, method="POST",
-        headers={"Content-Type": "application/json",
-                 "Authorization": f"Bearer {api_key}"},
-    )
+    import time as _t
+    _t0 = _t.time()
+    print("CHAT DEBUG model=" + repr(model) + " key_len=" + str(len(api_key)), flush=True)
     try:
-        with urllib.request.urlopen(req, timeout=OPENAI_TIMEOUT) as resp:
-            payload = json.loads(resp.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        raw = exc.read().decode("utf-8", errors="replace")
-        try:
-            msg = json.loads(raw)["error"]["message"]
-        except Exception:
-            msg = raw[:300] or exc.reason
-        raise ChatError(f"OpenAI API Error {exc.code}: {msg}", 502)
-    except urllib.error.URLError as exc:
-        raise ChatError(f"Could not reach the AI server: {exc.reason}", 502)
-    except (TimeoutError, OSError) as exc:
-        raise ChatError(f"AI request failed: {exc}", 502)
-    except ValueError:
-        raise ChatError("AI server returned invalid JSON.", 502)
-
-    try:
-        return payload["choices"][0]["message"]["content"] or ""
-    except (KeyError, IndexError, TypeError):
-        raise ChatError("AI server reply had an unexpected format.", 502)
+        from litellm import completion
+        resp = completion(model=("gemini/" + model if model.startswith("gemini-") else model), messages=[{"role": "user", "content": prompt}], api_key=api_key, timeout=OPENAI_TIMEOUT)
+        return resp.choices[0].message.content or ""
+    except Exception as exc:
+        print("CHAT DEBUG failed after " + str(round(_t.time() - _t0, 1)) + "s: " + type(exc).__name__ + ": " + str(exc)[:300], flush=True)
+        raise ChatError(f"AI API Error: {exc}", 502)
 
 
 @app.post(ROUTES["CHAT"])
@@ -753,7 +733,7 @@ def employee_chat():
                     info = build_block_info(stage, result)
                     msg = (f"Blocked by {stage} ({info['main_cause']}): "
                            f"'{info['snippet']}' on line {info['line']}")
-                    return chat_response(False, True, reply=msg, block_info=info)
+                    return chat_response(False, True, reply=NULL, message=msg, block_info=info)
 
         answer = call_openai(api_key, model, prompt)
 
@@ -790,6 +770,10 @@ def seed():
 
 init_db()
 check_schema()
+
+from models_route import register as register_models
+register_models(app)
+
 
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "seed":

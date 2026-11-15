@@ -8,9 +8,9 @@
     "BACKEND_DIR": "src/backend",
     "ML_DIR": "src/MLscripts",
     "ASSETS_DIR": "assets",
-    "CHECK1_SCRIPT": "src/MLscripts/test_greek_pii.py",
-    "CHECK2_SCRIPT": "src/MLscripts/test_context.py",
-    "CHECK3_SCRIPT": "src/MLscripts/test_injection.py"
+    "CHECK1_SCRIPT": "src/MLscripts/greek_pii.py",
+    "CHECK2_SCRIPT": "src/MLscripts/context.py",
+    "CHECK3_SCRIPT": "src/MLscripts/injection.py"
   },
 
   "ROUTES": {
