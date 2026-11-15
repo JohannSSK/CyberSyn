@@ -729,8 +729,6 @@ function refreshProfile() {
     workspace.avatarLetter.textContent = name.charAt(0).toUpperCase();
     workspace.displayUser.textContent = name;
     workspace.displayParent.textContent = "Workspace " + (state.parentId !== null && state.parentId !== undefined ? state.parentId : "--");
-    const idEl = document.getElementById("display-employee-id");
-    if (idEl) idEl.textContent = "Member " + (state.employeeId !== null && state.employeeId !== undefined ? state.employeeId : "--");
     state.team = state.team || {};
     const key = String(state.parentId);
     const names = state.team[key] = state.team[key] || [];
@@ -762,7 +760,7 @@ function startThinking(flags, isBypass) {
     label.textContent = steps[0] + "...";
     const timer = setInterval(() => {
         if (i < steps.length - 1) { i += 1; label.textContent = steps[i] + "..."; }
-    }, 2500);
+    }, 1500);
     workspace.chatStream.appendChild(bubble);
     workspace.chatStream.scrollTop = workspace.chatStream.scrollHeight;
     return {
