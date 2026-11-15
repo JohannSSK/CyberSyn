@@ -1,93 +1,304 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>API Tester</title>
-  <style>
-    body { font-family: monospace; padding: 20px; background: #111; color: #eee; }
-    .box { border: 1px solid #444; padding: 15px; margin-bottom: 15px; display: flex; gap: 15px; }
-    .col { flex: 1; }
-    textarea { width: 100%; height: 110px; background: #222; color: #0f0; border: 1px solid #555; padding: 8px; }
-    pre { background: #222; color: #0ff; padding: 10px; height: 110px; overflow: auto; margin: 0; border: 1px solid #555; }
-    button { margin-top: 8px; padding: 8px 14px; cursor: pointer; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CyberSyn — AI DLP Gateway & Security Firewall</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
-<body>
+<body class="dark-theme">
+    <!-- Notification Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
 
-  <h2>API Manual JSON Tester</h2>
+    <!-- MAIN APPLICATION CONTAINER -->
+    <div id="app" class="app-layout">
 
-  <!-- 1. /api/admin/login -->
-  <div class="box">
-    <div class="col">
-      <strong>1. /api/admin/login</strong>
-      <textarea id="in-1">{"username": "johann", "password": "123"}</textarea>
-      <button onclick="send('/api/admin/login', 'in-1', 'out-1')">Send</button>
+        <!-- ======================================================= -->
+        <!-- VIEW 1: AUTHENTICATION PORTAL (ADMIN & EMPLOYEE)        -->
+        <!-- ======================================================= -->
+        <main id="portal-view" class="view-panel active">
+            <header class="portal-header">
+                <div class="brand-badge">
+                    <span class="status-dot pulsing"></span>
+                    <span class="brand-title">CYBERSYN // AI DLP GATEWAY</span>
+                </div>
+                <h1>Security Access Portal</h1>
+                <p class="subtitle">Authenticate administrator authority to manage employee accounts and unlock protected AI workspace sessions.</p>
+            </header>
+
+            <div class="portal-grid">
+                <!-- STEP 1: ADMIN CARD (/api/admin/login & /api/admin) -->
+                <section class="card auth-card" id="admin-card">
+                    <div class="card-header">
+                        <div class="header-icon admin-icon">🛡️</div>
+                        <div>
+                            <h2>Step 1: Admin Authority</h2>
+                            <p class="section-desc">Sign in or register an administrative tenant key.</p>
+                        </div>
+                    </div>
+
+                    <!-- Active Admin Session Badge -->
+                    <div id="admin-session-badge" class="session-badge hidden">
+                        <span class="icon">✅</span>
+                        <div class="session-info">
+                            <strong>Active Admin Authority</strong>
+                            <span id="active-admin-label">Admin ID: --</span>
+                        </div>
+                        <button type="button" class="btn-text-danger" id="btn-admin-logout">Sign Out</button>
+                    </div>
+
+                    <form id="form-admin-auth" class="portal-form">
+                        <div class="input-group">
+                            <label for="admin-username">Admin Username</label>
+                            <input type="text" id="admin-username" placeholder="e.g., sysadmin" required autocomplete="off">
+                        </div>
+
+                        <div class="input-group">
+                            <label for="admin-password">Admin Password</label>
+                            <input type="password" id="admin-password" placeholder="••••••••••••" required autocomplete="off">
+                        </div>
+
+                        <div class="button-group-stacked">
+                            <button type="button" class="btn btn-primary" id="btn-admin-login">
+                                Sign In as Admin
+                            </button>
+                            <div class="button-row">
+                                <button type="button" class="btn btn-secondary" id="btn-admin-register">Register Admin</button>
+                                <button type="button" class="btn btn-danger-outline" id="btn-admin-delete">Delete Admin</button>
+                            </div>
+                        </div>
+                    </form>
+                </section>
+
+                <!-- STEP 2: EMPLOYEE CARD (/api/admin/employee & /login) -->
+                <section class="card auth-card locked" id="employee-card">
+                    <div class="card-overlay" id="employee-lock-overlay">
+                        <div class="lock-message">
+                            <span class="lock-icon">🔒</span>
+                            <h3>Admin Verification Required</h3>
+                            <p>Complete Step 1 to unlock employee account creation and workspace login.</p>
+                        </div>
+                    </div>
+
+                    <div class="card-header">
+                        <div class="header-icon emp-icon">👤</div>
+                        <div>
+                            <h2>Step 2: Employee Portal</h2>
+                            <p class="section-desc">Sign in with employee credentials to access AI Chat.</p>
+                        </div>
+                    </div>
+
+                    <form id="form-employee-auth" class="portal-form">
+                        <div class="input-group">
+                            <label for="employee-username">Employee Username</label>
+                            <input type="text" id="employee-username" placeholder="e.g., analyst_01" required autocomplete="off">
+                        </div>
+
+                        <div class="input-group">
+                            <label for="employee-password">Employee Password</label>
+                            <input type="password" id="employee-password" placeholder="••••••••••••" required autocomplete="off">
+                        </div>
+
+                        <div class="button-group-stacked">
+                            <button type="button" class="btn btn-accent" id="btn-employee-login">
+                                Enter AI Workspace
+                            </button>
+                            <div class="button-row">
+                                <button type="button" class="btn btn-secondary" id="btn-employee-create">Create Account</button>
+                                <button type="button" class="btn btn-danger-outline" id="btn-employee-delete">Remove Account</button>
+                            </div>
+                        </div>
+                    </form>
+                </section>
+            </div>
+        </main>
+
+        <!-- ======================================================= -->
+        <!-- VIEW 2: AI WORKSPACE & SETTINGS INTERFACE               -->
+        <!-- ======================================================= -->
+        <main id="workspace-view" class="view-panel hidden">
+            <!-- Sidebar: Settings (/api/admin/employee/settings) -->
+            <aside class="workspace-sidebar">
+                <div class="sidebar-brand">
+                    <span class="brand-title">CYBERSYN AI</span>
+                    <span class="shield-badge">FIREWALL ACTIVE</span>
+                </div>
+
+                <div class="user-profile-badge">
+                    <div class="avatar">👤</div>
+                    <div class="profile-details">
+                        <span class="profile-name" id="display-employee-user">Employee</span>
+                        <span class="profile-sub" id="display-parent-id">Admin ID: --</span>
+                    </div>
+                </div>
+
+                <!-- DLP Security Checks (check1, check2, check3) -->
+                <section class="sidebar-section">
+                    <div class="section-header-row">
+                        <span class="section-title">SECURITY SCANNER RULES</span>
+                        <span class="sync-indicator" id="settings-sync-badge">Synced</span>
+                    </div>
+
+                    <div class="toggle-list">
+                        <label class="toggle-item">
+                            <input type="checkbox" id="setting-check1" checked>
+                            <span class="toggle-switch"></span>
+                            <span class="toggle-text">
+                                <strong>Greek PII Scanner</strong>
+                                <small>AFM, Greek IDs, Phones, Names</small>
+                            </span>
+                        </label>
+
+                        <label class="toggle-item">
+                            <input type="checkbox" id="setting-check2" checked>
+                            <span class="toggle-switch"></span>
+                            <span class="toggle-text">
+                                <strong>Context DLP Scanner</strong>
+                                <small>Classified & corporate context</small>
+                            </span>
+                        </label>
+
+                        <label class="toggle-item">
+                            <input type="checkbox" id="setting-check3" checked>
+                            <span class="toggle-switch"></span>
+                            <span class="toggle-text">
+                                <strong>Prompt Injection Guard</strong>
+                                <small>Jailbreaks & system override</small>
+                            </span>
+                        </label>
+                    </div>
+                </section>
+
+                <!-- Model Configuration (MODEL_NAME, API_KEY) -->
+                <section class="sidebar-section">
+                    <div class="section-title">MODEL CONFIGURATION</div>
+                    <div class="input-group-compact">
+                        <label for="setting-model-name">Target Model</label>
+                        <input type="text" id="setting-model-name" value="gpt-4o-mini" placeholder="e.g., gpt-4o-mini">
+                    </div>
+                    <div class="input-group-compact">
+                        <label for="setting-api-key">OpenAI API Key</label>
+                        <input type="password" id="setting-api-key" placeholder="sk-..." autocomplete="off">
+                    </div>
+                    <button type="button" class="btn btn-primary btn-sm" id="btn-save-settings">
+                        Save Configuration
+                    </button>
+                </section>
+
+                <div class="sidebar-footer">
+                    <button type="button" class="btn btn-outline-danger btn-sm" id="btn-workspace-logout" style="width: 100%;">
+                        Sign Out of Session
+                    </button>
+                </div>
+            </aside>
+
+            <!-- Main Chat Area (/api/admin/employee/chat) -->
+            <section class="workspace-main">
+                <header class="workspace-topbar">
+                    <div class="topbar-status">
+                        <span class="status-dot active"></span>
+                        <span>Gateway Pipeline: <strong id="active-checks-summary">3/3 Checks Active</strong></span>
+                    </div>
+                    <button type="button" class="btn-link" id="btn-clear-chat">Clear View</button>
+                </header>
+
+                <!-- Chat Stream Viewport -->
+                <div class="chat-viewport" id="chat-stream">
+                    <div class="message-bubble system-bubble">
+                        <div class="bubble-header">CyberSyn DLP Firewall</div>
+                        <div class="bubble-content">
+                            Welcome to the CyberSyn Protected Workspace. Prompts sent through this interface pass through all active multi-stage scanners before reaching the language model.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chat Input Box -->
+                <footer class="chat-input-wrapper">
+                    <form id="form-chat-send" class="input-box-container">
+                        <textarea id="prompt-input" rows="2" placeholder="Type your prompt here... (Press Enter to submit, Shift+Enter for new line)" required></textarea>
+                        <button type="submit" class="btn btn-primary btn-send" id="btn-send-prompt">
+                            Submit Prompt
+                        </button>
+                    </form>
+                    <div class="input-footnote">
+                        Live DLP filtering enabled. Prompts violating policies are halted before API dispatch.
+                    </div>
+                </footer>
+            </section>
+        </main>
+
+        <!-- ======================================================= -->
+        <!-- VIEW 3: DLP INTERCEPT MODAL & BYPASS                    -->
+        <!-- ======================================================= -->
+        <div id="intercept-modal" class="modal-backdrop hidden">
+            <div class="modal-dialog">
+                <div class="modal-header dlp-alert">
+                    <div class="modal-title-wrap">
+                        <span class="alert-icon">⚠️</span>
+                        <div>
+                            <h2>CyberSyn DLP: Prompt Intercepted</h2>
+                            <p class="alert-subtitle">Security rule violation detected. Prompt transmission blocked.</p>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close" id="btn-close-modal">&times;</button>
+                </div>
+
+                <div class="modal-body">
+                    <!-- Summary Box -->
+                    <div class="alert-summary-box">
+                        <div class="summary-item">
+                            <span class="summary-label">Pipeline Stage</span>
+                            <span class="summary-value" id="intercept-stage">Stage --</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">Main Violation</span>
+                            <span class="summary-value warning-text" id="intercept-cause">Unknown</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">Confidence Score</span>
+                            <span class="summary-value" id="intercept-score">0.00</span>
+                        </div>
+                    </div>
+
+                    <!-- Match Details -->
+                    <div class="matches-section">
+                        <h4>Pattern Match Breakdown</h4>
+                        <div id="intercept-matches" class="matches-list"></div>
+                    </div>
+
+                    <!-- Admin Bypass Section -->
+                    <div class="bypass-accordion">
+                        <div class="bypass-header" id="toggle-bypass-controls">
+                            <span>🔒 Administrative Override (Bypass Filters)</span>
+                            <span class="arrow-indicator">▾</span>
+                        </div>
+                        <div class="bypass-content hidden" id="bypass-controls-panel">
+                            <p class="bypass-disclaimer">
+                                Authorizing this bypass forwards the blocked prompt with <code>bypass: true</code>, skipping DLP security inspection.
+                            </p>
+                            <div class="input-group-compact">
+                                <label for="bypass-admin-password">Confirm Admin Password</label>
+                                <input type="password" id="bypass-admin-password" placeholder="Enter admin password to authorize">
+                            </div>
+                            <button type="button" class="btn btn-warning" id="btn-execute-bypass">
+                                Override & Execute Prompt
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" id="btn-dismiss-modal">Dismiss & Edit Prompt</button>
+                </div>
+            </div>
+        </div>
+
     </div>
-    <div class="col"><strong>Reply:</strong><pre id="out-1"></pre></div>
-  </div>
 
-  <!-- 2. /api/admin -->
-  <div class="box">
-    <div class="col">
-      <strong>2. /api/admin</strong>
-      <textarea id="in-2">{"method": "add", "username": "johann", "password": "123"}</textarea>
-      <button onclick="send('/api/admin', 'in-2', 'out-2')">Send</button>
-    </div>
-    <div class="col"><strong>Reply:</strong><pre id="out-2"></pre></div>
-  </div>
-
-  <!-- 3. /api/admin/employee -->
-  <div class="box">
-    <div class="col">
-      <strong>3. /api/admin/employee</strong>
-      <textarea id="in-3">{"method": "add", "username": "nikos", "password": "456", "Parent_id": "1"}</textarea>
-      <button onclick="send('/api/admin/employee', 'in-3', 'out-3')">Send</button>
-    </div>
-    <div class="col"><strong>Reply:</strong><pre id="out-3"></pre></div>
-  </div>
-
-  <!-- 4. /api/admin/employee/login -->
-  <div class="box">
-    <div class="col">
-      <strong>4. /api/admin/employee/login</strong>
-      <textarea id="in-4">{"Parent_id": "1", "username": "nikos", "password": "456"}</textarea>
-      <button onclick="send('/api/admin/employee/login', 'in-4', 'out-4')">Send</button>
-    </div>
-    <div class="col"><strong>Reply:</strong><pre id="out-4"></pre></div>
-  </div>
-
-  <!-- 5. /api/admin/employee/settings -->
-  <div class="box">
-    <div class="col">
-      <strong>5. /api/admin/employee/settings</strong>
-      <textarea id="in-5">{"Parent_id": "1", "Employee_id": "101", "check1": true, "check2": true, "check3": true, "API_KEY": "sk-123", "MODEL_NAME": "gpt-4o-mini"}</textarea>
-      <button onclick="send('/api/admin/employee/settings', 'in-5', 'out-5')">Send</button>
-    </div>
-    <div class="col"><strong>Reply:</strong><pre id="out-5"></pre></div>
-  </div>
-
-  <!-- 6. /api/admin/employee/chat -->
-  <div class="box">
-    <div class="col">
-      <strong>6. /api/admin/employee/chat</strong>
-      <textarea id="in-6">{"Parent_id": "1", "Employee_id": "101", "check1": true, "check2": true, "check3": true, "API_KEY": "sk-123", "MODEL_NAME": "gpt-4o-mini", "prompt": "Hello", "bypass": false}</textarea>
-      <button onclick="send('/api/admin/employee/chat', 'in-6', 'out-6')">Send</button>
-    </div>
-    <div class="col"><strong>Reply:</strong><pre id="out-6"></pre></div>
-  </div>
-
-  <script>
-    async function send(route, inputId, outputId) {
-      const raw = document.getElementById(inputId).value;
-      const res = await fetch(route, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: raw
-      });
-      const data = await res.json();
-      document.getElementById(outputId).textContent = JSON.stringify(data, null, 2);
-    }
-  </script>
-
+    <!-- Application Controller -->
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
 </html>
