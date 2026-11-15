@@ -455,7 +455,7 @@ button, input, textarea { font-family: inherit; font-size: 0.92rem; }
 }
 
 .empty-state { margin: auto 0; text-align: center; padding: 32px 16px; }
-.empty-state h2 { font-family: var(--font-serif); font-weight: 400; font-size: 2.2rem; margin-bottom: 8px; }
+.empty-state h2 { font-family: var(--font-serif); font-weight: 400; font-size: 2.7rem; letter-spacing: 0.01em; margin-bottom: 8px; }
 .empty-state p { color: var(--text-secondary); font-size: 0.92rem; max-width: 460px; margin: 0 auto 24px; }
 
 .starter-grid {
@@ -1560,7 +1560,23 @@ html[data-lang="el"] .lang-en { display: none !important; }
 .chat-confirm-actions .btn-outline-danger { color: #e8a09a; border-color: rgba(190, 110, 106, 0.4); }
 
 /* Active chat title in topbar */
-.chat-title { margin-left: 44px; margin-right: 12px; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.92rem; font-weight: 500; color: var(--text-primary, #e8e6e1); }
+.chat-title { margin-left: 40px; margin-right: 10px; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.92rem; font-weight: 500; color: var(--text-primary, #e8e6e1); }
 
 /* Keep checks summary next to the chat title */
 .topbar-status { padding-left: 0; }
+
+/* Editable chat title */
+button.chat-title { background: none; border: 0; padding: 4px 6px; font: inherit; font-size: 0.92rem; font-weight: 500; text-align: left; cursor: pointer; border-radius: 6px; }
+button.chat-title:hover:not(:disabled) { background: rgba(255, 255, 255, 0.06); }
+button.chat-title:disabled { cursor: default; opacity: 1; }
+.chat-title-input { width: 320px; max-width: 320px; margin-left: 40px; margin-right: 10px; padding: 4px 8px; font: inherit; font-size: 0.92rem; font-weight: 500; color: #ececec; background: #262624; border: 1px solid #5b7a70; border-radius: 6px; outline: none; }
+
+/* Checks summary sits right after the chat title */
+.topbar-status { margin-left: 0; }
+#btn-clear-chat { margin-left: auto; }
+
+/* Tighter space between Team and Settings in the sidebar */
+#btn-open-settings { margin-top: -10px; }
+
+/* Equal space between Profile, Team and Settings */
+#btn-open-team { margin-top: -10px; }

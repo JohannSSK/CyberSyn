@@ -186,7 +186,8 @@
 <section class="workspace-main">
     <header class="workspace-topbar">
         <button type="button" id="btn-toggle-sidebar" class="sidebar-toggle" title="Show or hide sidebar">☰</button>
-        <span class="chat-title" id="active-chat-title">New chat</span>
+        <button type="button" class="chat-title" id="active-chat-title" title="Click to rename this chat">New chat</button>
+        <input type="text" id="chat-title-input" class="chat-title-input hidden" maxlength="80" aria-label="Chat title">
         <div class="topbar-status">
             <span class="status-dot active" id="topbar-dot"></span>
             <span id="active-checks-summary">3 of 3 safety checks active</span>

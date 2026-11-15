@@ -172,6 +172,18 @@ def save_exchange(db_file, parent_id, employee_id, chat_id, prompt, answer):
     return chat_id
 
 
+def rename_chat(db_file, parent_id, employee_id, chat_id, title):
+    con = _connect(db_file)
+    cur = con.execute(
+        "UPDATE CHATS SET title = ? WHERE id = ? AND Parent_id = ? AND Employee_id = ?",
+        (title, chat_id, parent_id, employee_id),
+    )
+    con.commit()
+    changed = cur.rowcount > 0
+    con.close()
+    return changed
+
+
 def delete_chat(db_file, parent_id, employee_id, chat_id):
     con = _connect(db_file)
     cur = con.execute(
@@ -230,3 +242,16 @@ def register(app, db_file):
         if not delete_chat(db_file, ids[0], ids[1], chat_id):
             return jsonify({"error": True, "error_message": "That chat was not found."}), 404
         return jsonify({"error": False, "deleted": chat_id})
+
+    @app.post("/api/admin/employee/chats/rename")
+    def chats_rename():
+        data = request.get_json(silent=True)
+        ids, chat_id = _ids(data), _chat_id(data)
+        if ids is None or chat_id is None:
+            return jsonify({"error": True, "error_message": "Parent_id, Employee_id and chat_id are required."}), 400
+        title = " ".join(str(data.get("title") or "").split())[:80]
+        if not title:
+            return jsonify({"error": True, "error_message": "Title cannot be empty."}), 400
+        if not rename_chat(db_file, ids[0], ids[1], chat_id, title):
+            return jsonify({"error": True, "error_message": "That chat was not found."}), 404
+        return jsonify({"error": False, "chat_id": chat_id, "title": title})

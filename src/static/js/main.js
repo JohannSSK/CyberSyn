@@ -3,7 +3,55 @@
  */
 
 document.addEventListener('DOMContentLoaded', () => {
-    function setChatTitle(title) { var el = document.getElementById("active-chat-title"); if (el) { el.textContent = title || "New chat"; } }
+    function setChatTitle(title) {
+        var el = document.getElementById("active-chat-title");
+        if (el) { el.textContent = title || "New chat"; el.disabled = !activeChatId; }
+    }
+    function startRenameChat() {
+        var btn = document.getElementById("active-chat-title");
+        var input = document.getElementById("chat-title-input");
+        if (!btn || !input || !activeChatId) return;
+        input.value = btn.textContent;
+        btn.classList.add("hidden");
+        input.classList.remove("hidden");
+        input.focus();
+        input.select();
+    }
+    function stopRenameChat() {
+        var btn = document.getElementById("active-chat-title");
+        var input = document.getElementById("chat-title-input");
+        if (input) input.classList.add("hidden");
+        if (btn) btn.classList.remove("hidden");
+    }
+    async function saveRenameChat() {
+        var btn = document.getElementById("active-chat-title");
+        var input = document.getElementById("chat-title-input");
+        if (!btn || !input || input.classList.contains("hidden")) return;
+        var previous = btn.textContent;
+        var title = input.value.trim();
+        var chatId = activeChatId;
+        stopRenameChat();
+        if (!title || title === previous || !chatId) return;
+        try {
+            var data = await chatApi("/api/admin/employee/chats/rename", { chat_id: chatId, title: title });
+            if (activeChatId === chatId) { setChatTitle(data.error ? previous : data.title); }
+        } catch (err) {
+            if (activeChatId === chatId) { setChatTitle(previous); }
+        }
+        refreshChatList();
+    }
+    (function wireChatTitle() {
+        var btn = document.getElementById("active-chat-title");
+        var input = document.getElementById("chat-title-input");
+        if (btn) btn.addEventListener("click", startRenameChat);
+        if (input) {
+            input.addEventListener("keydown", function (e) {
+                if (e.key === "Enter") { e.preventDefault(); saveRenameChat(); }
+                if (e.key === "Escape") { e.preventDefault(); stopRenameChat(); }
+            });
+            input.addEventListener("blur", saveRenameChat);
+        }
+    })();
     let activeChatId = null;
     let pendingDeleteId = null;
     const CAUSE_LABELS = {
