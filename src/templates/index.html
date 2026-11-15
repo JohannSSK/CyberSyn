@@ -168,6 +168,14 @@
 
     <button type="button" class="sidebar-link-btn" id="btn-open-settings">Settings</button>
 
+    <div class="sidebar-chats">
+        <div class="sidebar-chats-head">
+            <span class="section-title">Chats</span>
+            <button type="button" class="chat-new-btn" id="btn-new-chat">New chat</button>
+        </div>
+        <div id="chat-list" class="chat-list"></div>
+    </div>
+
     
     <div class="sidebar-footer">
         <a href="/help" id="btn-open-help" class="sidebar-link-btn">Help &amp; info</a>
@@ -178,11 +186,12 @@
 <section class="workspace-main">
     <header class="workspace-topbar">
         <button type="button" id="btn-toggle-sidebar" class="sidebar-toggle" title="Show or hide sidebar">☰</button>
+        <span class="chat-title" id="active-chat-title">New chat</span>
         <div class="topbar-status">
             <span class="status-dot active" id="topbar-dot"></span>
             <span id="active-checks-summary">3 of 3 safety checks active</span>
         </div>
-        <button type="button" class="btn-link" id="btn-clear-chat">Clear conversation</button>
+        <button type="button" class="btn-link" id="btn-clear-chat">Delete this chat</button>
     </header>
     <div id="unprotected-banner" class="unprotected-banner hidden">
         <strong>Warning: All safety checks are turned off.</strong> Your prompts are currently sent directly to the AI without local scanning.
@@ -198,7 +207,17 @@
 </section>
 </main>
 
-        <div id="settings-overlay" class="settings-overlay hidden">
+        <div id="chat-delete-overlay" class="chat-confirm-overlay hidden">
+    <div class="chat-confirm-panel">
+        <h2>Delete this chat?</h2>
+        <p>Its messages are removed from the database and cannot be recovered. Team stats are not changed.</p>
+        <div class="chat-confirm-actions">
+            <button type="button" class="btn btn-sm" id="btn-cancel-chat-delete">Cancel</button>
+            <button type="button" class="btn btn-sm btn-outline-danger" id="btn-confirm-chat-delete">Yes, delete this chat</button>
+        </div>
+    </div>
+</div>
+<div id="settings-overlay" class="settings-overlay hidden">
     <div class="settings-panel">
         <div class="settings-panel-header">
             <h2>Settings</h2>

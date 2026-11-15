@@ -23,6 +23,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from admin_session import create_session as create_admin_session, init_table as init_session_table, register as register_admin_session
 from team_stats import register as register_team_stats
 from block_log import record_block
+from chat_store import init_tables as init_chat_tables, bump_answered, register as register_chat_routes, list_chats, get_chat, newest_chat, save_exchange
 from secret_store import encrypt_secret, decrypt_secret, mask_stored_key, migrate_api_keys
 
 # ---------------------------------------------------------------------------
@@ -522,10 +523,13 @@ def employee_login():
         return fail4("Invalid employee username or password.", 401)
 
     upgrade_password("EMPLOYEES", row["id"], row["password"], password)
+    latest = newest_chat(DB_FILE, parent_id, row["id"])
     return jsonify({
         "error": False,
         "Employee_id": str(row["id"]),
-        "CHAT_LOGS": load_chat_logs(row["CHAT_LOGS"]),
+        "chats": list_chats(DB_FILE, parent_id, row["id"]),
+        "chat_id": latest["id"] if latest else None,
+        "CHAT_LOGS": latest["messages"] if latest else [],
         "settings": settings_payload(parent_id, row["id"], get_settings(parent_id, row["id"])),
         "error_message": NULL,
     })
@@ -744,6 +748,9 @@ def employee_chat():
         bypass = data.get("bypass", False)
         if not isinstance(bypass, bool):
             raise ChatError("'bypass' must be true or false.", 400)
+        chat_id = to_int(data.get("chat_id"))
+        if data.get("chat_id") is not None and (chat_id is None or get_chat(DB_FILE, parent_id, employee_id, chat_id) is None):
+            raise ChatError("That chat was not found for this team member.", 404)
 
         # Request values win, saved settings are the fallback.
         saved = get_settings(parent_id, employee_id)
@@ -780,15 +787,11 @@ def employee_chat():
 
         answer = call_openai(api_key, model, prompt)
 
-        # Save to the chat history.
-        logs = load_chat_logs(emp["CHAT_LOGS"])
-        logs.append({"prompt": prompt, "answer": answer})
-        db = get_db()
-        db.execute("UPDATE EMPLOYEES SET CHAT_LOGS = ? WHERE id = ?",
-                   (json.dumps(logs, ensure_ascii=False), employee_id))
-        db.commit()
+        # Save to the chat history (one row per chat in CHATS).
+        chat_id = save_exchange(DB_FILE, parent_id, employee_id, chat_id, prompt, answer)
+        bump_answered(DB_FILE, parent_id, employee_id)
 
-        return chat_response(False, False, reply=answer)
+        return jsonify({"error": False, "blocked": False, "reply_message": answer, "error_message": NULL, "block_info": NULL, "chat_id": chat_id})
 
     except ChatError as exc:
         return chat_response(True, message=exc.message, status=exc.status)
@@ -881,6 +884,8 @@ from models_route import register as register_models
 register_models(app)
 register_admin_session(app, DB_FILE)
 register_team_stats(app, DB_FILE)
+init_chat_tables(DB_FILE)
+register_chat_routes(app, DB_FILE)
 
 
 if __name__ == "__main__":

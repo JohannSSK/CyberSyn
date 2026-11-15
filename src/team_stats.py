@@ -69,6 +69,7 @@ def register(app, db_file):
                 (admin["id"],),
             ).fetchall()
         }
+        answered_map = {r["Employee_id"]: r["answered"] for r in con.execute("SELECT Employee_id, answered FROM EMPLOYEE_STATS WHERE Parent_id = ?", (admin["id"],)).fetchall()}
         con.close()
 
         blocks = {}
@@ -79,7 +80,7 @@ def register(app, db_file):
         for emp in employees:
             s = settings.get(emp["id"])
             checks_on = sum(int(s[k]) for k in ("check1", "check2", "check3")) if s else 3
-            answered = count_answered(emp["CHAT_LOGS"])
+            answered = answered_map.get(emp["id"], 0)
             emp_blocks = blocks.get(emp["id"], [])
             blocked = len(emp_blocks)
             sent = answered + blocked

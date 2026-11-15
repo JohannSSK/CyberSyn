@@ -3,6 +3,9 @@
  */
 
 document.addEventListener('DOMContentLoaded', () => {
+    function setChatTitle(title) { var el = document.getElementById("active-chat-title"); if (el) { el.textContent = title || "New chat"; } }
+    let activeChatId = null;
+    let pendingDeleteId = null;
     const CAUSE_LABELS = {
         GREEK_AFM: 'Greek Tax ID (AFM)',
         GREEK_AMKA: 'Greek Social Security (AMKA)',
@@ -487,6 +490,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 workspace.displayParent.textContent = `Admin: ${state.adminUsername || 'Unknown'}`;
 
                 workspace.chatStream.innerHTML = '';
+                activeChatId = data.chat_id || null; setChatTitle(((data.chats || []).find(function (c) { return c.id === data.chat_id; }) || {}).title);
+                renderChatList(Array.isArray(data.chats) ? data.chats : []);
                 if (Array.isArray(data.CHAT_LOGS) && data.CHAT_LOGS.length > 0) {
                     renderChatLogs(data.CHAT_LOGS);
                 } else {
@@ -691,7 +696,8 @@ document.addEventListener('DOMContentLoaded', () => {
         API_KEY: workspace.apiKey.value.trim(),
         MODEL_NAME: workspace.modelName.value.trim() || "gpt-4o-mini",
         prompt: promptText,
-        bypass: Boolean(isBypass)
+        bypass: Boolean(isBypass),
+        chat_id: activeChatId
     };
     const thinking = startThinking(flags, isBypass);
     workspace.btnSendPrompt.disabled = true;
@@ -711,6 +717,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (data.blocked === false && !data.error) {
             appendMessageBubble(data.reply_message || "Done.", "ai", isBypass, true);
+            if (data.chat_id) { activeChatId = data.chat_id; refreshChatList().then(function (chats) { var c = (chats || []).find(function (x) { return x.id === activeChatId; }); if (c) { setChatTitle(c.title); } }); }
         } else {
             appendErrorBubble(data.error_message || "Could not complete request.");
         }
@@ -982,6 +989,119 @@ function appendMessageBubble(text, sender, isBypass = false, animate = false) {
     scrollChat();
 }
 
+    async function chatApi(path, extra) {
+        const body = Object.assign({ Parent_id: state.parentId, Employee_id: state.employeeId }, extra || {});
+        const res = await fetch(path, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body)
+        });
+        return res.json();
+    }
+
+    function renderChatList(chats) {
+        const list = document.getElementById("chat-list");
+        if (!list) return;
+        list.replaceChildren();
+        if (!chats.length) {
+            const empty = document.createElement("div");
+            empty.className = "chat-list-empty";
+            empty.textContent = "No chats yet.";
+            list.appendChild(empty);
+            return;
+        }
+        chats.forEach(c => {
+            const row = document.createElement("div");
+            row.className = "chat-row" + (c.id === activeChatId ? " is-active" : "");
+            const open = document.createElement("button");
+            open.type = "button";
+            open.className = "chat-row-open";
+            open.textContent = c.title;
+            open.title = c.title;
+            open.addEventListener("click", () => openChat(c.id));
+            const del = document.createElement("button");
+            del.type = "button";
+            del.className = "chat-row-del";
+            del.textContent = "Delete";
+            del.addEventListener("click", e => { e.stopPropagation(); askDeleteChat(c.id); });
+            row.append(open, del);
+            list.appendChild(row);
+        });
+    }
+
+    async function refreshChatList() {
+        if (!state.parentId || !state.employeeId) return [];
+        try {
+            const data = await chatApi("/api/admin/employee/chats");
+            const chats = data.error ? [] : data.chats;
+            renderChatList(chats);
+            return chats;
+        } catch (err) {
+            return [];
+        }
+    }
+
+    async function openChat(chatId) {
+        try {
+            const data = await chatApi("/api/admin/employee/chats/open", { chat_id: chatId });
+            if (data.error) {
+                showToast(data.error_message || "Could not open that chat.", "error");
+                return;
+            }
+            activeChatId = data.chat.id; setChatTitle(data.chat.title);
+            workspace.chatStream.innerHTML = "";
+            if (data.chat.messages.length > 0) {
+                renderChatLogs(data.chat.messages);
+            } else {
+                renderEmptyState();
+            }
+            refreshChatList();
+        } catch (err) {
+            showToast("Could not reach the server.", "error");
+        }
+    }
+
+    function newChat() {
+        activeChatId = null; setChatTitle(null);
+        workspace.chatStream.innerHTML = "";
+        renderEmptyState();
+        refreshChatList();
+    }
+
+    function askDeleteChat(chatId) {
+        pendingDeleteId = chatId;
+        document.getElementById("chat-delete-overlay").classList.remove("hidden");
+    }
+
+    function closeDeleteChat() {
+        pendingDeleteId = null;
+        document.getElementById("chat-delete-overlay").classList.add("hidden");
+    }
+
+    async function confirmDeleteChat() {
+        const chatId = pendingDeleteId;
+        if (!chatId) {
+            closeDeleteChat();
+            return;
+        }
+        try {
+            const data = await chatApi("/api/admin/employee/chats/delete", { chat_id: chatId });
+            if (data.error) {
+                showToast(data.error_message || "Could not delete that chat.", "error");
+                return;
+            }
+            closeDeleteChat();
+            if (chatId === activeChatId) {
+                newChat();
+            } else {
+                refreshChatList();
+            }
+            showToast("Chat deleted.", "success");
+        } catch (err) {
+            showToast("Could not reach the server.", "error");
+        }
+    }
+
     function renderChatLogs(logs) {
         logs.forEach(entry => {
             if (entry && typeof entry === 'object') {
@@ -1116,10 +1236,13 @@ function appendMessageBubble(text, sender, isBypass = false, animate = false) {
 
     workspace.btnLogout.addEventListener('click', handleWorkspaceLogout);
     workspace.chatForm.addEventListener('submit', handleChatSubmit);
-    workspace.btnClearChat.addEventListener('click', () => {
-        workspace.chatStream.innerHTML = '';
-        renderEmptyState();
+    workspace.btnClearChat.addEventListener("click", () => {
+        if (activeChatId) askDeleteChat(activeChatId);
+        else showToast("No chat is open.", "warning");
     });
+    document.getElementById("btn-new-chat").addEventListener("click", newChat);
+    document.getElementById("btn-cancel-chat-delete").addEventListener("click", closeDeleteChat);
+    document.getElementById("btn-confirm-chat-delete").addEventListener("click", confirmDeleteChat);
 
     workspace.promptInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
