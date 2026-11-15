@@ -20,6 +20,10 @@ from pathlib import Path
 from flask import Flask, g, jsonify, render_template, request
 from werkzeug.exceptions import HTTPException
 from werkzeug.security import check_password_hash, generate_password_hash
+from admin_session import create_session as create_admin_session, init_table as init_session_table, register as register_admin_session
+from team_stats import register as register_team_stats
+from block_log import record_block
+from secret_store import encrypt_secret, decrypt_secret, mask_stored_key, migrate_api_keys
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -81,6 +85,31 @@ app.json.ensure_ascii = False
 @app.route("/")
 def index():
     return render_template("index.html")
+
+
+@app.route("/signup/admin")
+def signup_admin_page():
+    return render_template("signup_admin.html")
+
+
+@app.route("/signup/employee")
+def signup_employee_page():
+    return render_template("signup_employee.html")
+
+
+@app.route("/remove/employee")
+def remove_employee_page():
+    return render_template("remove_employee.html")
+
+
+@app.route("/team")
+def team_page():
+    return render_template("team.html")
+
+
+@app.route("/help")
+def help_page():
+    return render_template("help.html")
 
 
 @app.errorhandler(Exception)
@@ -308,7 +337,8 @@ def settings_payload(parent_id, employee_id, row):
         "check1": bool(row["check1"]),
         "check2": bool(row["check2"]),
         "check3": bool(row["check3"]),
-        "API_KEY": row["API_KEY"] or "",
+        "API_KEY": "",
+        "API_KEY_MASK": mask_stored_key(row["API_KEY"]),
         "MODEL_NAME": row["MODEL_NAME"] or DEFAULT_MODEL,
     }
 
@@ -339,12 +369,22 @@ def admin_login():
         return fail1("Invalid password.", 401)
 
     upgrade_password("ADMINS", row["id"], row["password"], password)
-    return jsonify({"success": True, "Parent_id": str(row["id"]), "reason": NULL})
+    return jsonify({"success": True, "Parent_id": str(row["id"]), "reason": NULL, "session_token": create_admin_session(DB_FILE, row["id"])})
 
 
 # ---------------------------------------------------------------------------
 # API 2: POST /api/admin  (add / remove admin)
 # ---------------------------------------------------------------------------
+
+def admin_password_problem(password):
+    if len(password) < 8:
+        return "Admin password must be at least 8 characters."
+    if not any(c.isdigit() for c in password):
+        return "Admin password must include at least one number."
+    if not any(c.isalpha() for c in password):
+        return "Admin password must include at least one letter."
+    return None
+
 
 def fail2(message, status):
     return jsonify({"error": True, "Parent_id": NULL, "error_message": message}), status
@@ -366,6 +406,9 @@ def admin_manage():
     row = db.execute("SELECT * FROM ADMINS WHERE username = ?", (username,)).fetchone()
 
     if method == "add":
+        problem = admin_password_problem(password)
+        if problem:
+            return fail2(problem, 400)
         if row is not None:
             return fail2(f"Admin '{username}' already exists.", 409)
         cur = db.execute(
@@ -375,7 +418,7 @@ def admin_manage():
         db.commit()
         new_id = cur.lastrowid
         create_default_settings(new_id, 0)
-        return jsonify({"error": False, "Parent_id": str(new_id),
+        return jsonify({"error": False, "Parent_id": str(new_id), "session_token": create_admin_session(DB_FILE, new_id),
                         "error_message": NULL}), 201
 
     # remove
@@ -384,6 +427,7 @@ def admin_manage():
     if not verify_password(row["password"], password):
         return fail2("Invalid password.", 401)
     pid = row["id"]
+    db.execute("DELETE FROM ADMIN_SESSIONS WHERE admin_id = ?", (pid,))
     db.execute("DELETE FROM SETTINGS WHERE Parent_id = ?", (pid,))
     db.execute("DELETE FROM EMPLOYEES WHERE Parent_id = ?", (pid,))
     db.execute("DELETE FROM ADMINS WHERE id = ?", (pid,))
@@ -482,6 +526,7 @@ def employee_login():
         "error": False,
         "Employee_id": str(row["id"]),
         "CHAT_LOGS": load_chat_logs(row["CHAT_LOGS"]),
+        "settings": settings_payload(parent_id, row["id"], get_settings(parent_id, row["id"])),
         "error_message": NULL,
     })
 
@@ -513,7 +558,8 @@ def employee_settings():
     if "API_KEY" in data:
         if not isinstance(data["API_KEY"], str):
             return fail3("'API_KEY' must be a string.", 400)
-        updates["API_KEY"] = data["API_KEY"]
+        if data["API_KEY"].strip():
+            updates["API_KEY"] = encrypt_secret(data["API_KEY"].strip())
     if "MODEL_NAME" in data:
         if not non_empty_str(data["MODEL_NAME"]):
             return fail3("'MODEL_NAME' must be a non-empty string.", 400)
@@ -652,7 +698,6 @@ def build_block_info(stage, result):
     return {
         "blocked": True,
         "stage": stage,
-        "score": result.get("score", NULL),
         "main_cause": result.get("main_cause", NULL),
         "line": result.get("line", NULL),
         "start_offset": result.get("start_offset", NULL),
@@ -711,10 +756,7 @@ def employee_chat():
             else:
                 flags[key] = bool(saved[key])
 
-        api_key = data.get("API_KEY")
-        if not isinstance(api_key, str) or not api_key.strip():
-            api_key = saved["API_KEY"] or ""
-        api_key = api_key.strip()
+        api_key = decrypt_secret(saved["API_KEY"]).strip()
         model = data.get("MODEL_NAME")
         if not non_empty_str(model):
             model = saved["MODEL_NAME"] or DEFAULT_MODEL
@@ -731,6 +773,7 @@ def employee_chat():
                 result = run_check(stage, prompt)
                 if result.get("blocked"):
                     info = build_block_info(stage, result)
+                    record_block(DB_FILE, parent_id, employee_id, stage, info["main_cause"])
                     msg = (f"Blocked by {stage} ({info['main_cause']}): "
                            f"'{info['snippet']}' on line {info['line']}")
                     return chat_response(False, True, reply=NULL, message=msg, block_info=info)
@@ -752,6 +795,67 @@ def employee_chat():
 
 
 # ---------------------------------------------------------------------------
+# API 7: POST /api/admin/employee/account  (employee changes own password or username)
+# ---------------------------------------------------------------------------
+
+def fail7(message, status):
+    return jsonify({"error": True, "error_message": message}), status
+
+
+@app.post("/api/admin/employee/account")
+def employee_account():
+    data = get_json_dict()
+    if data is None:
+        return fail7("Request body must be a JSON object.", 400)
+    parent_id = to_int(data.get("Parent_id"))
+    employee_id = to_int(data.get("Employee_id"))
+    action = str(data.get("action", "")).strip().lower()
+    current = data.get("current_password")
+    if parent_id is None:
+        return fail7("Parent_id must be a positive integer.", 400)
+    if employee_id is None:
+        return fail7("Employee_id must be a positive integer.", 400)
+    if action not in ("password", "username"):
+        return fail7("action must be password or username.", 400)
+    if not non_empty_str(current):
+        return fail7("current_password is required.", 400)
+
+    row = employee_row(parent_id, employee_id)
+    if row is None:
+        return fail7(not_found_employee_message(parent_id, employee_id), 404)
+    if not verify_password(row["password"], current):
+        return fail7("Current password is incorrect.", 401)
+
+    db = get_db()
+    if action == "password":
+        new_password = data.get("new_password")
+        if not non_empty_str(new_password):
+            return fail7("new_password is required.", 400)
+        if new_password.strip() == current.strip():
+            return fail7("The new password must be different from the current one.", 400)
+        db.execute("UPDATE EMPLOYEES SET password = ? WHERE id = ?",
+                   (generate_password_hash(new_password.strip()), employee_id))
+        db.commit()
+        return jsonify({"error": False, "error_message": NULL})
+
+    new_username = data.get("new_username")
+    if not non_empty_str(new_username):
+        return fail7("new_username is required.", 400)
+    new_username = new_username.strip()
+    if new_username == row["username"]:
+        return fail7("The new username is the same as the current one.", 400)
+    taken = db.execute(
+        "SELECT 1 FROM EMPLOYEES WHERE Parent_id = ? AND username = ? AND id != ?",
+        (parent_id, new_username, employee_id),
+    ).fetchone()
+    if taken is not None:
+        return fail7("That username is already taken under Parent_id " + str(parent_id) + ".", 409)
+    db.execute("UPDATE EMPLOYEES SET username = ? WHERE id = ?", (new_username, employee_id))
+    db.commit()
+    return jsonify({"error": False, "error_message": NULL, "username": new_username})
+
+
+# ---------------------------------------------------------------------------
 # Seed + startup
 # ---------------------------------------------------------------------------
 
@@ -769,10 +873,14 @@ def seed():
 
 
 init_db()
+init_session_table(DB_FILE)
 check_schema()
+migrate_api_keys(DB_FILE)
 
 from models_route import register as register_models
 register_models(app)
+register_admin_session(app, DB_FILE)
+register_team_stats(app, DB_FILE)
 
 
 if __name__ == "__main__":

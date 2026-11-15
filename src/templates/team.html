@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cybersyn - Team and stats</title>
+    <link rel="stylesheet" href="{{ url_for("static", filename="css/style.css") }}">
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="team-page-body">
+<main class="team-page">
+    <header class="team-header">
+        <div>
+            <div class="auth-eyebrow">Administrator</div>
+            <h1 class="team-title">Team and stats</h1>
+            <p class="team-sub" id="team-admin-line">Loading...</p>
+        </div>
+        <div class="team-header-actions">
+            <button type="button" class="link-small" id="btn-team-refresh">Refresh</button>
+            <a href="/" class="link-small">Back to sign in</a>
+        </div>
+    </header>
+
+    <div id="team-notice" class="team-notice hidden"></div>
+
+    <section class="team-stats">
+        <div class="team-stat"><span class="team-stat-label">Team members</span><strong id="stat-members">--</strong></div>
+        <div class="team-stat"><span class="team-stat-label">Prompts sent</span><strong id="stat-sent">--</strong></div>
+        <div class="team-stat"><span class="team-stat-label">Blocked</span><strong id="stat-blocked">--</strong></div>
+        <div class="team-stat"><span class="team-stat-label">Block rate</span><strong id="stat-rate">--</strong></div>
+    </section>
+
+    <div class="team-panel-head">
+        <h2>Members</h2>
+        <span class="team-sub" id="team-count"></span>
+    </div>
+    <section id="team-cards" class="team-cards"></section>
+    <div id="team-empty" class="team-empty hidden">No team members yet. Add one from the sign-in page.</div>
+</main>
+<script src="{{ url_for("static", filename="js/team.js") }}"></script>
+<script src="{{ url_for('static', filename='js/i18n.js') }}"></script>
+</body>
+</html>

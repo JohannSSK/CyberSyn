@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CyberSyn - Help and info</title>
+    <link rel="stylesheet" href="{{ url_for("static", filename="css/style.css") }}">
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="team-page-body">
+<main class="team-page">
+    <header class="team-header">
+        <div>
+            <div class="auth-eyebrow lang-en">Help and info</div>
+            <div class="auth-eyebrow lang-el">Βοήθεια και πληροφορίες</div>
+            <h1 class="team-title">CyberSyn</h1>
+            <p class="team-sub lang-en">An open source hackathon project. It runs on your own machine.</p>
+            <p class="team-sub lang-el">Έργο ανοιχτού κώδικα για hackathon. Εκτελείται στον δικό σας υπολογιστή.</p>
+        </div>
+        <div class="team-header-actions">
+            <a href="https://github.com/JohannSSK/CyberSyn" class="link-small lang-en" target="_blank" rel="noopener">Source code on GitHub</a>
+            <a href="https://github.com/JohannSSK/CyberSyn" class="link-small lang-el" target="_blank" rel="noopener">Πηγαίος κώδικας στο GitHub</a>
+            <a href="/" class="link-small lang-en">Back to sign in</a>
+            <a href="/" class="link-small lang-el">Πίσω στη σύνδεση</a>
+        </div>
+    </header>
+
+    <section class="help-section">
+        <h2 class="lang-en">Quick start</h2>
+        <h2 class="lang-el">Γρήγορη εκκίνηση</h2>
+        <ol class="lang-en">
+            <li>Create an administrator account on the sign-in page.</li>
+            <li>Sign in as administrator, then add team members from the sign-in page.</li>
+            <li>Open Settings, enter an API key, choose the checks you want, then press Apply and enter your admin password to save.</li>
+            <li>Sign in as a team member and start chatting. A blocked prompt shows a card. An administrator can approve sending it anyway.</li>
+            <li>Open Team to see each member's prompt counts, blocks and block reasons.</li>
+        </ol>
+        <ol class="lang-el">
+            <li>Δημιουργήστε λογαριασμό διαχειριστή από τη σελίδα σύνδεσης.</li>
+            <li>Συνδεθείτε ως διαχειριστής και προσθέστε μέλη ομάδας από τη σελίδα σύνδεσης.</li>
+            <li>Ανοίξτε τις Ρυθμίσεις, εισάγετε ένα κλειδί API, επιλέξτε τους ελέγχους που θέλετε και πατήστε Εφαρμογή. Για αποθήκευση, εισάγετε τον κωδικό διαχειριστή σας.</li>
+            <li>Συνδεθείτε ως μέλος ομάδας και ξεκινήστε τη συνομιλία. Ένα αποκλεισμένο prompt εμφανίζεται ως κάρτα. Ο διαχειριστής μπορεί να εγκρίνει την αποστολή του παρόλα αυτά.</li>
+            <li>Ανοίξτε την Ομάδα για να δείτε τον αριθμό των prompts, τους αποκλεισμούς και τις αιτίες κάθε μέλους.</li>
+        </ol>
+    </section>
+
+    <section class="help-section">
+        <h2 class="lang-en">Privacy policy</h2>
+        <h2 class="lang-el">Πολιτική απορρήτου</h2>
+        <ul class="lang-en">
+            <li>The authors do not run a server that collects your data. CyberSyn runs on the computer where you start it.</li>
+            <li>Usernames, passwords, prompts, replies, API keys and settings are stored in the local files listed under Where everything is stored. They are not sent to the authors.</li>
+            <li>Prompts are sent to the AI provider whose API key you save. That provider's privacy policy applies to those requests.</li>
+            <li>Passwords are stored as hashes. API keys are stored encrypted, not hashed, because the app needs the original key to call the provider.</li>
+            <li>The page loads the Inter and Instrument Serif fonts from Google Fonts. Google receives your IP address and browser details when the fonts load.</li>
+            <li>Removing an administrator deletes that admin's team members, settings and chat history from the local database.</li>
+            <li>For questions or requests, open an issue on the GitHub repository.</li>
+        </ul>
+        <ul class="lang-el">
+            <li>Οι δημιουργοί δεν διατηρούν διακομιστή που συλλέγει τα δεδομένα σας. Το CyberSyn εκτελείται στον υπολογιστή όπου το ξεκινάτε.</li>
+            <li>Τα ονόματα χρηστών, οι κωδικοί, τα prompts, οι απαντήσεις, τα κλειδιά API και οι ρυθμίσεις αποθηκεύονται στα τοπικά αρχεία της ενότητας Πού αποθηκεύονται τα δεδομένα. Δεν αποστέλλονται στους δημιουργούς.</li>
+            <li>Τα prompts αποστέλλονται στον πάροχο AI του οποίου αποθηκεύετε το κλειδί API. Για αυτά τα αιτήματα ισχύει η πολιτική απορρήτου του παρόχου.</li>
+            <li>Οι κωδικοί αποθηκεύονται ως hash. Τα κλειδιά API αποθηκεύονται κρυπτογραφημένα και όχι ως hash, επειδή η εφαρμογή χρειάζεται το αρχικό κλειδί για να καλέσει τον πάροχο.</li>
+            <li>Η σελίδα φορτώνει τις γραμματοσειρές Inter και Instrument Serif από το Google Fonts. Η Google λαμβάνει τη διεύθυνση IP και στοιχεία του προγράμματος περιήγησης όταν φορτώνουν οι γραμματοσειρές.</li>
+            <li>Η διαγραφή ενός διαχειριστή διαγράφει από την τοπική βάση δεδομένων τα μέλη ομάδας, τις ρυθμίσεις και το ιστορικό συνομιλιών του.</li>
+            <li>Για ερωτήσεις ή αιτήματα, ανοίξτε ένα issue στο αποθετήριο GitHub.</li>
+        </ul>
+    </section>
+
+    <section class="help-section">
+        <h2 class="lang-en">Terms of use</h2>
+        <h2 class="lang-el">Όροι χρήσης</h2>
+        <ul class="lang-en">
+            <li>CyberSyn is a hackathon prototype. It is provided as is, without warranty of any kind.</li>
+            <li>It has not been security audited. Some known limitations are not fixed yet. Do not rely on it to protect sensitive data or production systems.</li>
+            <li>You are responsible for your API key, the provider usage it creates, and following that provider's terms.</li>
+            <li>You may use, copy, change and share the code under the license included in the repository.</li>
+            <li>The authors are not liable for any loss caused by using this software.</li>
+        </ul>
+        <ul class="lang-el">
+            <li>Το CyberSyn είναι πρωτότυπο hackathon. Παρέχεται ως έχει, χωρίς εγγύηση οποιουδήποτε είδους.</li>
+            <li>Δεν έχει ελεγχθεί ως προς την ασφάλεια. Ορισμένοι γνωστοί περιορισμοί δεν έχουν διορθωθεί ακόμη. Μην το χρησιμοποιείτε για την προστασία ευαίσθητων δεδομένων ή συστημάτων παραγωγής.</li>
+            <li>Είστε υπεύθυνοι για το κλειδί API σας, τη χρήση του παρόχου που δημιουργεί και για την τήρηση των όρων του παρόχου.</li>
+            <li>Μπορείτε να χρησιμοποιείτε, να αντιγράφετε, να τροποποιείτε και να μοιράζεστε τον κώδικα σύμφωνα με την άδεια που περιλαμβάνεται στο αποθετήριο.</li>
+            <li>Οι δημιουργοί δεν φέρουν ευθύνη για οποιαδήποτε απώλεια προκληθεί από τη χρήση του λογισμικού.</li>
+        </ul>
+    </section>
+
+    <section class="help-section">
+        <h2>Cookies</h2>
+        <ul class="lang-en">
+            <li>CyberSyn does not set cookies for tracking, advertising or analytics.</li>
+            <li>Administrator sign-in is remembered with a token in your browser's localStorage, under the key <code>cybersyn_admin_token</code>. It is not a cookie. It expires after 7 days.</li>
+            <li>Pressing Switch administrator removes the token. Clearing the site data in your browser removes it too.</li>
+        </ul>
+        <ul class="lang-el">
+            <li>Το CyberSyn δεν ορίζει cookies για παρακολούθηση, διαφήμιση ή αναλυτικά στοιχεία.</li>
+            <li>Η σύνδεση του διαχειριστή θυμάται με ένα token στο localStorage του προγράμματος περιήγησης, με κλειδί <code>cybersyn_admin_token</code>. Δεν είναι cookie. Λήγει μετά από 7 ημέρες.</li>
+            <li>Με το πάτημα του Αλλαγή διαχειριστή αφαιρείται το token. Το ίδιο συμβαίνει και όταν διαγράφετε τα δεδομένα ιστότοπου στο πρόγραμμα περιήγησης.</li>
+        </ul>
+    </section>
+
+    <section class="help-section">
+        <h2 class="lang-en">Where everything is stored</h2>
+        <h2 class="lang-el">Πού αποθηκεύονται τα δεδομένα</h2>
+        <ul class="lang-en">
+            <li><code>backend/app.db</code>: the SQLite database. Tables: ADMINS (admin accounts, hashed passwords), EMPLOYEES (team members, hashed passwords, chat history in CHAT_LOGS), SETTINGS (checks, model and encrypted API key), ADMIN_SESSIONS (hashed admin tokens and expiry), BLOCK_LOG (stage and reason of each block).</li>
+            <li><code>backend/secret.key</code>: the key that decrypts saved API keys. It is set to read-only for you (chmod 600). If the environment variable <code>CYBERSYN_KEY</code> is set, the app uses that instead. Losing this key makes saved API keys unreadable.</li>
+            <li><code>includes/constants.json</code>: app constants, in the project root.</li>
+            <li><code>src/</code>: the Flask app, templates and static files.</li>
+            <li>Browser localStorage: the administrator token only. Team member sessions are never kept, so a refresh signs them out.</li>
+        </ul>
+        <ul class="lang-el">
+            <li><code>backend/app.db</code>: η βάση δεδομένων SQLite. Πίνακες: ADMINS (λογαριασμοί διαχειριστών, κωδικοί ως hash), EMPLOYEES (μέλη ομάδας, κωδικοί ως hash, ιστορικό συνομιλιών στο CHAT_LOGS), SETTINGS (έλεγχοι, μοντέλο και κρυπτογραφημένο κλειδί API), ADMIN_SESSIONS (hash των tokens διαχειριστή και λήξη), BLOCK_LOG (στάδιο και αιτία κάθε αποκλεισμού).</li>
+            <li><code>backend/secret.key</code>: το κλειδί που αποκρυπτογραφεί τα αποθηκευμένα κλειδιά API. Έχει δικαίωμα μόνο ανάγνωσης για εσάς (chmod 600). Αν έχει οριστεί η μεταβλητή περιβάλλοντος <code>CYBERSYN_KEY</code>, η εφαρμογή χρησιμοποιεί αυτήν. Αν χαθεί αυτό το κλειδί, τα αποθηκευμένα κλειδιά API δεν θα είναι αναγνώσιμα.</li>
+            <li><code>includes/constants.json</code>: σταθερές της εφαρμογής, στον ριζικό φάκελο του έργου.</li>
+            <li><code>src/</code>: η εφαρμογή Flask, τα templates και τα στατικά αρχεία.</li>
+            <li>localStorage του προγράμματος περιήγησης: μόνο το token διαχειριστή. Οι συνεδρίες μελών ομάδας δεν διατηρούνται ποτέ, οπότε η ανανέωση της σελίδας τα αποσυνδέει.</li>
+        </ul>
+    </section>
+
+    <section class="help-section">
+        <h2 class="lang-en">Source code</h2>
+        <h2 class="lang-el">Πηγαίος κώδικας</h2>
+        <p class="lang-en">The full source is public. You can read it, run it and report problems on GitHub.</p>
+        <p class="lang-el">Ο πλήρης πηγαίος κώδικας είναι δημόσιος. Μπορείτε να τον διαβάσετε, να τον εκτελέσετε και να αναφέρετε προβλήματα στο GitHub.</p>
+        <a href="https://github.com/JohannSSK/CyberSyn" class="help-link" target="_blank" rel="noopener">github.com/JohannSSK/CyberSyn</a>
+    </section>
+</main>
+</body>
+</html>

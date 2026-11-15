@@ -202,6 +202,37 @@ document.addEventListener('DOMContentLoaded', () => {
         stepTimeouts = [];
     }
 
+    function showAuthError(id, message) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = message;
+    }
+
+    function showStagedLoader(button, messages, totalMs) {
+        return new Promise(resolve => {
+            const original = button.textContent;
+            const stepMs = totalMs / messages.length;
+            const spinner = document.createElement("span");
+            spinner.className = "btn-spinner";
+            const label = document.createElement("span");
+            button.replaceChildren(spinner, label);
+            button.disabled = true;
+            let i = 0;
+            label.textContent = messages[0][0];
+            const timer = setInterval(() => {
+                if (i < messages.length - 1) {
+                    i += 1;
+                    label.textContent = messages[i][0];
+                }
+            }, stepMs);
+            setTimeout(() => {
+                clearInterval(timer);
+                button.textContent = original;
+                button.disabled = false;
+                resolve();
+            }, totalMs);
+        });
+    }
+
     function showToast(message, type = 'info') {
         const container = document.getElementById('toast-container');
         const toast = document.createElement('div');
@@ -232,7 +263,7 @@ document.addEventListener('DOMContentLoaded', () => {
             adminStep.classList.add('hidden');
             employee.card.classList.remove('hidden');
             admin.sessionBadge.classList.remove('hidden');
-            admin.activeLabel.textContent = `${state.adminUsername || 'Admin'} (ID #${state.parentId})`;
+            admin.activeLabel.textContent = state.adminUsername || 'Admin';
             employee.username.focus();
         } else {
             employee.card.classList.add('hidden');
@@ -286,6 +317,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        showAuthError('admin-msg', '');
         showSimpleLoading('Signing in as Admin...', 'Verifying workspace credentials');
         try {
             const response = await fetch('/api/admin/login', {
@@ -298,10 +330,17 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.success && data.Parent_id !== undefined) {
                 state.parentId = data.Parent_id;
                 state.adminUsername = username;
+                rememberAdmin(data.session_token);
+                await showStagedLoader(admin.btnLogin, [
+                    ['Verifying administrator', 'Checking your credentials'],
+                    ['Loading your workspace', 'Preparing team access'],
+                    ['Securing your session', 'Almost there']
+                ], 2200);
                 updateAdminAuthState();
                 showToast(`Welcome back, ${username}.`, 'success');
                 admin.password.value = '';
             } else {
+                showAuthError('admin-msg', data.reason || 'Could not sign in as admin.');
                 showToast(data.reason || 'Could not sign in as admin.', 'error');
             }
         } catch (err) {
@@ -336,6 +375,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (method === 'add') {
                     state.parentId = data.Parent_id;
                     state.adminUsername = username;
+                    rememberAdmin(data.session_token);
                     updateAdminAuthState();
                     showToast(`Admin "${username}" created and signed in.`, 'success');
                 } else {
@@ -353,10 +393,60 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function handleAdminLogout() {
+        const token = localStorage.getItem(ADMIN_TOKEN_KEY);
+        localStorage.removeItem(ADMIN_TOKEN_KEY);
+        if (token) {
+            fetch("/api/admin/logout", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ token })
+            }).catch(() => {});
+        }
         admin.password.value = '';
         state.parentId = null;
         state.adminUsername = null;
         updateAdminAuthState();
+    }
+
+    const ADMIN_TOKEN_KEY = "cybersyn_admin_token";
+
+    function rememberAdmin(token) {
+        if (token) localStorage.setItem(ADMIN_TOKEN_KEY, token);
+    }
+
+    async function restoreAdminSession() {
+        const token = localStorage.getItem(ADMIN_TOKEN_KEY);
+        if (!token) return;
+        try {
+            const res = await fetch("/api/admin/session", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ token })
+            });
+            const data = await res.json();
+            if (data.success) {
+                state.parentId = data.Parent_id;
+                state.adminUsername = data.username;
+                updateAdminAuthState();
+            } else {
+                localStorage.removeItem(ADMIN_TOKEN_KEY);
+            }
+        } catch (err) {
+            // Server unreachable: keep the token and show step 1.
+        }
+    }
+
+    function applyServerSettings(s) {
+        if (!s) return;
+        state.settings = {
+            check1: Boolean(s.check1),
+            check2: Boolean(s.check2),
+            check3: Boolean(s.check3),
+            API_KEY: "",
+            MODEL_NAME: s.MODEL_NAME || "gpt-4o-mini"
+        };
+        workspace.apiKey.value = "";
+        workspace.apiKey.placeholder = s.API_KEY_MASK ? "Saved key: " + s.API_KEY_MASK : "Paste your API key...";
     }
 
     async function handleEmployeeLogin() {
@@ -373,6 +463,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        showAuthError('employee-msg', '');
         showSimpleLoading('Opening workspace...', 'Loading your conversation history');
         try {
             const response = await fetch('/api/admin/employee/login', {
@@ -388,11 +479,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (!data.error) {
                 state.employeeId = data.Employee_id;
+                applyServerSettings(data.settings);
                 state.employeeUsername = username;
 
                 workspace.avatarLetter.textContent = username.charAt(0).toUpperCase();
                 workspace.displayUser.textContent = username;
-                workspace.displayParent.textContent = `Admin: ${state.adminUsername || ('#' + state.parentId)}`;
+                workspace.displayParent.textContent = `Admin: ${state.adminUsername || 'Unknown'}`;
 
                 workspace.chatStream.innerHTML = '';
                 if (Array.isArray(data.CHAT_LOGS) && data.CHAT_LOGS.length > 0) {
@@ -401,8 +493,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     renderEmptyState();
                 }
 
+                await showStagedLoader(employee.btnLogin, [
+                    ['Loading your conversations', 'Restoring chat history'],
+                    ['Preparing your workspace', 'Applying your safety settings'],
+                    ['Almost ready', 'Opening secure session']
+                ], 2400);
                 switchView('workspace');
             } else {
+                showAuthError('employee-msg', data.error_message || 'Invalid username or password.');
                 showToast(data.error_message || 'Invalid username or password.', 'error');
             }
         } catch (err) {
@@ -462,73 +560,110 @@ document.addEventListener('DOMContentLoaded', () => {
         switchView('portal');
     }
 
-    async function syncSettingsWithBackend() {
-    if (!state.parentId || !state.employeeId) return;
-    const pwField = document.getElementById("settings-admin-password");
-    const pw = pwField ? pwField.value : "";
-    const badge = workspace.syncBadge;
-    if (!pw) {
-        badge.textContent = "Admin password needed";
-        badge.classList.add("unsaved");
-        if (pwField) pwField.focus();
-        return;
-    }
-    const settingsPayload = {
-        Parent_id: state.parentId,
-        Employee_id: state.employeeId,
-        check1: Boolean(workspace.check1.checked),
-        check2: Boolean(workspace.check2.checked),
-        check3: Boolean(workspace.check3.checked),
-        API_KEY: workspace.apiKey.value.trim(),
-        MODEL_NAME: workspace.modelName.value.trim() || "gpt-4o-mini"
+    const applyConfirm = {
+        overlay: document.getElementById("confirm-overlay"),
+        input: document.getElementById("confirm-admin-password"),
+        confirmBtn: document.getElementById("btn-confirm-apply"),
+        cancelBtn: document.getElementById("btn-cancel-confirm"),
+        closeBtn: document.getElementById("btn-close-confirm")
     };
-    try {
-        workspace.btnSaveSettings.disabled = true;
-        workspace.btnSaveSettings.textContent = "Checking...";
+    const settingsOverlayEl = document.getElementById("settings-overlay");
+
+    function openApplyConfirm() {
+        settingsOverlayEl.classList.add("hidden");
+        applyConfirm.input.value = "";
+        applyConfirm.overlay.classList.remove("hidden");
+        applyConfirm.input.focus();
+    }
+
+    function closeApplyConfirm() {
+        applyConfirm.overlay.classList.add("hidden");
+        applyConfirm.input.value = "";
+    }
+
+    function returnToSettings(badgeText) {
+        closeApplyConfirm();
+        settingsOverlayEl.classList.remove("hidden");
+        if (badgeText) {
+            workspace.syncBadge.textContent = badgeText;
+            workspace.syncBadge.classList.add("unsaved");
+        }
+    }
+
+    async function saveSettingsWithPassword(pw) {
+        const payload = {
+            Parent_id: state.parentId,
+            Employee_id: state.employeeId,
+            check1: Boolean(workspace.check1.checked),
+            check2: Boolean(workspace.check2.checked),
+            check3: Boolean(workspace.check3.checked),
+            API_KEY: workspace.apiKey.value.trim(),
+            MODEL_NAME: workspace.modelName.value.trim() || "gpt-4o-mini"
+        };
         let ok = false;
         try {
             ok = await verifyAdminPassword(pw);
         } catch (e) {
-            badge.textContent = "Could not verify";
-            badge.classList.add("unsaved");
+            returnToSettings("Could not verify");
             return;
         }
         if (!ok) {
-            badge.textContent = "Wrong admin password";
-            badge.classList.add("unsaved");
+            returnToSettings("Wrong admin password");
             return;
         }
-        workspace.btnSaveSettings.textContent = "Saving...";
-        const response = await fetch("/api/admin/employee/settings", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(settingsPayload)
-        });
-        const data = await response.json();
-        if (response.ok && !data.error) {
-            state.settings = {
-                check1: data.check1 !== undefined ? Boolean(data.check1) : settingsPayload.check1,
-                check2: data.check2 !== undefined ? Boolean(data.check2) : settingsPayload.check2,
-                check3: data.check3 !== undefined ? Boolean(data.check3) : settingsPayload.check3,
-                API_KEY: data.API_KEY !== undefined ? data.API_KEY : settingsPayload.API_KEY,
-                MODEL_NAME: data.MODEL_NAME || settingsPayload.MODEL_NAME
-            };
-            applySettingsToUI();
-            pwField.value = "";
-            badge.textContent = "Saved";
-            badge.classList.remove("unsaved");
-        } else {
-            badge.textContent = data.error_message || "Could not save";
-            badge.classList.add("unsaved");
+        try {
+            const response = await fetch("/api/admin/employee/settings", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+            const data = await response.json();
+            if (response.ok && !data.error) {
+                state.settings = {
+                    check1: data.check1 !== undefined ? Boolean(data.check1) : payload.check1,
+                    check2: data.check2 !== undefined ? Boolean(data.check2) : payload.check2,
+                    check3: data.check3 !== undefined ? Boolean(data.check3) : payload.check3,
+                    API_KEY: data.API_KEY !== undefined ? data.API_KEY : payload.API_KEY,
+                    MODEL_NAME: data.MODEL_NAME || payload.MODEL_NAME
+                };
+                applySettingsToUI();
+                closeApplyConfirm();
+                workspace.syncBadge.textContent = "Saved";
+                workspace.syncBadge.classList.remove("unsaved");
+                showToast("Settings applied.", "success");
+            } else {
+                returnToSettings(data.error_message || "Could not save");
+            }
+        } catch (err) {
+            returnToSettings("Network error");
         }
-    } catch (err) {
-        badge.textContent = "Network error";
-        badge.classList.add("unsaved");
-    } finally {
-        workspace.btnSaveSettings.disabled = false;
-        workspace.btnSaveSettings.textContent = "Save Settings";
     }
-}
+
+    function wireApplyConfirm() {
+        if (!applyConfirm.overlay || !applyConfirm.input || !applyConfirm.confirmBtn) return;
+        const cancel = () => returnToSettings("");
+        applyConfirm.cancelBtn.addEventListener("click", cancel);
+        applyConfirm.closeBtn.addEventListener("click", cancel);
+        applyConfirm.confirmBtn.addEventListener("click", async () => {
+            const pw = applyConfirm.input.value.trim();
+            if (!pw) {
+                applyConfirm.input.focus();
+                return;
+            }
+            applyConfirm.confirmBtn.disabled = true;
+            applyConfirm.confirmBtn.textContent = "Checking...";
+            try {
+                await saveSettingsWithPassword(pw);
+            } finally {
+                applyConfirm.confirmBtn.disabled = false;
+                applyConfirm.confirmBtn.textContent = "Confirm";
+            }
+        });
+        applyConfirm.input.addEventListener("keydown", e => {
+            if (e.key === "Enter") applyConfirm.confirmBtn.click();
+        });
+    }
+    wireApplyConfirm();
 
     async function handleChatSubmit(event) {
         if (event) event.preventDefault();
@@ -536,6 +671,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!promptText) return;
 
         removeEmptyState();
+        pinNextPrompt = true;
         appendMessageBubble(promptText, 'user');
         workspace.promptInput.value = '';
 
@@ -574,7 +710,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         if (data.blocked === false && !data.error) {
-            appendMessageBubble(data.reply_message || "Done.", "ai", isBypass);
+            appendMessageBubble(data.reply_message || "Done.", "ai", isBypass, true);
         } else {
             appendErrorBubble(data.error_message || "Could not complete request.");
         }
@@ -728,7 +864,11 @@ function refreshProfile() {
     const name = state.employeeUsername || "Member";
     workspace.avatarLetter.textContent = name.charAt(0).toUpperCase();
     workspace.displayUser.textContent = name;
-    workspace.displayParent.textContent = "Workspace " + (state.parentId !== null && state.parentId !== undefined ? state.parentId : "--");
+    workspace.displayParent.textContent = "Admin: " + (state.adminUsername || "--");
+    const pe = document.getElementById("profile-employee-id");
+    const pp = document.getElementById("profile-parent-id");
+    if (pe) pe.textContent = state.employeeId || "--";
+    if (pp) pp.textContent = state.parentId || "--";
     state.team = state.team || {};
     const key = String(state.parentId);
     const names = state.team[key] = state.team[key] || [];
@@ -762,7 +902,7 @@ function startThinking(flags, isBypass) {
         if (i < steps.length - 1) { i += 1; label.textContent = steps[i] + "..."; }
     }, 1500);
     workspace.chatStream.appendChild(bubble);
-    workspace.chatStream.scrollTop = workspace.chatStream.scrollHeight;
+    scrollChat();
     return {
         stop() {
             clearInterval(timer);
@@ -776,10 +916,10 @@ function appendErrorBubble(message) {
     bubble.className = "message-bubble intercept-bubble";
     bubble.innerHTML = `<div class="bubble-title">Something went wrong</div><div class="bubble-content">${escapeHTML(message)}</div>`;
     workspace.chatStream.appendChild(bubble);
-    workspace.chatStream.scrollTop = workspace.chatStream.scrollHeight;
+    scrollChat();
 }
 
-function appendMessageBubble(text, sender, isBypass = false) {
+function appendMessageBubble(text, sender, isBypass = false, animate = false) {
     const bubble = document.createElement("div");
     bubble.className = "message-bubble " + sender + "-bubble" + (isBypass ? " bypassed" : "");
     let body = sender === "ai"
@@ -787,14 +927,15 @@ function appendMessageBubble(text, sender, isBypass = false) {
         : `<div class="bubble-content">${escapeHTML(text)}</div>`;
     if (sender === "ai" && isBypass) body += `<div class="bubble-tag">Sent with admin approval</div>`;
     bubble.innerHTML = body;
+    if (animate && sender === "ai") revealWords(bubble.querySelector(".bubble-content"));
     workspace.chatStream.appendChild(bubble);
-    workspace.chatStream.scrollTop = workspace.chatStream.scrollHeight;
+    scrollChat();
 }
 
     function appendInterceptChatCard(blockInfo, promptText) {
     const bubble = document.createElement("div");
     bubble.className = "message-bubble intercept-bubble";
-    const score = typeof blockInfo.score === "number" ? " &middot; confidence " + Math.round(blockInfo.score * 100) + "%" : "";
+    const score = "";
     const found = (blockInfo.matches || []).slice(0, 5).map(m => {
         const snip = m.snippet || m.text || m.value || "";
         const why = m.cause || m.rule || "";
@@ -838,7 +979,7 @@ function appendMessageBubble(text, sender, isBypass = false) {
         await sendChatPrompt(promptText || state.lastInterceptedPrompt, true);
     });
     workspace.chatStream.appendChild(bubble);
-    workspace.chatStream.scrollTop = workspace.chatStream.scrollHeight;
+    scrollChat();
 }
 
     function renderChatLogs(logs) {
@@ -902,18 +1043,18 @@ function appendMessageBubble(text, sender, isBypass = false) {
     }
 
     admin.btnLogin.addEventListener('click', handleAdminLogin);
-    admin.btnRegister.addEventListener('click', () => handleAdminAccountAction('add'));
+    admin.btnRegister.addEventListener('click', () => { window.location.href = "/signup/admin"; });
     admin.btnDelete.addEventListener('click', () => handleAdminAccountAction('remove'));
     admin.btnLogout.addEventListener('click', handleAdminLogout);
 
     employee.btnLogin.addEventListener('click', handleEmployeeLogin);
-    employee.btnCreate.addEventListener('click', () => handleEmployeeAccountAction('add'));
-    employee.btnDelete.addEventListener('click', () => handleEmployeeAccountAction('remove'));
+    employee.btnCreate.addEventListener('click', () => { window.location.href = "/signup/employee"; });
+    employee.btnDelete.addEventListener('click', () => { window.location.href = "/remove/employee"; });
 
     [workspace.check1, workspace.check2, workspace.check3].forEach(chk => {
         chk.addEventListener('change', () => {
             markSettingsUnsaved();
-            syncSettingsWithBackend();
+            
         });
     });
 
@@ -971,7 +1112,7 @@ function appendMessageBubble(text, sender, isBypass = false) {
     workspace.apiKey.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(loadModels, 700); });
     sel.addEventListener("focus", loadModels);
 })();
-    workspace.btnSaveSettings.addEventListener('click', syncSettingsWithBackend);
+    workspace.btnSaveSettings.addEventListener('click', openApplyConfirm);
 
     workspace.btnLogout.addEventListener('click', handleWorkspaceLogout);
     workspace.chatForm.addEventListener('submit', handleChatSubmit);
@@ -1008,5 +1149,176 @@ function appendMessageBubble(text, sender, isBypass = false) {
     });
 
     updateAdminAuthState();
+    restoreAdminSession();
     switchView('portal');
+
+    // Profile: change own password or username
+    function setupAccountForm(kind) {
+        const showBtn = document.getElementById("btn-show-change-" + kind);
+        const form = document.getElementById("form-change-" + kind);
+        const cancelBtn = document.getElementById("btn-cancel-" + kind);
+        const saveBtn = document.getElementById("btn-save-" + kind);
+        const msg = document.getElementById("msg-" + kind);
+        const currentIn = document.getElementById("input-" + kind + "-current");
+        const newIn = document.getElementById("input-" + kind + "-new");
+        if (!showBtn || !form || !cancelBtn || !saveBtn || !msg || !currentIn || !newIn) return;
+
+        const reset = () => {
+            form.classList.add("hidden");
+            currentIn.value = "";
+            newIn.value = "";
+            msg.textContent = "";
+        };
+
+        showBtn.addEventListener("click", () => {
+            if (form.classList.contains("hidden")) {
+                form.classList.remove("hidden");
+                currentIn.focus();
+            } else {
+                reset();
+            }
+        });
+        cancelBtn.addEventListener("click", reset);
+        [currentIn, newIn].forEach(input => {
+            input.addEventListener("keydown", e => { if (e.key === "Enter") saveBtn.click(); });
+        });
+
+        saveBtn.addEventListener("click", async () => {
+            const current = currentIn.value.trim();
+            const value = newIn.value.trim();
+            if (!current || !value) {
+                msg.textContent = "Fill in both fields.";
+                return;
+            }
+            const body = {
+                Parent_id: state.parentId,
+                Employee_id: state.employeeId,
+                action: kind,
+                current_password: current
+            };
+            if (kind === "password") body.new_password = value;
+            else body.new_username = value;
+
+            saveBtn.disabled = true;
+            msg.textContent = "Saving...";
+            try {
+                const res = await fetch("/api/admin/employee/account", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(body)
+                });
+                const data = await res.json();
+                if (data.error) {
+                    msg.textContent = data.error_message || "Could not save.";
+                    return;
+                }
+                if (kind === "username") {
+                    const oldName = state.employeeUsername;
+                    const newName = data.username || value;
+                    const key = String(state.parentId);
+                    state.employeeUsername = newName;
+                    if (state.team && state.team[key]) {
+                        state.team[key] = state.team[key].map(n => n === oldName ? newName : n);
+                    }
+                    refreshProfile();
+                }
+                showToast(kind === "password" ? "Password changed." : "Username changed.", "success");
+                reset();
+            } catch (err) {
+                msg.textContent = "Could not reach the server.";
+            } finally {
+                saveBtn.disabled = false;
+            }
+        });
+    }
+    setupAccountForm("password");
+    setupAccountForm("username");
 });
+
+document.addEventListener("DOMContentLoaded", () => {
+    const btn = document.getElementById("btn-toggle-sidebar");
+    const view = document.getElementById("workspace-view");
+    if (btn && view) {
+        btn.addEventListener("click", () => view.classList.toggle("sidebar-collapsed"));
+    }
+});
+
+document.addEventListener("DOMContentLoaded", () => {
+    const openBtn = document.getElementById("btn-open-settings");
+    const overlay = document.getElementById("settings-overlay");
+    const closeBtn = document.getElementById("btn-close-settings");
+    if (!openBtn || !overlay || !closeBtn) return;
+    const openSettings = () => overlay.classList.remove("hidden");
+    const closeSettings = () => overlay.classList.add("hidden");
+    openBtn.addEventListener("click", openSettings);
+    closeBtn.addEventListener("click", closeSettings);
+    overlay.addEventListener("click", e => { if (e.target === overlay) closeSettings(); });
+    document.addEventListener("keydown", e => {
+        if (e.key === "Escape" && !overlay.classList.contains("hidden")) closeSettings();
+    });
+});
+
+document.addEventListener("DOMContentLoaded", () => {
+    const panels = [
+        ["btn-open-profile", "profile-overlay", "btn-close-profile"],
+        ["btn-open-team", "team-overlay", "btn-close-team"]
+    ];
+    panels.forEach(([openId, overlayId, closeId]) => {
+        const openBtn = document.getElementById(openId);
+        const overlay = document.getElementById(overlayId);
+        const closeBtn = document.getElementById(closeId);
+        if (!openBtn || !overlay || !closeBtn) return;
+        const close = () => overlay.classList.add("hidden");
+        openBtn.addEventListener("click", () => overlay.classList.remove("hidden"));
+        closeBtn.addEventListener("click", close);
+        overlay.addEventListener("click", e => { if (e.target === overlay) close(); });
+        document.addEventListener("keydown", e => { if (e.key === "Escape") close(); });
+    });
+});
+
+let pinNextPrompt = false;
+
+// The chat does not auto-scroll. The user scrolls on their own.
+function scrollChat() {}
+
+function revealWords(container) {
+    if (!container) return;
+    const stream = document.getElementById("chat-stream");
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+    const textNodes = [];
+    while (walker.nextNode()) textNodes.push(walker.currentNode);
+    const words = [];
+    textNodes.forEach(node => {
+        const frag = document.createDocumentFragment();
+        let buf = "";
+        let bufSpace = null;
+        const flush = () => {
+            if (!buf) return;
+            if (bufSpace) {
+                frag.appendChild(document.createTextNode(buf));
+            } else {
+                const span = document.createElement("span");
+                span.className = "word-reveal";
+                span.textContent = buf;
+                words.push(span);
+                frag.appendChild(span);
+            }
+            buf = "";
+        };
+        for (const ch of node.textContent) {
+            const isSpace = ch.trim() === "";
+            if (bufSpace !== null && isSpace !== bufSpace) flush();
+            bufSpace = isSpace;
+            buf += ch;
+        }
+        flush();
+        node.replaceWith(frag);
+    });
+    const step = Math.max(12, Math.min(45, 4000 / Math.max(words.length, 1)));
+    words.forEach((span, i) => {
+        setTimeout(() => {
+            span.classList.add("shown");
+            if (stream) scrollChat();
+        }, i * step);
+    });
+}

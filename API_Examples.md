@@ -611,3 +611,54 @@ Runs enabled ML scripts (`check1`, `check2`, `check3`) unless `bypass == true`. 
   "block_info": "NULL"
 }
 ```
+
+## POST /api/admin/team
+
+Returns each team member of the signed-in admin, with prompt and block statistics. The Team page uses this endpoint.
+
+**Request**
+
+```json
+{"token": "<admin session token>"}
+```
+
+**Response (200)**
+
+```json
+{
+  "error": false,
+  "admin": "karnivool",
+  "stats": {"members": 2, "sent": 14, "blocked": 3, "block_rate": 21},
+  "members": [
+    {
+      "username": "alice",
+      "sent": 9,
+      "answered": 7,
+      "blocked": 2,
+      "block_rate": 22,
+      "checks_on": 3,
+      "reasons": [{"label": "Email address", "count": 2, "percent": 100}],
+      "stages": [{"label": "check1", "count": 2, "percent": 100}]
+    }
+  ]
+}
+```
+
+**Response (401)**: the session is missing or expired.
+
+```json
+{"error": true, "error_message": "Your administrator session has ended."}
+```
+
+**Notes**
+- `sent` is `answered` plus `blocked`.
+- `block_rate` is the percentage of `sent` that was blocked. `percent` in `reasons` and `stages` is the share of that member's blocks.
+- `reasons` lists the block reasons and `stages` lists the checks that blocked. Both are sorted by count.
+- Block counts come from BLOCK_LOG, so only blocks recorded after that table was added appear.
+- Passwords and API keys are never returned.
+
+## POST /api/admin/employee/chat: blocked prompts
+
+A blocked prompt returns the block details: `stage`, `main_cause`, `line`, `start_offset`, `end_offset`, `snippet` and `matches`. The response contains no confidence score.
+
+Each block is saved to BLOCK_LOG. Blocked prompts are not added to chat history. A request with `bypass` set to true skips the checks, so an approved send is not logged as a block.

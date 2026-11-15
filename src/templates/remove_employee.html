@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cybersyn - Remove team member</title>
+    <link rel="stylesheet" href="{{ url_for("static", filename="css/style.css") }}">
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+<section id="portal-view" class="auth-shell">
+    <aside class="auth-brand">
+        <div class="auth-logo"><span>Cybersyn</span></div>
+        <div class="auth-brand-body">
+            <h2>Remove a team member from your workspace.</h2>
+            <p>Removing a team member deletes their account and saved conversations. This cannot be undone.</p>
+        </div>
+        <div class="auth-brand-foot">AI Security Gateway &middot; Running locally</div>
+    </aside>
+    <div class="auth-panel">
+        <div class="auth-step">
+            <div class="auth-progress" aria-hidden="true"><span class="is-active"></span><span></span></div>
+            <div class="auth-eyebrow">Remove team member</div>
+            <h1 class="auth-title">Remove team member</h1>
+            <p class="auth-lead">Enter the username and password of the team member to confirm removal.</p>
+            <div id="session-context" class="auth-context hidden">
+                <div class="auth-context-text">
+                    <span class="auth-context-label">Signed in as administrator</span>
+                    <strong id="session-admin-label">Admin</strong>
+                </div>
+            </div>
+            <div id="session-notice" class="auth-inline-msg"></div>
+            <div class="auth-field">
+                <label for="remove-username">Team member username</label>
+                <input type="text" id="remove-username" placeholder="Enter team member username" autocomplete="off">
+            </div>
+            <div class="auth-field">
+                <label for="remove-password">Team member password</label>
+                <input type="password" id="remove-password" placeholder="Enter team member password" autocomplete="off">
+            </div>
+            <div id="remove-msg" class="auth-inline-msg"></div>
+            <button type="button" id="btn-remove-employee" class="auth-btn-primary">Remove team member</button>
+            <div class="auth-secondary">
+                <a href="/" class="auth-link">Back to sign in</a>
+            </div>
+        </div>
+        <div class="auth-footnote">Protected by local Python scanners.</div>
+    </div>
+</section>
+<script src="{{ url_for("static", filename="js/remove_employee.js") }}"></script>
+<script src="{{ url_for('static', filename='js/i18n.js') }}"></script>
+</body>
+</html>

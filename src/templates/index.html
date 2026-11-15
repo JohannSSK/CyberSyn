@@ -101,6 +101,7 @@
                 <input type="password" id="admin-password" placeholder="Enter your password" autocomplete="current-password">
             </div>
 
+            <div id="admin-msg" class="auth-inline-msg"></div>
             <button type="button" id="btn-admin-login" class="auth-btn-primary">Continue</button>
 
             <div class="auth-secondary">
@@ -120,7 +121,10 @@
                     <span class="auth-context-label">Signed in as administrator</span>
                     <strong id="active-admin-label">Admin</strong>
                 </div>
-                <button type="button" id="btn-admin-logout" class="auth-link">Switch administrator</button>
+                <div class="auth-context-actions">
+                    <button type="button" id="btn-admin-logout" class="auth-link">Switch administrator</button>
+                    <a href="/team" class="auth-link">View team and stats</a>
+                </div>
             </div>
 
             <div class="auth-field">
@@ -132,6 +136,7 @@
                 <input type="password" id="employee-password" placeholder="Enter team member password" autocomplete="off">
             </div>
 
+            <div id="employee-msg" class="auth-inline-msg"></div>
             <button type="button" id="btn-employee-login" class="auth-btn-primary">Open workspace</button>
 
             <div class="auth-secondary">
@@ -157,30 +162,50 @@
         </div>
     </div>
 
-    <details class="side-panel" open>
-        <summary><a href="/profile" class="sidebar-link">Profile</a></summary>
-        <div class="side-panel-body">
-            <div class="user-profile-badge">
-                <div class="avatar" id="user-avatar-letter">U</div>
-                <div class="profile-details">
-                    <span class="profile-name" id="display-employee-user">Member</span>
-                    <span class="profile-sub" id="display-parent-id">Workspace --</span>
-                </div>
-            </div>
-        </div>
-    </details>
+    <button type="button" class="sidebar-link-btn" id="btn-open-profile">Profile</button>
 
-    <details class="side-panel">
-        <summary><a href="/team" class="sidebar-link">Team</a></summary>
-        <div class="side-panel-body">
-            <div id="team-list" class="team-list"><span class="profile-sub">Sign in to see members.</span></div>
-        </div>
-    </details>
+    <button type="button" class="sidebar-link-btn" id="btn-open-team">Team</button>
 
-    <details class="side-panel">
-        <summary><a href="/settings" class="sidebar-link">Settings</a></summary>
-        <div class="side-panel-body">
-            <section class="sidebar-section">
+    <button type="button" class="sidebar-link-btn" id="btn-open-settings">Settings</button>
+
+    
+    <div class="sidebar-footer">
+        <a href="/help" id="btn-open-help" class="sidebar-link-btn">Help &amp; info</a>
+        <button type="button" class="btn btn-outline-danger btn-sm" id="btn-workspace-logout" style="width: 100%;">Sign out</button>
+    </div>
+</aside>
+
+<section class="workspace-main">
+    <header class="workspace-topbar">
+        <button type="button" id="btn-toggle-sidebar" class="sidebar-toggle" title="Show or hide sidebar">☰</button>
+        <div class="topbar-status">
+            <span class="status-dot active" id="topbar-dot"></span>
+            <span id="active-checks-summary">3 of 3 safety checks active</span>
+        </div>
+        <button type="button" class="btn-link" id="btn-clear-chat">Clear conversation</button>
+    </header>
+    <div id="unprotected-banner" class="unprotected-banner hidden">
+        <strong>Warning: All safety checks are turned off.</strong> Your prompts are currently sent directly to the AI without local scanning.
+    </div>
+    <div class="chat-viewport" id="chat-stream"></div>
+    <footer class="chat-input-wrapper">
+        <form id="form-chat-send" class="input-box-container">
+            <textarea id="prompt-input" rows="2" placeholder="Ask anything... (Enter to send, Shift+Enter for a new line)" required></textarea>
+            <button type="submit" class="btn btn-primary btn-send" id="btn-send-prompt">Send</button>
+        </form>
+        <div class="input-footnote">Checked locally on this machine before reaching the AI provider.</div>
+    </footer>
+</section>
+</main>
+
+        <div id="settings-overlay" class="settings-overlay hidden">
+    <div class="settings-panel">
+        <div class="settings-panel-header">
+            <h2>Settings</h2>
+            <button type="button" class="btn-close" id="btn-close-settings">&times;</button>
+        </div>
+        <div class="settings-panel-body">
+<section class="sidebar-section">
                 <div class="section-header-row">
                     <span class="section-title">Local Safety Checks</span>
                     <span class="sync-indicator" id="settings-sync-badge">Saved</span>
@@ -217,44 +242,84 @@
             </section>
 
             <section class="sidebar-section">
-                <div class="section-title">Admin approval</div>
-                <div class="input-group-compact">
-                    <label for="settings-admin-password">Admin password</label>
-                    <input type="password" id="settings-admin-password" placeholder="Required to save changes" autocomplete="off">
-                </div>
-                <button type="button" class="btn btn-secondary btn-sm" id="btn-save-settings">Save Settings</button>
+                <button type="button" class="btn btn-primary btn-sm" id="btn-save-settings">Apply</button>
             </section>
         </div>
-    </details>
-
-    <div class="sidebar-footer">
-        <button type="button" class="btn btn-outline-danger btn-sm" id="btn-workspace-logout" style="width: 100%;">Sign out</button>
     </div>
-</aside>
+</div>
 
-<section class="workspace-main">
-    <header class="workspace-topbar">
-        <div class="topbar-status">
-            <span class="status-dot active" id="topbar-dot"></span>
-            <span id="active-checks-summary">3 of 3 safety checks active</span>
+<div id="profile-overlay" class="info-overlay hidden">
+    <div class="info-panel">
+        <div class="info-panel-header">
+            <h2>Profile</h2>
+            <button type="button" class="btn-close" id="btn-close-profile">&times;</button>
         </div>
-        <button type="button" class="btn-link" id="btn-clear-chat">Clear conversation</button>
-    </header>
-    <div id="unprotected-banner" class="unprotected-banner hidden">
-        <strong>Warning: All safety checks are turned off.</strong> Your prompts are currently sent directly to the AI without local scanning.
+        <div class="info-panel-body">
+            <details class="id-details"><summary>IDs</summary><div class="id-details-body"><span>Your ID <b id="profile-employee-id">--</b></span>
+            <span>Admin ID <b id="profile-parent-id">--</b></span></div></details>
+<div class="user-profile-badge">
+                <div class="avatar" id="user-avatar-letter">U</div>
+                <div class="profile-details">
+                    <span class="profile-name" id="display-employee-user">Member</span>
+                    <span class="profile-sub" id="display-parent-id">Workspace --</span>
+                </div>
+            </div>
+            <div class="profile-actions">
+                <button type="button" class="link-small" id="btn-show-change-password">Change password</button>
+                <button type="button" class="link-small" id="btn-show-change-username">Change username</button>
+            </div>
+            <div id="form-change-password" class="inline-form hidden">
+                <input type="password" id="input-password-current" placeholder="Current password" autocomplete="current-password">
+                <input type="password" id="input-password-new" placeholder="New password" autocomplete="new-password">
+                <div class="inline-form-actions">
+                    <button type="button" class="link-small" id="btn-cancel-password">Cancel</button>
+                    <button type="button" class="btn btn-primary btn-sm" id="btn-save-password">Save</button>
+                </div>
+                <div id="msg-password" class="inline-msg"></div>
+            </div>
+            <div id="form-change-username" class="inline-form hidden">
+                <input type="password" id="input-username-current" placeholder="Current password" autocomplete="current-password">
+                <input type="text" id="input-username-new" placeholder="New username" autocomplete="off">
+                <div class="inline-form-actions">
+                    <button type="button" class="link-small" id="btn-cancel-username">Cancel</button>
+                    <button type="button" class="btn btn-primary btn-sm" id="btn-save-username">Save</button>
+                </div>
+                <div id="msg-username" class="inline-msg"></div>
+            </div>
+        </div>
     </div>
-    <div class="chat-viewport" id="chat-stream"></div>
-    <footer class="chat-input-wrapper">
-        <form id="form-chat-send" class="input-box-container">
-            <textarea id="prompt-input" rows="2" placeholder="Ask anything... (Enter to send, Shift+Enter for a new line)" required></textarea>
-            <button type="submit" class="btn btn-primary btn-send" id="btn-send-prompt">Send</button>
-        </form>
-        <div class="input-footnote">Checked locally on this machine before reaching the AI provider.</div>
-    </footer>
-</section>
-</main>
+</div>
 
-        <!-- VIEW 3: BLOCKED PROMPT MODAL -->
+<div id="team-overlay" class="info-overlay hidden">
+    <div class="info-panel">
+        <div class="info-panel-header">
+            <h2>Team</h2>
+            <button type="button" class="btn-close" id="btn-close-team">&times;</button>
+        </div>
+        <div class="info-panel-body">
+<div id="team-list" class="team-list"><span class="profile-sub">Sign in to see members.</span></div>
+        </div>
+    </div>
+</div>
+
+<div id="confirm-overlay" class="info-overlay hidden">
+    <div class="info-panel">
+        <div class="info-panel-header">
+            <h2>Confirm changes</h2>
+            <button type="button" class="btn-close" id="btn-close-confirm">&times;</button>
+        </div>
+        <div class="info-panel-body">
+            <p class="confirm-text">Enter the admin password to apply these settings.</p>
+            <input type="password" id="confirm-admin-password" placeholder="Admin password" autocomplete="off">
+            <div class="inline-form-actions">
+                <button type="button" class="link-small" id="btn-cancel-confirm">Cancel</button>
+                <button type="button" class="btn btn-primary btn-sm" id="btn-confirm-apply">Confirm</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- VIEW 3: BLOCKED PROMPT MODAL -->
         <div id="intercept-modal" class="modal-backdrop hidden">
             <div class="modal-dialog">
                 <div class="modal-header">
@@ -313,5 +378,6 @@
     </div>
 
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+<script src="{{ url_for('static', filename='js/i18n.js') }}"></script>
 </body>
 </html>
