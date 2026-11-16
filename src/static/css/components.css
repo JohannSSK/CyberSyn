@@ -178,6 +178,8 @@
 .select option { background: var(--surface-2); color: var(--text); }
 
 .hint { font-size: 12px; color: var(--text-muted); }
+.hint.is-ok { color: var(--success); }
+.hint.is-error { color: var(--danger); }
 
 /* Input with a leading icon */
 .input-icon { position: relative; }
@@ -489,120 +491,6 @@
 
 .empty p { max-width: 420px; font-size: 13.5px; }
 
-/* --------------------------------------------------------------------------
-   Full-screen scanning overlay
-   -------------------------------------------------------------------------- */
-
-.scan-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 8500;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 22px;
-    background: rgba(4, 8, 18, 0.78);
-    backdrop-filter: blur(8px);
-    animation: fade-in var(--fast) var(--ease) both;
-}
-
-.scan-card {
-    width: 100%;
-    max-width: 470px;
-    padding: 32px;
-    text-align: center;
-    border-radius: var(--r-xl);
-    background: var(--surface);
-    border: 1px solid var(--border);
-    box-shadow: var(--shadow-lg);
-    animation: scale-in var(--med) var(--ease) both;
-}
-
-.scan-ring {
-    position: relative;
-    width: 72px;
-    height: 72px;
-    margin: 0 auto 20px;
-}
-
-.scan-ring svg.ring {
-    width: 100%;
-    height: 100%;
-    transform: rotate(-90deg);
-}
-
-.scan-ring .ring circle {
-    fill: none;
-    stroke-width: 3;
-    stroke-linecap: round;
-}
-
-.scan-ring .ring .track { stroke: var(--surface-3); }
-
-.scan-ring .ring .bar {
-    stroke: var(--accent);
-    stroke-dasharray: 176;
-    stroke-dashoffset: 176;
-    animation: draw-ring 1.35s var(--ease) infinite;
-}
-
-.scan-ring .glyph {
-    position: absolute;
-    inset: 0;
-    display: grid;
-    place-items: center;
-    color: var(--accent);
-}
-
-.scan-ring .glyph .icon { width: 27px; height: 27px; }
-
-.scan-steps {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    margin: 22px 0 16px;
-    text-align: left;
-}
-
-.scan-step {
-    display: flex;
-    align-items: center;
-    gap: 11px;
-    padding: 9px 11px;
-    border-radius: var(--r-sm);
-    opacity: 0.4;
-    transition: opacity var(--med) var(--ease), background var(--med) var(--ease);
-}
-
-.scan-step.active { opacity: 1; background: var(--surface-2); }
-.scan-step.done   { opacity: 0.72; }
-
-.scan-step .mark {
-    display: grid;
-    place-items: center;
-    width: 19px;
-    height: 19px;
-    flex: none;
-    border-radius: 50%;
-    border: 2px solid var(--border);
-    font-size: 11px;
-    color: var(--success);
-}
-
-.scan-step.active .mark { border-color: var(--accent); }
-
-.scan-step.done .mark { border-color: var(--success); background: var(--success-soft); }
-
-.scan-step .mark .icon { width: 11px; height: 11px; }
-
-.scan-step-body { min-width: 0; }
-.scan-step-body strong { display: block; font-size: 13.5px; }
-.scan-step-body small { font-size: 11.5px; color: var(--text-muted); }
-.scan-step .status { margin-left: auto; font-size: 11.5px; color: var(--text-muted); flex: none; }
-
-.scan-timer { font-size: 12px; color: var(--text-muted); }
-
-.scan-timer b { color: var(--accent); font-family: var(--font-mono); }
 
 /* ==========================================================================
    Language switch — EN / ΕΛ. Built by core/i18n.js into [data-lang-switch].
