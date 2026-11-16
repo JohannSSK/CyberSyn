@@ -14,6 +14,9 @@
 
     <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}">
+    {# Shared chrome: the sidebar is on every signed-in page, so it loads
+       everywhere rather than from the one page that happens to need it. #}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}">
     {% block styles %}{% endblock %}
 </head>
 <body>
