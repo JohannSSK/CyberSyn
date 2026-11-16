@@ -1,1 +1,14 @@
 *.db
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Runtime secrets — CyberSyn generates a Fernet key on first start.
+# Never commit this: it decrypts every stored AI provider API key.
+src/backend/secret.key
+
+# Local environment overrides
+.env
