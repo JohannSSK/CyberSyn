@@ -12,3 +12,7 @@ src/backend/secret.key
 
 # Local environment overrides
 .env
+
+# Editor / scratch backups
+*.bak
+*.before-undo
