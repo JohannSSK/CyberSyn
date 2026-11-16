@@ -1,0 +1,26 @@
+.git
+.gitignore
+.github
+
+# Python / virtual environments
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Runtime state — never bake secrets or user data into the image
+src/backend/secret.key
+*.db
+*.sqlite
+*.sqlite3
+
+# Editor / OS noise
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Local scratch copies kept in the repo
+*.bak
+*.before-undo
