@@ -1,0 +1,40 @@
+{# Add a team member to the signed-in administrator's workspace. #}
+{% extends "auth_page.html" %}
+
+{% block title %}Add team member — CyberSyn{% endblock %}
+
+{% set brand_title = "One seat per person." %}
+{% set brand_lead = "Each team member signs in on their own and gets their own "
+                    "chats, their own history, and the policy you set for them." %}
+{% set eyebrow = "New team member" %}
+{% set title = "Add team member" %}
+{% set lead = "Give them a username and a password to sign in with. They can "
+              "change both later from their own profile." %}
+{% set back_href = "/" %}
+{% set back_label = "Back to sign in" %}
+{% set footnote = "They inherit this workspace's privacy policy." %}
+
+{% block form %}
+<div class="auth-field">
+    <label for="new-member-username">Username</label>
+    <input type="text" id="new-member-username" placeholder="Choose a username"
+           autocomplete="off" autofocus>
+</div>
+<div class="auth-field">
+    <label for="new-member-password">Password</label>
+    <input type="password" id="new-member-password" placeholder="Choose a password"
+           autocomplete="new-password">
+</div>
+<div class="auth-field">
+    <label for="new-member-confirm">Confirm password</label>
+    <input type="password" id="new-member-confirm" placeholder="Type the password again"
+           autocomplete="new-password">
+</div>
+
+<div id="create-member-msg" class="auth-inline-msg"></div>
+<button type="button" id="btn-create-member" class="auth-btn-primary">Add team member</button>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/account_pages.js') }}"></script>
+{% endblock %}

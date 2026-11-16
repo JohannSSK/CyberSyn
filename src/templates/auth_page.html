@@ -1,0 +1,58 @@
+{# The shell every account page sits in.
+
+   Creating or deleting an account used to reuse the sign-in boxes, so the
+   same two fields meant "sign in", "create" or "delete" depending on which
+   link you had clicked. Each action now gets its own page with its own
+   fields, and this holds the parts they share. #}
+{% extends "base.html" %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
+{% endblock %}
+
+{% block body %}
+<div class="app-shell">
+    <section class="auth-shell">
+        <aside class="auth-brand">
+            <div class="auth-logo">
+                <span data-icon="shield"></span>
+                <span>CyberSyn</span>
+            </div>
+
+            <div class="auth-brand-body">
+                <h2>{{ brand_title }}</h2>
+                <p>{{ brand_lead }}</p>
+            </div>
+
+            <div class="auth-brand-foot">AI Security Gateway · Running locally</div>
+        </aside>
+
+        <div class="auth-panel">
+            <div data-lang-switch class="auth-lang"></div>
+
+            <div class="auth-step">
+                <div class="auth-eyebrow">{{ eyebrow }}</div>
+                <h1 class="auth-title">{{ title }}</h1>
+                <p class="auth-lead">{{ lead }}</p>
+
+                {% if context_label %}
+                <div class="auth-context">
+                    <div class="auth-context-text">
+                        <span class="auth-context-label">Administrator</span>
+                        <strong id="active-admin-label">{{ context_label }}</strong>
+                    </div>
+                </div>
+                {% endif %}
+
+                {% block form %}{% endblock %}
+
+                <div class="auth-secondary">
+                    <a href="{{ back_href }}" class="auth-link">{{ back_label }}</a>
+                </div>
+            </div>
+
+            <div class="auth-footnote">{{ footnote }}</div>
+        </div>
+    </section>
+</div>
+{% endblock %}

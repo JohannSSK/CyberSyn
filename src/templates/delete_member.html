@@ -1,0 +1,39 @@
+{# Remove a team member from the signed-in administrator's workspace. #}
+{% extends "auth_page.html" %}
+
+{% block title %}Remove team member — CyberSyn{% endblock %}
+
+{% set brand_title = "Their workspace goes with them." %}
+{% set brand_lead = "Removing a team member deletes their chats and their settings. "
+                    "Team statistics are kept, so the audit trail stays whole." %}
+{% set eyebrow = "Danger zone" %}
+{% set title = "Remove team member" %}
+{% set lead = "Sign in with the team member's own credentials to confirm removal." %}
+{% set back_href = "/" %}
+{% set back_label = "Back to sign in" %}
+{% set footnote = "Their sessions are ended immediately." %}
+
+{% block form %}
+<div class="auth-field">
+    <label for="del-member-username">Username</label>
+    <input type="text" id="del-member-username" placeholder="The member to remove"
+           autocomplete="off" autofocus>
+</div>
+<div class="auth-field">
+    <label for="del-member-password">Password</label>
+    <input type="password" id="del-member-password" placeholder="Their password"
+           autocomplete="current-password">
+</div>
+
+<div class="auth-warning">
+    <span data-icon="warning"></span>
+    <span>Their chats and settings are deleted. Statistics are kept.</span>
+</div>
+
+<div id="delete-member-msg" class="auth-inline-msg"></div>
+<button type="button" id="btn-delete-member" class="auth-btn-danger">Remove this member</button>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/account_pages.js') }}"></script>
+{% endblock %}

@@ -4,6 +4,11 @@
    Step 1: the administrator signs in. Step 2: a team member signs in, which
    is what actually opens a workspace. The administrator token is kept
    separately from the member token, because the two grant different powers.
+
+   This page only signs people in. Creating or deleting an account happens on
+   its own page (/create-admin, /delete-admin, /create-member,
+   /delete-member); reusing these boxes for those meant the same two fields
+   stood for four different actions.
    ========================================================================== */
 
 (function () {
@@ -19,8 +24,6 @@
         password: $("#admin-password"),
         msg: $("#admin-msg"),
         login: $("#btn-admin-login"),
-        register: $("#btn-admin-register"),
-        remove: $("#btn-admin-delete")
     };
 
     var employee = {
@@ -30,9 +33,7 @@
         username: $("#employee-username"),
         password: $("#employee-password"),
         msg: $("#employee-msg"),
-        login: $("#btn-employee-login"),
-        create: $("#btn-employee-create"),
-        remove: $("#btn-employee-delete")
+        login: $("#btn-employee-login")
     };
 
     var parentId = null;
@@ -68,36 +69,6 @@
             });
             admin.password.value = "";
             revealMemberStep(username);
-        }).catch(function (err) {
-            showError(admin.msg, err.message);
-            Loading.toast(err.message, "error");
-        });
-    }
-
-    /** Add or remove an administrator, using the credentials in step 1. */
-    function adminManage(method) {
-        var username = admin.username.value.trim();
-        var password = admin.password.value;
-        if (!username || !password) {
-            showError(admin.msg, "Fill in both fields first, then choose "
-                + (method === "add" ? "create" : "delete") + ".");
-            return;
-        }
-        var removing = method === "remove";
-        var confirmed = !removing || confirm(
-            "Delete the administrator '" + username + "'?\n\n"
-            + "Their team members, settings and history are removed with them. This cannot be undone."
-        );
-        if (!confirmed) return;
-
-        var button = removing ? admin.remove : admin.register;
-        Loading.withButton(button, function () {
-            return window.Api.post("/api/admin",
-                { method: method, username: username, password: password },
-                { member: false, onUnauthorised: false });
-        }).then(function () {
-            Loading.toast(removing ? "Administrator deleted." : "Administrator created. Sign in now.", "success");
-            if (removing) admin.password.value = "";
         }).catch(function (err) {
             showError(admin.msg, err.message);
             Loading.toast(err.message, "error");
@@ -156,47 +127,12 @@
         });
     }
 
-    /** Create or remove a team member under the signed-in administrator. */
-    function employeeManage(method) {
-        var username = employee.username.value.trim();
-        var password = employee.password.value;
-        if (!username || !password) {
-            showError(employee.msg, "Fill in both fields first, then choose "
-                + (method === "add" ? "add" : "remove") + ".");
-            return;
-        }
-        var removing = method === "remove";
-        var confirmed = !removing || confirm(
-            "Remove '" + username + "'?\n\nTheir chats and settings are removed. "
-            + "Team statistics are kept."
-        );
-        if (!confirmed) return;
-
-        var button = removing ? employee.remove : employee.create;
-        Loading.withButton(button, function () {
-            return window.Api.post("/api/admin/employee",
-                { method: method, Parent_id: parentId, username: username, password: password },
-                { member: false, onUnauthorised: false });
-        }).then(function () {
-            Loading.toast(removing ? "Team member removed." : "Team member added. Sign in now.", "success");
-            employee.password.value = "";
-        }).catch(function (err) {
-            showError(employee.msg, err.message);
-            Loading.toast(err.message, "error");
-        });
-    }
-
     /* ------------------------------------------------------------------
        Wiring
        ------------------------------------------------------------------ */
 
     window.Dom.on(admin.login, "click", adminLogin);
-    window.Dom.on(admin.register, "click", function () { adminManage("add"); });
-    window.Dom.on(admin.remove, "click", function () { adminManage("remove"); });
-
     window.Dom.on(employee.login, "click", employeeLogin);
-    window.Dom.on(employee.create, "click", function () { employeeManage("add"); });
-    window.Dom.on(employee.remove, "click", function () { employeeManage("remove"); });
     window.Dom.on($("#btn-admin-logout"), "click", backToAdmin);
 
     [admin.username, admin.password].forEach(function (input) {
