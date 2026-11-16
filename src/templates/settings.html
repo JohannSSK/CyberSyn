@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+
+{% block title %}Settings — CyberSyn{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/page.css') }}">
+{% endblock %}
+
+{% block body %}
+<div class="app-shell">
+    <div class="layout">
+        {% include "partials/sidebar.html" %}
+
+        <main class="layout-main">
+            <header class="page-head">
+                <div>
+                    <span class="eyebrow">Workspace</span>
+                    <h1>Settings</h1>
+                    <p class="dim">Policy, model connection and how your prompts are screened.</p>
+                </div>
+            </header>
+
+            <div class="page-body">
+
+                <section class="card">
+                    <div class="card-title"><span data-icon="shield"></span> Local safety checks</div>
+                    <p class="small muted" style="margin-bottom:16px">
+                        Each check runs on this machine before a prompt is sent. Turn one off only
+                        with a reason — the setting is applied to every message you send.
+                    </p>
+
+                    <div class="stack-sm" id="toggle-list">
+                        <label class="toggle" data-toggle="check1">
+                            <input type="checkbox" id="setting-check1">
+                            <span class="toggle-track"></span>
+                            <span class="toggle-body">
+                                <strong>Personal &amp; Greek IDs</strong>
+                                <small>AFM with checksum, AMKA, Greek phone numbers, emails and names (EN + EL)</small>
+                            </span>
+                        </label>
+                        <label class="toggle" data-toggle="check2">
+                            <input type="checkbox" id="setting-check2">
+                            <span class="toggle-track"></span>
+                            <span class="toggle-body">
+                                <strong>Confidential context</strong>
+                                <small>Contracts and NDAs, financials, HR and payroll, credentials, source code</small>
+                            </span>
+                        </label>
+                        <label class="toggle" data-toggle="check3">
+                            <input type="checkbox" id="setting-check3">
+                            <span class="toggle-track"></span>
+                            <span class="toggle-body">
+                                <strong>Prompt injection</strong>
+                                <small>Jailbreaks, hidden instructions and override attempts</small>
+                            </span>
+                        </label>
+                    </div>
+
+                    <div class="row" style="margin-top:18px">
+                        <button type="button" class="btn btn-primary" id="btn-save-checks">
+                            Save checks
+                        </button>
+                        <span class="tiny muted" id="checks-state"></span>
+                    </div>
+                </section>
+
+                <section class="card">
+                    <div class="card-title"><span data-icon="key"></span> AI connection</div>
+
+                    <div class="field" style="margin-bottom:16px">
+                        <label for="setting-model">Model</label>
+                        <div class="row">
+                            <select id="setting-model" class="select grow">
+                                <option value="gpt-4o-mini">gpt-4o-mini</option>
+                            </select>
+                            <button type="button" class="btn" id="btn-refresh-models">
+                                Refresh list
+                            </button>
+                        </div>
+                        <span class="hint">Paste a key first to load the models it can reach.</span>
+                    </div>
+
+                    <div class="field">
+                        <label for="setting-api-key">API key</label>
+                        <div class="input-icon">
+                            <span data-icon="key"></span>
+                            <input type="password" id="setting-api-key" class="input"
+                                   placeholder="Paste your API key…" autocomplete="off" spellcheck="false">
+                        </div>
+                        <span class="hint" id="key-state">No key saved yet.</span>
+                    </div>
+
+                    <div class="row" style="margin-top:18px">
+                        <button type="button" class="btn btn-primary" id="btn-save-connection">
+                            Save connection
+                        </button>
+                        <span class="tiny muted">The key is encrypted on the server and never sent back to the browser.</span>
+                    </div>
+                </section>
+
+                <section class="card">
+                    <div class="card-title"><span data-icon="warning"></span> Danger zone</div>
+                    <p class="small muted" style="margin-bottom:14px">
+                        Turning every check off sends your prompts straight to the AI provider with
+                        no local screening.
+                    </p>
+                    <button type="button" class="btn btn-outline-danger btn-sm" id="btn-disable-all">
+                        Turn all checks off
+                    </button>
+                    <button type="button" class="btn btn-sm" id="btn-enable-all">
+                        Turn all checks on
+                    </button>
+                </section>
+
+            </div>
+        </main>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/settings.js') }}"></script>
+{% endblock %}

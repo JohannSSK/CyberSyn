@@ -76,10 +76,11 @@ def create_app():
 
 def register_api(app):
     """Register every API blueprint."""
-    from routes import admin_api, chat_api, chat_history, member_api
+    from routes import admin_api, assets, chat_api, chat_history, member_api
     from models_route import register as register_models
     from team_stats import register as register_team_stats
 
+    app.register_blueprint(assets.assets)
     app.register_blueprint(admin_api.admin_api)
     app.register_blueprint(member_api.member_api)
     app.register_blueprint(chat_api.chat_api)

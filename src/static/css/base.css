@@ -1,0 +1,245 @@
+/* ==========================================================================
+   base.css — design tokens, reset, typography, layout primitives.
+   Every other stylesheet builds on these variables; none of them redefine
+   a colour or a font that lives here.
+   ========================================================================== */
+
+:root {
+    /* Surfaces, darkest to lightest */
+    --bg:            #080D19;
+    --bg-grad-a:     #0B1224;
+    --bg-grad-b:     #101A33;
+    --surface:       #111A2E;
+    --surface-2:     #17223B;
+    --surface-3:     #1E2B49;
+    --border:        #26334F;
+    --border-soft:   #1C2740;
+
+    /* Text */
+    --text:          #E8EEF9;
+    --text-dim:      #A9B8D4;
+    --text-muted:    #7488AC;
+
+    /* Accent + status */
+    --accent:        #38BDF8;
+    --accent-deep:   #0EA5E9;
+    --accent-soft:   rgba(56, 189, 248, 0.14);
+    --accent-line:   rgba(56, 189, 248, 0.38);
+    --violet:        #A78BFA;
+    --success:       #34D399;
+    --success-soft:  rgba(52, 211, 153, 0.14);
+    --warn:          #FBBF24;
+    --warn-soft:     rgba(251, 191, 36, 0.14);
+    --danger:        #F87171;
+    --danger-soft:   rgba(248, 113, 113, 0.14);
+
+    /* Geometry */
+    --r-sm: 8px;
+    --r-md: 12px;
+    --r-lg: 16px;
+    --r-xl: 22px;
+    --r-pill: 999px;
+
+    /* Elevation */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.36);
+    --shadow-lg: 0 24px 64px rgba(0, 0, 0, 0.55);
+    --glow: 0 0 0 1px var(--accent-line), 0 8px 30px rgba(56, 189, 248, 0.18);
+
+    /* Type */
+    --font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-display: "Instrument Serif", "Inter", Georgia, serif;
+    --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+    /* Motion */
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --fast: 140ms;
+    --med: 240ms;
+    --slow: 420ms;
+
+    --sidebar-w: 268px;
+    --topbar-h: 66px;
+}
+
+/* --------------------------------------------------------------------------
+   Reset
+   -------------------------------------------------------------------------- */
+
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+* { margin: 0; padding: 0; }
+
+html, body { height: 100%; }
+
+body {
+    font-family: var(--font);
+    font-size: 15px;
+    line-height: 1.6;
+    color: var(--text);
+    background: var(--bg);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+}
+
+/* The app is always dark: light-system themes must not wash it out. */
+:root { color-scheme: dark; }
+
+img, svg { display: block; max-width: 100%; }
+
+button, input, select, textarea {
+    font: inherit;
+    color: inherit;
+    background: none;
+    border: none;
+}
+
+button { cursor: pointer; }
+
+button:disabled { cursor: not-allowed; }
+
+a { color: var(--accent); text-decoration: none; }
+
+a:hover { text-decoration: underline; }
+
+ul, ol { list-style: none; }
+
+::selection { background: var(--accent-soft); color: #fff; }
+
+:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+/* --------------------------------------------------------------------------
+   Typography
+   -------------------------------------------------------------------------- */
+
+h1, h2, h3, h4 { font-weight: 600; line-height: 1.25; letter-spacing: -0.01em; }
+
+h1 { font-size: 30px; }
+h2 { font-size: 23px; }
+h3 { font-size: 18px; }
+h4 { font-size: 15px; }
+
+.display { font-family: var(--font-display); font-weight: 400; letter-spacing: -0.02em; }
+
+.mono { font-family: var(--font-mono); font-variant-ligatures: none; }
+
+.muted { color: var(--text-muted); }
+
+.dim { color: var(--text-dim); }
+
+.small { font-size: 13px; }
+
+.tiny { font-size: 12px; }
+
+.eyebrow {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+}
+
+/* --------------------------------------------------------------------------
+   Layout primitives
+   -------------------------------------------------------------------------- */
+
+.app-shell {
+    position: relative;
+    min-height: 100vh;
+    background:
+        radial-gradient(1100px 620px at 12% -8%, rgba(56, 189, 248, 0.10), transparent 60%),
+        radial-gradient(900px 520px at 96% 4%, rgba(167, 139, 250, 0.09), transparent 62%),
+        linear-gradient(168deg, var(--bg-grad-a), var(--bg-grad-b) 55%, var(--bg));
+}
+
+.page {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 34px 26px 72px;
+}
+
+.page-narrow {
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 34px 26px 72px;
+}
+
+.stack      { display: flex; flex-direction: column; gap: 14px; }
+.stack-sm   { display: flex; flex-direction: column; gap: 8px; }
+.stack-lg   { display: flex; flex-direction: column; gap: 26px; }
+.row        { display: flex; align-items: center; gap: 10px; }
+.row-between{ display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.wrap       { flex-wrap: wrap; }
+.grow       { flex: 1; min-width: 0; }
+.center     { text-align: center; }
+
+.grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+
+@media (max-width: 900px) {
+    .grid-3, .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 620px) {
+    .grid-2, .grid-3, .grid-4 { grid-template-columns: minmax(0, 1fr); }
+    .page, .page-narrow { padding: 22px 16px 60px; }
+}
+
+.hidden { display: none !important; }
+
+.sr-only {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0);
+    white-space: nowrap; border: 0;
+}
+
+/* --------------------------------------------------------------------------
+   Scrollbars
+   -------------------------------------------------------------------------- */
+
+* { scrollbar-width: thin; scrollbar-color: var(--surface-3) transparent; }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+
+::-webkit-scrollbar-track { background: transparent; }
+
+::-webkit-scrollbar-thumb {
+    background: var(--surface-3);
+    border: 3px solid transparent;
+    border-radius: var(--r-pill);
+    background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover { background: #2C3C63; background-clip: content-box; }
+
+/* --------------------------------------------------------------------------
+   Motion
+   -------------------------------------------------------------------------- */
+
+@keyframes fade-in   { from { opacity: 0; } to { opacity: 1; } }
+@keyframes rise-in   { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes scale-in  { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: none; } }
+@keyframes spin      { to { transform: rotate(360deg); } }
+@keyframes shimmer   { 100% { transform: translateX(100%); } }
+@keyframes pulse-dim { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+@keyframes draw-ring { to { stroke-dashoffset: 0; } }
+
+.rise-in { animation: rise-in var(--med) var(--ease) both; }
+.fade-in { animation: fade-in var(--med) var(--ease) both; }
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}

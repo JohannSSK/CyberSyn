@@ -1,403 +1,114 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cybersyn — Safe Team AI Workspace</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-</head>
-<body>
-    <div id="toast-container" class="toast-container"></div>
+{% extends "base.html" %}
 
-    <!-- LIVE LOADING & SCRIPT SCANNING OVERLAY -->
-    <div id="loading-overlay" class="loading-overlay hidden">
-        <div class="loading-card">
-            <div class="loading-spinner-wrap">
-                <div class="loading-ring"></div>
-                <svg class="loading-shield-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 3l7 3v6c0 5-3.5 8.5-7 9-3.5-.5-7-4-7-9V6l7-3z"/>
-                </svg>
+{% block title %}Sign in — CyberSyn{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
+{% endblock %}
+
+{% block body %}
+<div class="app-shell">
+    <section id="portal-view" class="auth-shell">
+        <aside class="auth-brand">
+            <div class="auth-logo">
+                <img src="/assets/icons/shield.png" alt="" width="28" height="28" class="icon">
+                <span>CyberSyn</span>
             </div>
-            <h3 id="loading-title">Checking your message...</h3>
-            <p id="loading-subtitle" class="loading-subtitle">Running local privacy checks before contacting the AI model</p>
 
-            <div id="loading-steps" class="loading-steps">
-                <div class="loading-step" id="step-check1">
-                    <span class="step-indicator"></span>
-                    <div class="step-text">
-                        <strong>Personal & Greek IDs</strong>
-                        <small>Checking for AFM, AMKA, phone numbers & names</small>
+            <div class="auth-brand-body">
+                <h2>Use AI at work without exposing what matters.</h2>
+                <p>CyberSyn reviews every message on your own machine before it
+                   reaches an AI model, so sensitive information stays inside
+                   your organisation.</p>
+                <ul class="auth-points">
+                    <li><strong>Screened locally</strong>
+                        <span>Every check runs on this computer. Nothing is sent out for review.</span></li>
+                    <li><strong>Built for Greek data</strong>
+                        <span>Recognises AFM, AMKA, phone numbers and company names.</span></li>
+                    <li><strong>Administrator controlled</strong>
+                        <span>Admins manage team access and approve any exceptions.</span></li>
+                </ul>
+            </div>
+
+            <div class="auth-brand-foot">AI Security Gateway · Running locally</div>
+        </aside>
+
+        <div class="auth-panel">
+            <!-- Step 1 — the administrator signs in first -->
+            <div id="admin-step" class="auth-step">
+                <div class="auth-progress" aria-hidden="true">
+                    <span class="is-active"></span><span></span>
+                </div>
+                <div class="auth-eyebrow">Step 1 of 2</div>
+                <h1 class="auth-title">Administrator sign in</h1>
+                <p class="auth-lead">Sign in with your administrator account to manage your workspace.</p>
+
+                <div class="auth-field">
+                    <label for="admin-username">Username</label>
+                    <input type="text" id="admin-username" placeholder="Enter your username"
+                           autocomplete="username" autofocus>
+                </div>
+                <div class="auth-field">
+                    <label for="admin-password">Password</label>
+                    <input type="password" id="admin-password" placeholder="Enter your password"
+                           autocomplete="current-password">
+                </div>
+
+                <div id="admin-msg" class="auth-inline-msg"></div>
+                <button type="button" id="btn-admin-login" class="auth-btn-primary">Continue</button>
+
+                <div class="auth-secondary">
+                    <button type="button" id="btn-admin-register" class="auth-link">Create administrator account</button>
+                    <button type="button" id="btn-admin-delete" class="auth-link auth-link-danger">Delete account</button>
+                </div>
+            </div>
+
+            <!-- Step 2 — pick the team member to work as -->
+            <div id="employee-card" class="auth-step hidden">
+                <div class="auth-progress" aria-hidden="true">
+                    <span class="is-active"></span><span class="is-active"></span>
+                </div>
+                <div class="auth-eyebrow">Step 2 of 2</div>
+                <h1 class="auth-title">Team member sign in</h1>
+                <p class="auth-lead">Choose the team member account you want to work in.</p>
+
+                <div id="admin-session-badge" class="auth-context hidden">
+                    <div class="auth-context-text">
+                        <span class="auth-context-label">Signed in as administrator</span>
+                        <strong id="active-admin-label">Admin</strong>
                     </div>
-                    <span class="step-status" id="status-check1">Waiting</span>
-                </div>
-                <div class="loading-step" id="step-check2">
-                    <span class="step-indicator"></span>
-                    <div class="step-text">
-                        <strong>Company & Confidential Context</strong>
-                        <small>Checking for contracts, NDAs & financial data</small>
+                    <div class="auth-context-actions">
+                        <button type="button" id="btn-admin-logout" class="auth-link">Switch administrator</button>
+                        <a href="/stats" class="auth-link">Team statistics</a>
                     </div>
-                    <span class="step-status" id="status-check2">Waiting</span>
                 </div>
-                <div class="loading-step" id="step-check3">
-                    <span class="step-indicator"></span>
-                    <div class="step-text">
-                        <strong>Prompt Safety</strong>
-                        <small>Checking for prompt injection & override attempts</small>
-                    </div>
-                    <span class="step-status" id="status-check3">Waiting</span>
+
+                <div class="auth-field">
+                    <label for="employee-username">Username</label>
+                    <input type="text" id="employee-username" placeholder="Enter team member username"
+                           autocomplete="off">
                 </div>
-                <div class="loading-step" id="step-ai">
-                    <span class="step-indicator"></span>
-                    <div class="step-text">
-                        <strong>AI Response</strong>
-                        <small>Sending approved message to model</small>
-                    </div>
-                    <span class="step-status" id="status-ai">Waiting</span>
+                <div class="auth-field">
+                    <label for="employee-password">Password</label>
+                    <input type="password" id="employee-password" placeholder="Enter team member password"
+                           autocomplete="off">
                 </div>
-            </div>
 
-            <div class="loading-timer">
-                Elapsed time: <span id="loading-elapsed">0.0s</span>
-            </div>
-        </div>
-    </div>
+                <div id="employee-msg" class="auth-inline-msg"></div>
+                <button type="button" id="btn-employee-login" class="auth-btn-primary">Open workspace</button>
 
-    <div id="app" class="app-layout">
-        <!-- VIEW 1: SIGN IN PORTAL -->
-        <section id="portal-view" class="auth-shell">
-    <aside class="auth-brand">
-        <div class="auth-logo">
-            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8.2-7 10-4-1.8-7-5.5-7-10V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg>
-            <span>Cybersyn</span>
-        </div>
-        <div class="auth-brand-body">
-            <h2>Use AI at work without exposing what matters.</h2>
-            <p>Cybersyn reviews every message on your own machine before it reaches an AI model, so sensitive information stays inside your organization.</p>
-            <ul class="auth-points">
-                <li><strong>Screened locally</strong><span>Every check runs on this computer. Nothing is sent out for review.</span></li>
-                <li><strong>Built for Greek data</strong><span>Recognizes AFM, AMKA, phone numbers and company names.</span></li>
-                <li><strong>Administrator controlled</strong><span>Admins manage team access and approve any exceptions.</span></li>
-            </ul>
-        </div>
-        <div class="auth-brand-foot">AI Security Gateway &middot; Running locally</div>
-    </aside>
-
-    <div class="auth-panel">
-        <div id="admin-step" class="auth-step">
-            <div class="auth-progress" aria-hidden="true"><span class="is-active"></span><span></span></div>
-            <div class="auth-eyebrow">Step 1 of 2</div>
-            <h1 class="auth-title">Administrator sign in</h1>
-            <p class="auth-lead">Sign in with your administrator account to manage your workspace.</p>
-
-            <div class="auth-field">
-                <label for="admin-username">Username</label>
-                <input type="text" id="admin-username" placeholder="Enter your username" autocomplete="username">
-            </div>
-            <div class="auth-field">
-                <label for="admin-password">Password</label>
-                <input type="password" id="admin-password" placeholder="Enter your password" autocomplete="current-password">
-            </div>
-
-            <div id="admin-msg" class="auth-inline-msg"></div>
-            <button type="button" id="btn-admin-login" class="auth-btn-primary">Continue</button>
-
-            <div class="auth-secondary">
-                <button type="button" id="btn-admin-register" class="auth-link">Create administrator account</button>
-                <button type="button" id="btn-admin-delete" class="auth-link auth-link-danger">Delete account</button>
-            </div>
-        </div>
-
-        <div id="employee-card" class="auth-step hidden">
-            <div class="auth-progress" aria-hidden="true"><span class="is-active"></span><span class="is-active"></span></div>
-            <div class="auth-eyebrow">Step 2 of 2</div>
-            <h1 class="auth-title">Team member sign in</h1>
-            <p class="auth-lead">Choose the team member account you want to work in.</p>
-
-            <div id="admin-session-badge" class="auth-context hidden">
-                <div class="auth-context-text">
-                    <span class="auth-context-label">Signed in as administrator</span>
-                    <strong id="active-admin-label">Admin</strong>
-                </div>
-                <div class="auth-context-actions">
-                    <button type="button" id="btn-admin-logout" class="auth-link">Switch administrator</button>
-                    <a href="/team" class="auth-link">View team and stats</a>
+                <div class="auth-secondary">
+                    <button type="button" id="btn-employee-create" class="auth-link">Add team member</button>
+                    <button type="button" id="btn-employee-delete" class="auth-link auth-link-danger">Remove team member</button>
                 </div>
             </div>
 
-            <div class="auth-field">
-                <label for="employee-username">Username</label>
-                <input type="text" id="employee-username" placeholder="Enter team member username" autocomplete="off">
-            </div>
-            <div class="auth-field">
-                <label for="employee-password">Password</label>
-                <input type="password" id="employee-password" placeholder="Enter team member password" autocomplete="off">
-            </div>
-
-            <div id="employee-msg" class="auth-inline-msg"></div>
-            <button type="button" id="btn-employee-login" class="auth-btn-primary">Open workspace</button>
-
-            <div class="auth-secondary">
-                <button type="button" id="btn-employee-create" class="auth-link">Add team member</button>
-                <button type="button" id="btn-employee-delete" class="auth-link auth-link-danger">Remove team member</button>
-            </div>
+            <div class="auth-footnote">Protected by local Python scanners. Sign-in is required each time you open this page.</div>
         </div>
-
-        <div class="auth-footnote">Protected by local Python scanners. Sign-in is required each time you open this page.</div>
-    </div>
-</section>
-
-        <!-- VIEW 2: WORKSPACE & CHAT -->
-        <main id="workspace-view" class="workspace-view hidden">
-<aside class="workspace-sidebar">
-    <div class="sidebar-top">
-        <div class="brand-mark">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 3l7 3v6c0 5-3.5 8.5-7 9-3.5-.5-7-4-7-9V6l7-3z"/>
-                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4"/>
-            </svg>
-            <span>Cybersyn</span>
-        </div>
-    </div>
-
-    <button type="button" class="sidebar-link-btn" id="btn-open-profile">Profile</button>
-
-    <button type="button" class="sidebar-link-btn" id="btn-open-team">Team</button>
-
-    <button type="button" class="sidebar-link-btn" id="btn-open-settings">Settings</button>
-
-    <div class="sidebar-chats">
-        <div class="sidebar-chats-head">
-            <span class="section-title">Chats</span>
-            <button type="button" class="chat-new-btn" id="btn-new-chat">New chat</button>
-        </div>
-        <div id="chat-list" class="chat-list"></div>
-    </div>
-
-    
-    <div class="sidebar-footer">
-        <a href="/help" id="btn-open-help" class="sidebar-link-btn">Help &amp; info</a>
-        <button type="button" class="btn btn-outline-danger btn-sm" id="btn-workspace-logout" style="width: 100%;">Sign out</button>
-    </div>
-</aside>
-
-<section class="workspace-main">
-    <header class="workspace-topbar">
-        <button type="button" id="btn-toggle-sidebar" class="sidebar-toggle" title="Show or hide sidebar">☰</button>
-        <button type="button" class="chat-title" id="active-chat-title" title="Click to rename this chat">New chat</button>
-        <input type="text" id="chat-title-input" class="chat-title-input hidden" maxlength="80" aria-label="Chat title">
-        <div class="topbar-status">
-            <span class="status-dot active" id="topbar-dot"></span>
-            <span id="active-checks-summary">3 of 3 safety checks active</span>
-        </div>
-        <button type="button" class="btn-link" id="btn-clear-chat">Delete this chat</button>
-    </header>
-    <div id="unprotected-banner" class="unprotected-banner hidden">
-        <strong>Warning: All safety checks are turned off.</strong> Your prompts are currently sent directly to the AI without local scanning.
-    </div>
-    <div class="chat-viewport" id="chat-stream"></div>
-    <footer class="chat-input-wrapper">
-        <form id="form-chat-send" class="input-box-container">
-            <textarea id="prompt-input" rows="2" placeholder="Ask anything... (Enter to send, Shift+Enter for a new line)" required></textarea>
-            <button type="submit" class="btn btn-primary btn-send" id="btn-send-prompt">Send</button>
-        </form>
-        <div class="input-footnote">Checked locally on this machine before reaching the AI provider.</div>
-    </footer>
-</section>
-</main>
-
-        <div id="chat-delete-overlay" class="chat-confirm-overlay hidden">
-    <div class="chat-confirm-panel">
-        <h2>Delete this chat?</h2>
-        <p>Its messages are removed from the database and cannot be recovered. Team stats are not changed.</p>
-        <div class="chat-confirm-actions">
-            <button type="button" class="btn btn-sm" id="btn-cancel-chat-delete">Cancel</button>
-            <button type="button" class="btn btn-sm btn-outline-danger" id="btn-confirm-chat-delete">Yes, delete this chat</button>
-        </div>
-    </div>
+    </section>
 </div>
-<div id="settings-overlay" class="settings-overlay hidden">
-    <div class="settings-panel">
-        <div class="settings-panel-header">
-            <h2>Settings</h2>
-            <button type="button" class="btn-close" id="btn-close-settings">&times;</button>
-        </div>
-        <div class="settings-panel-body">
-<section class="sidebar-section">
-                <div class="section-header-row">
-                    <span class="section-title">Local Safety Checks</span>
-                    <span class="sync-indicator" id="settings-sync-badge">Saved</span>
-                </div>
-                <div class="toggle-list">
-                    <label class="toggle-item">
-                        <input type="checkbox" id="setting-check1" checked>
-                        <span class="toggle-switch"></span>
-                        <span class="toggle-text"><strong>Personal & Greek IDs</strong><small>AFM, AMKA, phones, emails & names</small></span>
-                    </label>
-                    <label class="toggle-item">
-                        <input type="checkbox" id="setting-check2" checked>
-                        <span class="toggle-switch"></span>
-                        <span class="toggle-text"><strong>Confidential Context</strong><small>Contracts, NDAs, finance & HR data</small></span>
-                    </label>
-                    <label class="toggle-item">
-                        <input type="checkbox" id="setting-check3" checked>
-                        <span class="toggle-switch"></span>
-                        <span class="toggle-text"><strong>Prompt Injection</strong><small>Jailbreaks & hidden instructions</small></span>
-                    </label>
-                </div>
-            </section>
+{% endblock %}
 
-            <section class="sidebar-section">
-                <div class="section-title">AI Model Connection</div>
-                <div class="input-group-compact">
-                    <label for="setting-model-name">Model name</label>
-                    <select id="setting-model-name"><option value="gpt-4o-mini">gpt-4o-mini</option></select>
-                </div>
-                <div class="input-group-compact">
-                    <label for="setting-api-key">API Key</label>
-                    <input type="password" id="setting-api-key" placeholder="Paste your API key..." autocomplete="off">
-                </div>
-            </section>
-
-            <section class="sidebar-section">
-                <button type="button" class="btn btn-primary btn-sm" id="btn-save-settings">Apply</button>
-            </section>
-        </div>
-    </div>
-</div>
-
-<div id="profile-overlay" class="info-overlay hidden">
-    <div class="info-panel">
-        <div class="info-panel-header">
-            <h2>Profile</h2>
-            <button type="button" class="btn-close" id="btn-close-profile">&times;</button>
-        </div>
-        <div class="info-panel-body">
-            <details class="id-details"><summary>IDs</summary><div class="id-details-body"><span>Your ID <b id="profile-employee-id">--</b></span>
-            <span>Admin ID <b id="profile-parent-id">--</b></span></div></details>
-<div class="user-profile-badge">
-                <div class="avatar" id="user-avatar-letter">U</div>
-                <div class="profile-details">
-                    <span class="profile-name" id="display-employee-user">Member</span>
-                    <span class="profile-sub" id="display-parent-id">Workspace --</span>
-                </div>
-            </div>
-            <div class="profile-actions">
-                <button type="button" class="link-small" id="btn-show-change-password">Change password</button>
-                <button type="button" class="link-small" id="btn-show-change-username">Change username</button>
-            </div>
-            <div id="form-change-password" class="inline-form hidden">
-                <input type="password" id="input-password-current" placeholder="Current password" autocomplete="current-password">
-                <input type="password" id="input-password-new" placeholder="New password" autocomplete="new-password">
-                <div class="inline-form-actions">
-                    <button type="button" class="link-small" id="btn-cancel-password">Cancel</button>
-                    <button type="button" class="btn btn-primary btn-sm" id="btn-save-password">Save</button>
-                </div>
-                <div id="msg-password" class="inline-msg"></div>
-            </div>
-            <div id="form-change-username" class="inline-form hidden">
-                <input type="password" id="input-username-current" placeholder="Current password" autocomplete="current-password">
-                <input type="text" id="input-username-new" placeholder="New username" autocomplete="off">
-                <div class="inline-form-actions">
-                    <button type="button" class="link-small" id="btn-cancel-username">Cancel</button>
-                    <button type="button" class="btn btn-primary btn-sm" id="btn-save-username">Save</button>
-                </div>
-                <div id="msg-username" class="inline-msg"></div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div id="team-overlay" class="info-overlay hidden">
-    <div class="info-panel">
-        <div class="info-panel-header">
-            <h2>Team</h2>
-            <button type="button" class="btn-close" id="btn-close-team">&times;</button>
-        </div>
-        <div class="info-panel-body">
-<div id="team-list" class="team-list"><span class="profile-sub">Sign in to see members.</span></div>
-        </div>
-    </div>
-</div>
-
-<div id="confirm-overlay" class="info-overlay hidden">
-    <div class="info-panel">
-        <div class="info-panel-header">
-            <h2>Confirm changes</h2>
-            <button type="button" class="btn-close" id="btn-close-confirm">&times;</button>
-        </div>
-        <div class="info-panel-body">
-            <p class="confirm-text">Enter the admin password to apply these settings.</p>
-            <input type="password" id="confirm-admin-password" placeholder="Admin password" autocomplete="off">
-            <div class="inline-form-actions">
-                <button type="button" class="link-small" id="btn-cancel-confirm">Cancel</button>
-                <button type="button" class="btn btn-primary btn-sm" id="btn-confirm-apply">Confirm</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- VIEW 3: BLOCKED PROMPT MODAL -->
-        <div id="intercept-modal" class="modal-backdrop hidden">
-            <div class="modal-dialog">
-                <div class="modal-header">
-                    <div class="modal-title-wrap">
-                        <div class="alert-badge">Blocked</div>
-                        <div>
-                            <h2>We paused this message</h2>
-                            <p class="alert-subtitle">Sensitive information was found locally, so nothing was sent to the AI.</p>
-                        </div>
-                    </div>
-                    <button type="button" class="btn-close" id="btn-close-modal">&times;</button>
-                </div>
-
-                <div class="modal-body">
-                    <div class="alert-summary-box">
-                        <div class="summary-item">
-                            <span class="summary-label">Stopped by</span>
-                            <span class="summary-value" id="intercept-stage">Check 1</span>
-                        </div>
-                        <div class="summary-item">
-                            <span class="summary-label">Reason</span>
-                            <span class="summary-value warning-text" id="intercept-cause">Sensitive Data</span>
-                        </div>
-                        <div class="summary-item">
-                            <span class="summary-label">Confidence</span>
-                            <span class="summary-value" id="intercept-score">95%</span>
-                        </div>
-                    </div>
-
-                    <div class="matches-section">
-                        <h4>Flagged content in your message</h4>
-                        <div id="intercept-matches" class="matches-list"></div>
-                    </div>
-
-                    <div class="bypass-accordion">
-                        <div class="bypass-header" id="toggle-bypass-controls">
-                            <span>Need to send this anyway? Use Admin Override</span>
-                            <span class="arrow-indicator">▾</span>
-                        </div>
-                        <div class="bypass-content hidden" id="bypass-controls-panel">
-                            <p class="bypass-disclaimer">Enter the workspace admin password to approve sending this one message directly to the AI.</p>
-                            <div class="input-group-compact">
-                                <label for="bypass-admin-password">Admin password</label>
-                                <input type="password" id="bypass-admin-password" placeholder="Enter admin password">
-                            </div>
-                            <button type="button" class="btn btn-warning" id="btn-execute-bypass">Approve & Send Message</button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-primary" id="btn-dismiss-modal">Edit my message</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
-<script src="{{ url_for('static', filename='js/i18n.js') }}"></script>
-</body>
-</html>
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/auth.js') }}"></script>
+{% endblock %}

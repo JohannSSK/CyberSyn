@@ -1,0 +1,215 @@
+/* ==========================================================================
+   stats.css — the administrator statistics screen.
+   Charts are drawn with plain elements (bars, lines, donuts) so there is no
+   charting library to load and nothing to break offline.
+   ========================================================================== */
+
+.range-bar {
+    display: inline-flex;
+    gap: 2px;
+    padding: 3px;
+    border-radius: var(--r-pill);
+    background: var(--surface);
+    border: 1px solid var(--border-soft);
+}
+
+.range-bar button {
+    padding: 6px 13px;
+    border-radius: var(--r-pill);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    transition: all var(--fast) var(--ease);
+}
+
+.range-bar button:hover { color: var(--text); }
+.range-bar button.is-active { color: #04121F; background: var(--accent); }
+
+/* ---- member cards ---- */
+
+.member-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    gap: 16px;
+}
+
+.member-card {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 18px;
+    border-radius: var(--r-lg);
+    background: linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.012));
+    border: 1px solid var(--border-soft);
+    animation: rise-in var(--med) var(--ease) both;
+}
+
+.member-head { display: flex; align-items: center; gap: 13px; }
+
+.member-head .avatar { width: 40px; height: 40px; font-size: 15px; }
+
+.member-id { min-width: 0; flex: 1; }
+.member-id strong { display: block; font-size: 15px; }
+.member-id small { font-size: 11.5px; color: var(--text-muted); }
+
+/* Donut: a conic-gradient ring driven by --pct */
+.donut {
+    position: relative;
+    width: 56px;
+    height: 56px;
+    flex: none;
+    border-radius: 50%;
+    background:
+        conic-gradient(var(--donut-color, var(--accent)) calc(var(--pct, 0) * 1%),
+                       var(--surface-3) 0);
+    display: grid;
+    place-items: center;
+    transition: --pct var(--slow) var(--ease);
+}
+
+.donut::after {
+    content: "";
+    position: absolute;
+    inset: 6px;
+    border-radius: 50%;
+    background: var(--surface);
+}
+
+.donut span {
+    position: relative;
+    font-size: 12.5px;
+    font-weight: 700;
+    font-family: var(--font-mono);
+}
+
+/* ---- bars ---- */
+
+.bars { display: flex; flex-direction: column; gap: 9px; }
+
+.bar-row { display: flex; flex-direction: column; gap: 5px; }
+
+.bar-top {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 12.5px;
+}
+
+.bar-top .bar-value { font-family: var(--font-mono); color: var(--text-muted); font-size: 11.5px; }
+
+.bar-track {
+    height: 7px;
+    border-radius: var(--r-pill);
+    background: var(--surface-3);
+    overflow: hidden;
+}
+
+.bar-fill {
+    height: 100%;
+    border-radius: var(--r-pill);
+    background: linear-gradient(90deg, var(--accent-deep), var(--accent));
+    transition: width var(--slow) var(--ease);
+}
+
+.bar-fill.warn { background: linear-gradient(90deg, #D99A0B, var(--warn)); }
+.bar-fill.danger { background: linear-gradient(90deg, #C93F3F, var(--danger)); }
+.bar-fill.violet { background: linear-gradient(90deg, #7C5CE0, var(--violet)); }
+.bar-fill.success { background: linear-gradient(90deg, #1F9C6E, var(--success)); }
+
+/* ---- trend chart ---- */
+
+.trend {
+    display: flex;
+    align-items: flex-end;
+    gap: 3px;
+    height: 68px;
+    padding: 8px 0 0;
+}
+
+.trend-col {
+    position: relative;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    height: 100%;
+    min-width: 0;
+}
+
+.trend-bar {
+    width: 100%;
+    border-radius: 3px 3px 0 0;
+    background: linear-gradient(180deg, var(--accent), var(--accent-deep));
+    min-height: 2px;
+    transition: height var(--slow) var(--ease);
+}
+
+.trend-bar.override { background: linear-gradient(180deg, var(--warn), #D99A0B); }
+
+.trend-col:hover .trend-bar { filter: brightness(1.25); }
+
+.trend-axis {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 6px;
+    font-size: 10.5px;
+    color: var(--text-muted);
+}
+
+/* ---- timeline ---- */
+
+.timeline {
+    display: flex;
+    flex-direction: column;
+    max-height: 520px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.tl-item {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr) auto;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border-soft);
+    font-size: 13px;
+}
+
+.tl-item:last-child { border-bottom: none; }
+
+.tl-mark {
+    display: grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    margin-top: 2px;
+    border-radius: 50%;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+}
+
+.tl-mark .icon { width: 10px; height: 10px; }
+.tl-item.kind-blocked .tl-mark { color: var(--danger); border-color: rgba(248,113,113,0.4); }
+.tl-item.kind-override .tl-mark { color: var(--warn); border-color: rgba(251,191,36,0.4); }
+.tl-item.kind-prompt .tl-mark { color: var(--accent); border-color: var(--accent-line); }
+.tl-item.kind-login .tl-mark { color: var(--success); border-color: rgba(52,211,153,0.4); }
+
+.tl-body { min-width: 0; }
+.tl-body strong { font-weight: 600; }
+.tl-body small { display: block; color: var(--text-muted); font-size: 12px; overflow-wrap: anywhere; }
+.tl-time { font-size: 11.5px; color: var(--text-muted); white-space: nowrap; font-family: var(--font-mono); }
+
+/* ---- legend ---- */
+
+.legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    font-size: 11.5px;
+    color: var(--text-muted);
+}
+
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+
+.swatch { width: 9px; height: 9px; border-radius: 2px; }

@@ -46,17 +46,3 @@ def team():
 def help_page():
     return render_template("help.html")
 
-
-@pages.get("/signup/admin")
-def signup_admin():
-    return render_template("signup_admin.html")
-
-
-@pages.get("/signup/employee")
-def signup_employee():
-    return render_template("signup_employee.html")
-
-
-@pages.get("/remove/employee")
-def remove_employee():
-    return render_template("remove_employee.html")

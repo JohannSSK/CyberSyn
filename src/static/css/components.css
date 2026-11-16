@@ -1,0 +1,607 @@
+/* ==========================================================================
+   components.css — buttons, fields, cards, toasts, modals, loading states.
+   Reusable pieces only. Nothing here knows about a specific page.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Buttons
+   -------------------------------------------------------------------------- */
+
+.btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    padding: 11px 18px;
+    border-radius: var(--r-md);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    transition: background var(--fast) var(--ease),
+                border-color var(--fast) var(--ease),
+                transform var(--fast) var(--ease),
+                box-shadow var(--fast) var(--ease);
+    white-space: nowrap;
+    user-select: none;
+}
+
+.btn:hover:not(:disabled) {
+    background: var(--surface-3);
+    border-color: #30406A;
+    transform: translateY(-1px);
+}
+
+.btn:active:not(:disabled) { transform: translateY(0) scale(0.985); }
+
+.btn:disabled { opacity: 0.5; }
+
+.btn-primary {
+    color: #04121F;
+    background: linear-gradient(180deg, #58CBFA, var(--accent));
+    border-color: transparent;
+    box-shadow: 0 6px 18px rgba(56, 189, 248, 0.24);
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: linear-gradient(180deg, #6FD3FB, #2BB4EE);
+    box-shadow: 0 10px 26px rgba(56, 189, 248, 0.34);
+}
+
+.btn-ghost { background: transparent; border-color: transparent; color: var(--text-dim); }
+.btn-ghost:hover:not(:disabled) { background: var(--surface-2); color: var(--text); border-color: var(--border-soft); }
+
+.btn-outline { background: transparent; border-color: var(--border); }
+.btn-outline:hover:not(:disabled) { background: var(--surface-2); }
+
+.btn-danger { color: #fff; background: linear-gradient(180deg, #F97C7C, #E14B4B); border-color: transparent; }
+.btn-danger:hover:not(:disabled) { background: linear-gradient(180deg, #FB8F8F, #EC5A5A); }
+
+.btn-outline-danger { color: var(--danger); background: transparent; border-color: rgba(248, 113, 113, 0.45); }
+.btn-outline-danger:hover:not(:disabled) { background: var(--danger-soft); border-color: var(--danger); }
+
+.btn-warning { color: #241A02; background: linear-gradient(180deg, #FCC94D, #F0A81E); border-color: transparent; }
+.btn-warning:hover:not(:disabled) { background: linear-gradient(180deg, #FDD268, #F3B333); }
+
+.btn-sm { padding: 7px 13px; font-size: 13px; border-radius: var(--r-sm); }
+.btn-lg { padding: 14px 24px; font-size: 15px; }
+.btn-block { width: 100%; }
+
+.btn-link {
+    padding: 0;
+    background: none;
+    border: none;
+    color: var(--accent);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.btn-link:hover { text-decoration: underline; }
+
+.btn-link.danger { color: var(--danger); }
+
+/* Icons inside buttons */
+.btn .icon { width: 17px; height: 17px; flex: none; }
+
+.btn-sm .icon { width: 15px; height: 15px; }
+
+/* --------------------------------------------------------------------------
+   Button loading state
+   Every action button shows its own spinner while its request is in flight,
+   and locks so a double-click cannot fire the same action twice.
+   -------------------------------------------------------------------------- */
+
+.btn.is-loading {
+    color: transparent !important;
+    pointer-events: none;
+    position: relative;
+}
+
+.btn.is-loading .icon,
+.btn.is-loading > *:not(.btn-spinner) { opacity: 0; }
+
+.btn-spinner {
+    position: absolute;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn.is-loading .btn-spinner { display: flex; }
+
+.btn-spinner::after {
+    content: "";
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.28);
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: spin 620ms linear infinite;
+    color: var(--text);
+}
+
+.btn-primary.is-loading .btn-spinner::after,
+.btn-danger.is-loading .btn-spinner::after,
+.btn-warning.is-loading .btn-spinner::after {
+    border-color: rgba(0, 0, 0, 0.25);
+    border-top-color: #06121F;
+}
+
+/* --------------------------------------------------------------------------
+   Fields
+   -------------------------------------------------------------------------- */
+
+.field { display: flex; flex-direction: column; gap: 7px; }
+
+.field > label {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.input,
+.select,
+.textarea {
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: var(--r-md);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    transition: border-color var(--fast) var(--ease),
+                box-shadow var(--fast) var(--ease),
+                background var(--fast) var(--ease);
+}
+
+.input::placeholder, .textarea::placeholder { color: var(--text-muted); }
+
+.input:focus, .select:focus, .textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.textarea { resize: vertical; min-height: 84px; }
+
+.select {
+    appearance: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%237488AC' stroke-width='2.2' stroke-linecap='round'><path d='M6 9l6 6 6-6'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 13px center;
+    padding-right: 38px;
+    cursor: pointer;
+}
+
+.select option { background: var(--surface-2); color: var(--text); }
+
+.hint { font-size: 12px; color: var(--text-muted); }
+
+/* Input with a leading icon */
+.input-icon { position: relative; }
+
+.input-icon .icon {
+    position: absolute;
+    left: 13px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 17px;
+    height: 17px;
+    opacity: 0.75;
+    pointer-events: none;
+}
+
+.input-icon .input { padding-left: 40px; }
+
+/* --------------------------------------------------------------------------
+   Toggle switch
+   -------------------------------------------------------------------------- */
+
+.toggle {
+    display: flex;
+    align-items: flex-start;
+    gap: 13px;
+    padding: 13px 15px;
+    border-radius: var(--r-md);
+    border: 1px solid var(--border-soft);
+    background: var(--surface);
+    cursor: pointer;
+    transition: border-color var(--fast) var(--ease), background var(--fast) var(--ease);
+}
+
+.toggle:hover { border-color: var(--border); background: var(--surface-2); }
+
+.toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
+
+.toggle-track {
+    position: relative;
+    flex: none;
+    width: 42px;
+    height: 24px;
+    margin-top: 1px;
+    border-radius: var(--r-pill);
+    background: var(--surface-3);
+    border: 1px solid var(--border);
+    transition: background var(--med) var(--ease), border-color var(--med) var(--ease);
+}
+
+.toggle-track::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    transition: transform var(--med) var(--ease), background var(--med) var(--ease);
+}
+
+.toggle input:checked + .toggle-track {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+}
+
+.toggle input:checked + .toggle-track::after {
+    transform: translateX(18px);
+    background: var(--accent);
+}
+
+.toggle input:focus-visible + .toggle-track { box-shadow: 0 0 0 3px var(--accent-soft); }
+
+.toggle-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+
+.toggle-body strong { font-size: 14px; font-weight: 600; }
+
+.toggle-body small { font-size: 12.5px; color: var(--text-muted); line-height: 1.45; }
+
+/* --------------------------------------------------------------------------
+   Cards
+   -------------------------------------------------------------------------- */
+
+.card {
+    padding: 20px;
+    border-radius: var(--r-lg);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.012));
+    border: 1px solid var(--border-soft);
+    box-shadow: var(--shadow-sm);
+}
+
+.card-title {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin-bottom: 14px;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.card-title .icon { width: 17px; height: 17px; color: var(--accent); }
+
+/* --------------------------------------------------------------------------
+   Badges
+   -------------------------------------------------------------------------- */
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: var(--r-pill);
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+}
+
+.badge-accent { background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent); }
+.badge-success { background: var(--success-soft); border-color: rgba(52,211,153,0.4); color: var(--success); }
+.badge-warn { background: var(--warn-soft); border-color: rgba(251,191,36,0.4); color: var(--warn); }
+.badge-danger { background: var(--danger-soft); border-color: rgba(248,113,113,0.4); color: var(--danger); }
+
+.dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none; }
+
+.dot-live { box-shadow: 0 0 0 0 currentColor; animation: pulse-dot 2.2s infinite; }
+
+@keyframes pulse-dot {
+    0%   { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.55); }
+    70%  { box-shadow: 0 0 0 7px rgba(52, 211, 153, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); }
+}
+
+/* --------------------------------------------------------------------------
+   Icon buttons
+   -------------------------------------------------------------------------- */
+
+.icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--r-sm);
+    color: var(--text-muted);
+    background: transparent;
+    border: 1px solid transparent;
+    transition: all var(--fast) var(--ease);
+}
+
+.icon-btn:hover {
+    color: var(--text);
+    background: var(--surface-2);
+    border-color: var(--border);
+}
+
+.icon-btn.danger:hover { color: var(--danger); background: var(--danger-soft); border-color: rgba(248,113,113,0.35); }
+.icon-btn .icon { width: 16px; height: 16px; }
+
+.icon-btn.is-loading { pointer-events: none; }
+.icon-btn.is-loading .icon { opacity: 0; }
+
+/* --------------------------------------------------------------------------
+   Toasts
+   -------------------------------------------------------------------------- */
+
+.toast-container {
+    position: fixed;
+    top: 18px;
+    right: 18px;
+    z-index: 9000;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: none;
+}
+
+.toast {
+    display: flex;
+    align-items: flex-start;
+    gap: 11px;
+    min-width: 280px;
+    max-width: 400px;
+    padding: 13px 15px;
+    border-radius: var(--r-md);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-md);
+    font-size: 13.5px;
+    pointer-events: auto;
+    animation: toast-in var(--med) var(--ease) both;
+}
+
+.toast.out { animation: toast-out var(--med) var(--ease) both; }
+
+@keyframes toast-in  { from { opacity: 0; transform: translateX(24px) scale(0.97); } to { opacity: 1; transform: none; } }
+@keyframes toast-out { to { opacity: 0; transform: translateX(24px) scale(0.97); } }
+
+.toast .icon { width: 17px; height: 17px; flex: none; margin-top: 1px; }
+.toast-success { border-color: rgba(52,211,153,0.4); } .toast-success .icon { color: var(--success); }
+.toast-error   { border-color: rgba(248,113,113,0.4); } .toast-error   .icon { color: var(--danger); }
+.toast-warn    { border-color: rgba(251,191,36,0.4); } .toast-warn    .icon { color: var(--warn); }
+.toast-info .icon { color: var(--accent); }
+
+/* --------------------------------------------------------------------------
+   Modal / overlay
+   -------------------------------------------------------------------------- */
+
+.overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 8000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 22px;
+    background: rgba(4, 8, 18, 0.72);
+    backdrop-filter: blur(6px);
+    animation: fade-in var(--fast) var(--ease) both;
+}
+
+.overlay.out { animation: fade-in var(--fast) var(--ease) reverse both; }
+
+.modal {
+    width: 100%;
+    max-width: 560px;
+    max-height: 88vh;
+    overflow-y: auto;
+    border-radius: var(--r-xl);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-lg);
+    animation: scale-in var(--med) var(--ease) both;
+}
+
+.modal-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 20px 22px;
+    border-bottom: 1px solid var(--border-soft);
+}
+
+.modal-body { padding: 22px; }
+.modal-foot {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 16px 22px;
+    border-top: 1px solid var(--border-soft);
+}
+
+.btn-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--r-sm);
+    font-size: 22px;
+    line-height: 1;
+    color: var(--text-muted);
+    background: transparent;
+    transition: all var(--fast) var(--ease);
+}
+
+.btn-close:hover { color: var(--text); background: var(--surface-2); }
+
+/* --------------------------------------------------------------------------
+   Skeleton loading
+   -------------------------------------------------------------------------- */
+
+.skeleton {
+    position: relative;
+    overflow: hidden;
+    background: var(--surface-2);
+    border-radius: var(--r-sm);
+}
+
+.skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.055), transparent);
+    animation: shimmer 1.5s infinite;
+}
+
+/* --------------------------------------------------------------------------
+   Empty state
+   -------------------------------------------------------------------------- */
+
+.empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 54px 24px;
+    text-align: center;
+    color: var(--text-muted);
+}
+
+.empty .icon { width: 40px; height: 40px; opacity: 0.4; }
+
+.empty h3 { color: var(--text-dim); font-size: 17px; }
+
+.empty p { max-width: 420px; font-size: 13.5px; }
+
+/* --------------------------------------------------------------------------
+   Full-screen scanning overlay
+   -------------------------------------------------------------------------- */
+
+.scan-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 8500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 22px;
+    background: rgba(4, 8, 18, 0.78);
+    backdrop-filter: blur(8px);
+    animation: fade-in var(--fast) var(--ease) both;
+}
+
+.scan-card {
+    width: 100%;
+    max-width: 470px;
+    padding: 32px;
+    text-align: center;
+    border-radius: var(--r-xl);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-lg);
+    animation: scale-in var(--med) var(--ease) both;
+}
+
+.scan-ring {
+    position: relative;
+    width: 72px;
+    height: 72px;
+    margin: 0 auto 20px;
+}
+
+.scan-ring svg.ring {
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+}
+
+.scan-ring .ring circle {
+    fill: none;
+    stroke-width: 3;
+    stroke-linecap: round;
+}
+
+.scan-ring .ring .track { stroke: var(--surface-3); }
+
+.scan-ring .ring .bar {
+    stroke: var(--accent);
+    stroke-dasharray: 176;
+    stroke-dashoffset: 176;
+    animation: draw-ring 1.35s var(--ease) infinite;
+}
+
+.scan-ring .glyph {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    color: var(--accent);
+}
+
+.scan-ring .glyph .icon { width: 27px; height: 27px; }
+
+.scan-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin: 22px 0 16px;
+    text-align: left;
+}
+
+.scan-step {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 9px 11px;
+    border-radius: var(--r-sm);
+    opacity: 0.4;
+    transition: opacity var(--med) var(--ease), background var(--med) var(--ease);
+}
+
+.scan-step.active { opacity: 1; background: var(--surface-2); }
+.scan-step.done   { opacity: 0.72; }
+
+.scan-step .mark {
+    display: grid;
+    place-items: center;
+    width: 19px;
+    height: 19px;
+    flex: none;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    font-size: 11px;
+    color: var(--success);
+}
+
+.scan-step.active .mark { border-color: var(--accent); }
+
+.scan-step.done .mark { border-color: var(--success); background: var(--success-soft); }
+
+.scan-step .mark .icon { width: 11px; height: 11px; }
+
+.scan-step-body { min-width: 0; }
+.scan-step-body strong { display: block; font-size: 13.5px; }
+.scan-step-body small { font-size: 11.5px; color: var(--text-muted); }
+.scan-step .status { margin-left: auto; font-size: 11.5px; color: var(--text-muted); flex: none; }
+
+.scan-timer { font-size: 12px; color: var(--text-muted); }
+
+.scan-timer b { color: var(--accent); font-family: var(--font-mono); }
