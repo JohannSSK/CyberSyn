@@ -1,0 +1,28 @@
+services:
+  cybersyn:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: cybersyn:2026
+    container_name: cybersyn
+    restart: unless-stopped
+
+    ports:
+      - "5000:5000"
+
+    environment:
+      # Bind on every interface so the port is reachable from outside the container.
+      CYBERSYN_HOST: "0.0.0.0"
+      CYBERSYN_PORT: "5000"
+      # Keep the Werkzeug debugger off. Set to 1 only for local development.
+      CYBERSYN_DEBUG: "0"
+      # Optional: supply a Fernet key to decrypt API keys from another machine
+      # (e.g. from your .env file). Leave empty to let CyberSyn generate one.
+      CYBERSYN_KEY: "${CYBERSYN_KEY:-}"
+
+    volumes:
+      # Persists app.db (accounts, chats, block log) and the generated secret.key.
+      - cybersyn-data:/app/src/backend
+
+volumes:
+  cybersyn-data:

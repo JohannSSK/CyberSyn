@@ -52,8 +52,11 @@ ROOT_DIR = CONSTANTS_FILE.parent.parent
 with open(CONSTANTS_FILE, "r", encoding="utf-8") as fh:
     CONSTANTS = json.load(fh)
 
-HOST = CONSTANTS.get("HOST", "127.0.0.1")
-PORT = int(CONSTANTS.get("PORT", 5000))
+# Container-friendly: environment variables win over includes/constants.json, so
+# `docker compose up` can bind 0.0.0.0 without editing a tracked file.
+HOST = os.environ.get("CYBERSYN_HOST") or CONSTANTS.get("HOST", "127.0.0.1")
+PORT = int(os.environ.get("CYBERSYN_PORT") or CONSTANTS.get("PORT", 5000))
+DEBUG = os.environ.get("CYBERSYN_DEBUG", "0") == "1"
 PATHS = CONSTANTS["PATHS"]
 ROUTES = CONSTANTS["ROUTES"]
 
@@ -900,4 +903,4 @@ if __name__ == "__main__":
     for rule in app.url_map.iter_rules():
         if rule.endpoint != "static":
             print(f"  {sorted(rule.methods - {'HEAD', 'OPTIONS'})}  {rule.rule}")
-    app.run(host=HOST, port=PORT, debug=True)
+    app.run(host=HOST, port=PORT, debug=DEBUG, threaded=True)
