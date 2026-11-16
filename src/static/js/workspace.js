@@ -362,7 +362,7 @@
             return Api.post("/api/admin/employee/chat/regenerate", {
                 chat_id: state.chatId,
                 message_id: message.id
-            }, { timeout: 120000 });
+            }, { timeout: requestBudget() });
         }).then(function (data) {
             state.messages = data.messages || [];
             renderMessages();
@@ -490,6 +490,20 @@
        Sending
        ------------------------------------------------------------------ */
 
+    /** How long to wait for a reply before giving up.
+
+        The server answers within its screening budget plus the model call,
+        both published on <body> by the route so the two cannot drift apart.
+        A hardcoded number here would silently become too short the moment
+        either of those changed.
+    */
+    function requestBudget() {
+        var body = document.body || {};
+        var seconds = parseInt(body.getAttribute("data-request-timeout"), 10);
+        if (!seconds || seconds < 30) seconds = 135;
+        return seconds * 1000;
+    }
+
     function send(text, bypass, adminToken) {
         if (state.busy) return;
         state.busy = true;
@@ -507,7 +521,7 @@
         };
         if (adminToken) payload.admin_token = adminToken;
 
-        Api.post("/api/admin/employee/chat", payload, { timeout: 120000 })
+        Api.post("/api/admin/employee/chat", payload, { timeout: requestBudget() })
             .then(function (data) {
                 hidePending();
                 if (data.blocked) {

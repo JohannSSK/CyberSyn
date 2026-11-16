@@ -108,7 +108,17 @@ def warm_models(app=None):
             from model_cache import warm
 
             warmed = warm()
-            print(f"Warmed scanners: {loaded}, models: {warmed}")
+            # LiteLLM is imported here too, so its import cost lands on
+            # start-up rather than on whoever sends the first message.
+            _import("ai_client").preload()
+            print(f"Warmed scanners: {loaded}, models: {warmed['loaded']}")
+            if warmed["skipped"]:
+                # Not an error -- the models are simply not on this machine
+                # yet, and fetching them at start-up would hold the scanner
+                # lock. Say so, because otherwise the first prompt is slow
+                # with no explanation why.
+                print("Models not loaded (will load on first use): "
+                      + ", ".join(warmed["skipped"]))
         except Exception as exc:
             print(f"Model warm-up skipped: {type(exc).__name__}: {exc}")
 

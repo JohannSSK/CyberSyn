@@ -54,11 +54,16 @@ def get_taggers():
     return get_spacy(_EN), get_spacy(_EL)
 
 
-def get_zero_shot():
+def get_zero_shot(local_only=False):
     """The one zero-shot classifier shared by the context and injection checks.
 
     Prefer the copy baked into the container image; fall back to a download
     when running from a plain checkout where setup.sh did the fetching.
+
+    `local_only` never reaches the network. Warm-up uses it: loading weights
+    holds the cache lock, and every prompt queues behind that lock, so a
+    start-up download would stall the first minute of conversation behind a
+    transfer nobody asked for yet.
     """
     global _zero_shot
     with _lock:
@@ -74,6 +79,8 @@ def get_zero_shot():
                         local_files_only=True,
                     )
                 except Exception:
+                    if local_only:
+                        raise
                     _zero_shot = pipeline(
                         "zero-shot-classification", model=ZERO_SHOT_MODEL
                     )
@@ -95,16 +102,22 @@ def warm(names=("spacy", "zero-shot")):
     """Eagerly load models so the first real prompt is not the slow one.
 
     Called from a background thread at start-up, while the container is
-    already serving requests.
+    already serving requests. It only loads what is already on disk: a
+    download here would hold the cache lock, and every prompt behind it,
+    for as long as the transfer takes. Models that are not present yet are
+    reported as skipped rather than fetched.
     """
-    done = []
+    done, skipped = [], []
     try:
         if "spacy" in names:
             get_taggers()
             done.append("spacy")
         if "zero-shot" in names:
-            get_zero_shot()
-            done.append("zero-shot")
+            try:
+                get_zero_shot(local_only=True)
+                done.append("zero-shot")
+            except Exception:
+                skipped.append("zero-shot")
     except Exception:
-        pass
-    return done
+        skipped.append("spacy")
+    return {"loaded": done, "skipped": skipped}

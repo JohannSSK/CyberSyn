@@ -12,6 +12,23 @@ from errors import ChatError
 from providers import normalise_model
 
 
+def preload():
+    """Import LiteLLM now, on the warm-up thread, rather than on a prompt.
+
+    Importing it costs a couple of seconds. Paid during start-up it is
+    invisible; paid inside the first request it looks like a slow provider.
+    """
+    try:
+        import litellm
+
+        # LiteLLM prints a "give feedback / get help" banner on error. It is
+        # noise in a log that also carries the real failure.
+        litellm.suppress_debug_info = True
+        return True
+    except Exception:  # noqa: BLE001 - warm-up must never stop start-up
+        return False
+
+
 def complete(api_key, model, prompt, api_base=None, provider=None):
     """Send one prompt and return the model's reply text.
 

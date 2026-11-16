@@ -157,7 +157,8 @@ class RouteTests(unittest.TestCase):
         from routes import chat_api
 
         chat_api.complete = lambda key, model, prompt, **kwargs: "stub reply"
-        scanning.run_check = lambda stage, prompt: {
+        # Screening passes each check the time left in its shared budget.
+        scanning.run_check = lambda stage, prompt, timeout=None: {
             "blocked": True, "stage": stage, "reason": "stub",
             "line": 1, "start": 0, "end": 1, "snippet": "", "matches": [],
         }

@@ -1,0 +1,43 @@
+{# Create an administrator account. Separate from sign-in, because reusing
+   the same boxes for both meant a typo could create an account instead of
+   opening one, and neither action explained itself. #}
+{% extends "auth_page.html" %}
+
+{% block title %}Create administrator — CyberSyn{% endblock %}
+
+{% set brand_title = "One administrator per workspace." %}
+{% set brand_lead = "The administrator holds the workspace: they add team members, "
+                    "set the privacy policy, and approve anything the gate blocks." %}
+{% set eyebrow = "New account" %}
+{% set title = "Create administrator account" %}
+{% set lead = "Choose a username and a password. This account owns the workspace, "
+              "so keep the password somewhere safe — losing it means losing the team." %}
+{% set back_href = "/" %}
+{% set back_label = "Back to sign in" %}
+{% set footnote = "Accounts are stored on this machine only." %}
+
+{% block form %}
+<div class="auth-field">
+    <label for="new-admin-username">Username</label>
+    <input type="text" id="new-admin-username" placeholder="Choose a username"
+           autocomplete="off" autofocus>
+</div>
+<div class="auth-field">
+    <label for="new-admin-password">Password</label>
+    <input type="password" id="new-admin-password" placeholder="Choose a password"
+           autocomplete="new-password">
+    <span class="auth-hint" id="admin-password-rule"></span>
+</div>
+<div class="auth-field">
+    <label for="new-admin-confirm">Confirm password</label>
+    <input type="password" id="new-admin-confirm" placeholder="Type the password again"
+           autocomplete="new-password">
+</div>
+
+<div id="create-admin-msg" class="auth-inline-msg"></div>
+<button type="button" id="btn-create-admin" class="auth-btn-primary">Create account</button>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/account_pages.js') }}"></script>
+{% endblock %}

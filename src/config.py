@@ -44,6 +44,16 @@ def _env_flag(name, default=False):
     return value.strip().lower() in ("1", "true", "yes", "on")
 
 
+# LiteLLM fetches its own model price catalogue from GitHub on import and
+# again before each call, retrying three times with backoff. This app never
+# asks for pricing, so that is pure latency in front of every prompt — worst
+# when the network is slow or blocked, which is exactly when a prompt can
+# least afford it. Its bundled catalogue is as good as the remote one here.
+# Set CYBERSYN_LITELLM_NETWORK=1 to let LiteLLM reach the network.
+if not _env_flag("CYBERSYN_LITELLM_NETWORK"):
+    os.environ.setdefault("LITELLM_OFFLINE_MODE", "true")
+
+
 # A container must be able to bind 0.0.0.0 and pick its own database path
 # without editing a tracked file, so the environment always wins.
 HOST = os.environ.get("CYBERSYN_HOST") or CONSTANTS.get("HOST", "127.0.0.1")
