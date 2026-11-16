@@ -212,3 +212,61 @@
 
     .sidebar.is-open { transform: none; }
 }
+
+/* --------------------------------------------------------------------------
+   Administrator unlock badge
+
+   Shown while this tab holds a recent administrator approval. It has to be
+   visible — an unlocked session nobody can see is one nobody can end — and
+   the countdown tells you when the prompt will come back.
+   -------------------------------------------------------------------------- */
+
+.sidebar-unlock { padding: 0 16px 10px; }
+
+.unlock-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 11px;
+    border-radius: var(--r-sm);
+    background: var(--success-soft);
+    border: 1px solid rgba(151, 171, 145, 0.28);
+    font-size: 11.5px;
+    color: var(--text-dim);
+    line-height: 1.35;
+}
+
+.unlock-dot {
+    width: 7px;
+    height: 7px;
+    flex: none;
+    border-radius: 50%;
+    background: var(--success);
+    animation: unlock-breathe 2.4s var(--ease) infinite;
+}
+
+.unlock-text { flex: 1 1 auto; }
+.unlock-text b { color: var(--text); font-weight: 600; }
+
+.unlock-lock {
+    flex: none;
+    padding: 3px 7px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    background: transparent;
+    color: var(--text-muted);
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.unlock-lock:hover { color: var(--text); border-color: var(--accent-line); }
+
+@keyframes unlock-breathe {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .unlock-dot { animation: none; }
+}

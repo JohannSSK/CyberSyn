@@ -31,11 +31,32 @@ def init_table(db_file):
     con.close()
 
 
+# Every privileged action asks for the password again, and each answer mints
+# a session. Cap them per administrator so a week of overrides cannot leave
+# thousands of live tokens behind, and drop expired rows while we are here.
+MAX_SESSIONS_PER_ADMIN = 20
+
+
 def create_session(db_file, admin_id):
     """Issue a token for an administrator and return it (once)."""
     token = secrets.token_urlsafe(32)
     expires = datetime.now(timezone.utc) + timedelta(days=SESSION_DAYS)
     con = _connect(db_file)
+    con.execute(
+        "DELETE FROM ADMIN_SESSIONS WHERE expires_at < ?",
+        (datetime.now(timezone.utc).isoformat(),),
+    )
+    live = con.execute(
+        "SELECT token_hash FROM ADMIN_SESSIONS WHERE admin_id = ? "
+        "ORDER BY expires_at DESC",
+        (admin_id,),
+    ).fetchall()
+    if len(live) >= MAX_SESSIONS_PER_ADMIN:
+        keep = {row["token_hash"] for row in live[:MAX_SESSIONS_PER_ADMIN - 1]}
+        con.executemany(
+            "DELETE FROM ADMIN_SESSIONS WHERE token_hash = ?",
+            [(row["token_hash"],) for row in live if row["token_hash"] not in keep],
+        )
     con.execute(
         "INSERT INTO ADMIN_SESSIONS (token_hash, admin_id, expires_at) "
         "VALUES (?, ?, ?)",

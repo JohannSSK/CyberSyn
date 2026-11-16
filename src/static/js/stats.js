@@ -15,9 +15,8 @@
     var Loading = window.Loading;
     var $ = Dom.$;
 
-    // Team-wide numbers are for administrators. Members are sent back to
-    // their chat rather than shown a dashboard that would never fill.
-    if (!window.Shell.guardAdmin()) return;
+    // Team-wide numbers are for administrators.
+    if (!window.Shell.guard()) return;
 
     var KIND_META = {
         blocked: { icon: "warning", label: "Blocked" },
@@ -257,5 +256,8 @@
         });
     });
 
-    load();
+    window.Shell.withAdminPage({
+        title: "Statistics",
+        what: "team activity, blocks and trends"
+    }).then(function () { load(); }).catch(function () { });
 })();

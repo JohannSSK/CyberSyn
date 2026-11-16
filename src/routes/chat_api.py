@@ -14,7 +14,8 @@ from chat_store import bump_answered, save_exchange
 from config import CHECKS, DB_FILE, DEFAULT_MODEL
 from errors import ApiError, ChatError
 from web import chat_response, get_json_dict, non_empty_str, to_int
-from members import employee_row, get_settings, not_found_employee_message
+from members import (employee_row, get_settings, not_found_employee_message,
+                     provider_and_base)
 from scanning import screen
 from secret_store import decrypt_secret
 
@@ -120,7 +121,9 @@ def employee_chat():
                 )
                 return chat_response(False, True, message=message, block_info=info)
 
-        answer = complete(api_key, model, prompt)
+        provider, api_base = provider_and_base(saved)
+        answer = complete(api_key, model, prompt, api_base=api_base,
+                          provider=provider)
 
         created = chat_id is None
         chat_id, entry = save_exchange(DB_FILE, parent_id, employee_id, chat_id,
@@ -176,8 +179,9 @@ def regenerate():
         if not api_key:
             raise ChatError("No API_KEY provided.", 400)
 
+        provider, base = saved_provider_base(saved)
         answer = complete(api_key, saved["MODEL_NAME"] or DEFAULT_MODEL,
-                          entry["prompt"])
+                          entry["prompt"], api_base=base, provider=provider)
         messages = replace_answer(DB_FILE, parent_id, employee_id, chat_id,
                                   message_id, answer)
         record_activity(DB_FILE, parent_id, employee_id, "regenerated",

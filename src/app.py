@@ -120,8 +120,7 @@ app = create_app()
 
 def main():
     if len(sys.argv) > 1 and sys.argv[1] == "seed":
-        db.seed()
-        return 0
+        return db.seed(*sys.argv[2:4])
 
     print("Database file :", DB_FILE)
     print("Routes:")

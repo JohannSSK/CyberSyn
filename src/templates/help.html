@@ -284,6 +284,14 @@
                             provider is reachable from the server.</p>
                         </article>
                         <article>
+                            <h4>Model discovery names the wrong provider</h4>
+                            <p>Discovery offers the key to each provider in turn and uses the
+                            first that answers, which is right almost always. When it is not —
+                            several providers issue keys that look alike — pick the provider
+                            explicitly instead of leaving it on <em>Detect automatically</em>.
+                            Only that one is then asked.</p>
+                        </article>
+                        <article>
                             <h4>Every message is refused</h4>
                             <p>That is the gate failing closed. The check named in the error is
                             the one that could not run — usually a model that failed to load.</p>

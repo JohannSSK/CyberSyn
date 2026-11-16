@@ -143,9 +143,12 @@ class RouteTests(unittest.TestCase):
         cls.member = login["session_token"]
 
         # The chat route needs a stored key before it will forward anything.
+        # Setting one is an administrator action, so it carries the
+        # administrator's approval as well as the member's session.
         cls.client.post("/api/admin/employee/settings",
                         json={"Parent_id": 1, "Employee_id": cls.member_id,
                               "session_token": cls.member,
+                              "admin_token": cls.admin,
                               "API_KEY": "sk-test-key-1234567890"})
 
         # Stub the two things that would need the network or a model, so the
@@ -153,7 +156,7 @@ class RouteTests(unittest.TestCase):
         # Patched where each is *used*: chat_api binds complete() at import.
         from routes import chat_api
 
-        chat_api.complete = lambda key, model, prompt: "stub reply"
+        chat_api.complete = lambda key, model, prompt, **kwargs: "stub reply"
         scanning.run_check = lambda stage, prompt: {
             "blocked": True, "stage": stage, "reason": "stub",
             "line": 1, "start": 0, "end": 1, "snippet": "", "matches": [],
@@ -218,10 +221,90 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.get_json()["reply_message"], "stub reply")
 
-    def test_a_signed_in_member_can_change_their_own_settings(self):
-        r = self.client.post("/api/admin/employee/settings",
-                             json=self.ids(MODEL_NAME="gpt-4o-mini"))
+    def test_a_signed_in_member_can_read_their_own_settings(self):
+        r = self.client.post("/api/admin/employee/settings", json=self.ids())
         self.assertEqual(r.status_code, 200)
+        self.assertIn("MODEL_NAME", r.get_json())
+
+    def test_a_member_cannot_change_policy_without_approval(self):
+        """Weakening the gate is not the member's own decision to make."""
+        for change in ({"check1": False}, {"MODEL_NAME": "gpt-4o"},
+                       {"API_KEY": "sk-another"}, {"PROVIDER": "groq"}):
+            with self.subTest(**change):
+                r = self.client.post("/api/admin/employee/settings",
+                                     json=self.ids(**change))
+                self.assertEqual(r.status_code, 401)
+
+    def test_policy_changes_work_once_approved(self):
+        r = self.client.post("/api/admin/employee/settings",
+                             json=self.ids(admin_token=self.admin,
+                                           MODEL_NAME="gpt-4o-mini"))
+        self.assertEqual(r.status_code, 200)
+
+    def test_approval_from_another_workspace_is_refused(self):
+        """An administrator may only approve inside their own workspace."""
+        other = self.client.post(
+            "/api/admin/login",
+            json={"username": "boss", "password": "admin-pw"}).get_json()
+        r = self.client.post("/api/admin/employee/settings",
+                             json=self.ids(Parent_id=99,
+                                           admin_token=other["session_token"],
+                                           check1=False))
+        self.assertNotEqual(r.status_code, 200)
+
+    def test_signing_out_revokes_the_token_on_the_server(self):
+        """Clearing localStorage alone would leave it replayable for a week."""
+        login = self.client.post(
+            "/api/admin/employee/login",
+            json={"Parent_id": 1, "username": "member", "password": "member-pw"}
+        ).get_json()
+        token = login["session_token"]
+
+        r = self.client.post("/api/admin/employee/chats", json=self.ids(
+            Employee_id=int(login["Employee_id"]), session_token=token))
+        self.assertEqual(r.status_code, 200, "the token works before sign-out")
+
+        self.client.post("/api/admin/employee/logout", json=self.ids(
+            Employee_id=int(login["Employee_id"]), session_token=token))
+
+        r = self.client.post("/api/admin/employee/chats", json=self.ids(
+            Employee_id=int(login["Employee_id"]), session_token=token))
+        self.assertEqual(r.status_code, 401, "the token is dead after sign-out")
+
+    def test_a_single_member_can_be_signed_out(self):
+        """Ending one session must not end everyone else's."""
+        mine = auth.create_employee_session(DB, 1, 7)
+        theirs = auth.create_employee_session(DB, 1, 7)
+        self.assertTrue(auth.revoke_employee_session(DB, mine))
+        self.assertIsNone(auth.member_from_token(DB, mine))
+        self.assertIsNotNone(auth.member_from_token(DB, theirs))
+
+    def test_revoking_a_junk_token_is_harmless(self):
+        for token in ("", "   ", "nope", None, 12345, object()):
+            with self.subTest(token=token):
+                self.assertFalse(auth.revoke_employee_session(DB, token))
+
+    def test_administrator_sessions_are_capped(self):
+        """Each approval mints a session; they must not pile up forever."""
+        import admin_session
+
+        before = admin_session.MAX_SESSIONS_PER_ADMIN
+        try:
+            admin_session.MAX_SESSIONS_PER_ADMIN = 3
+            tokens = [admin_session.create_session(DB, 4242) for _ in range(8)]
+            # The newest survive; older ones are dropped, not accumulated.
+            self.assertTrue(all(admin_session.create_session(DB, 4242)
+                                for _ in range(2)))
+            live = sum(1 for t in tokens
+                       if auth.admin_from_token(DB, t) is not None)
+            self.assertLessEqual(live, 3, "old sessions should be evicted")
+        finally:
+            admin_session.MAX_SESSIONS_PER_ADMIN = before
+
+    def test_a_forged_approval_token_is_refused(self):
+        r = self.client.post("/api/admin/employee/settings",
+                             json=self.ids(admin_token="forged", check1=False))
+        self.assertEqual(r.status_code, 401)
 
     def test_a_signed_in_member_can_read_their_own_history(self):
         r = self.client.post("/api/admin/employee/chats", json=self.ids())
@@ -231,8 +314,25 @@ class RouteTests(unittest.TestCase):
     def test_an_administrator_can_set_a_members_policy(self):
         r = self.client.post("/api/admin/employee/settings",
                              json=self.ids(session_token=self.admin,
+                                           admin_token=self.admin,
                                            MODEL_NAME="gpt-4o-mini"))
         self.assertEqual(r.status_code, 200)
+
+    def test_a_bad_base_url_is_refused(self):
+        """The base URL is fetched by this server, so it gets checked."""
+        for url in ("http://169.254.169.254/latest", "ftp://example.com",
+                    "https://user:pw@example.com", "file:///etc/passwd"):
+            with self.subTest(url=url):
+                r = self.client.post("/api/admin/employee/settings",
+                                     json=self.ids(admin_token=self.admin,
+                                                   API_BASE=url))
+                self.assertEqual(r.status_code, 400, url)
+
+    def test_an_unknown_provider_is_refused(self):
+        r = self.client.post("/api/admin/employee/settings",
+                             json=self.ids(admin_token=self.admin,
+                                           PROVIDER="made-up"))
+        self.assertEqual(r.status_code, 400)
 
     def test_an_administrator_cannot_read_a_members_history(self):
         """Deliberate: policy is the administrator's job, the content is not."""

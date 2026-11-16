@@ -30,6 +30,10 @@
 
     <div class="sidebar-spacer"></div>
 
+    {# Filled by shell.js while administrator access is unlocked in this tab,
+       so the state is visible and can be closed before the timer runs out. #}
+    <div class="sidebar-unlock hidden" data-admin-lock></div>
+
     <div class="sidebar-foot">
         <div class="sidebar-user">
             <span class="avatar" data-member-avatar>M</span>

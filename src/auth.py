@@ -71,6 +71,12 @@ def create_employee_session(db_file, parent_id, employee_id):
     token = secrets.token_urlsafe(32)
     expires = datetime.now(timezone.utc) + timedelta(days=SESSION_DAYS)
     con = _connect(db_file)
+    # Expired rows are dead weight and are never matched again; drop them
+    # while the table is open rather than letting them accumulate.
+    con.execute(
+        "DELETE FROM EMPLOYEE_SESSIONS WHERE expires_at < ?",
+        (datetime.now(timezone.utc).isoformat(),),
+    )
     con.execute(
         "INSERT INTO EMPLOYEE_SESSIONS (token_hash, Parent_id, Employee_id, expires_at)"
         " VALUES (?, ?, ?, ?)",
@@ -79,6 +85,20 @@ def create_employee_session(db_file, parent_id, employee_id):
     con.commit()
     con.close()
     return token
+
+
+def revoke_employee_session(db_file, token):
+    """End one team-member session. Safe to call with a missing token."""
+    if not isinstance(token, str) or not token.strip():
+        return False
+    con = _connect(db_file)
+    cur = con.execute(
+        "DELETE FROM EMPLOYEE_SESSIONS WHERE token_hash = ?", (_hash(token.strip()),)
+    )
+    con.commit()
+    changed = cur.rowcount > 0
+    con.close()
+    return changed
 
 
 def revoke_employee_sessions(db_file, parent_id, employee_id):

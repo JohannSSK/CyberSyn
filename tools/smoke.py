@@ -12,6 +12,7 @@ what this checks is that every screen and every new endpoint hangs together.
 """
 
 import json
+import os
 import sys
 import urllib.error
 import urllib.request
@@ -49,12 +50,30 @@ def check(label, condition, detail=""):
         print(f"  FAIL  {label}  {detail}")
 
 
+# The app ships with no accounts, so the test creates the one it needs.
+# These are test fixtures for whatever database BASE points at — override
+# them with the environment when running against a real one.
+ADMIN_USER = os.environ.get("CYBERSYN_SMOKE_USER", "smoke_admin")
+ADMIN_PASS = os.environ.get("CYBERSYN_SMOKE_PASSWORD", "Smoke-Test-Pw-123")
+
+
 def main():
     print(f"CyberSyn smoke test against {BASE}\n")
 
     # ---- sign in -----------------------------------------------------
+    # The app ships with no accounts, so the test creates its own rather
+    # than depending on one having been seeded by hand.
     status, admin = call("/api/admin/login",
-                         {"username": "johann", "password": "admin_secret_123"})
+                         {"username": ADMIN_USER, "password": ADMIN_PASS})
+    if not admin.get("success"):
+        added = call("/api/admin", {"method": "add", "username": ADMIN_USER,
+                                    "password": ADMIN_PASS})
+        status, admin = call("/api/admin/login",
+                             {"username": ADMIN_USER, "password": ADMIN_PASS})
+        if not admin.get("success"):
+            print(f"  note: {ADMIN_USER} exists with a different password. "
+                  f"Set CYBERSYN_SMOKE_USER / CYBERSYN_SMOKE_PASSWORD, or "
+                  f"point BASE at a fresh database. ({added})")
     check("admin signs in", status == 200 and admin.get("success"), admin)
     if not admin.get("success"):
         return report()
@@ -87,8 +106,10 @@ def main():
         return call(path, payload)
 
     # ---- settings ----------------------------------------------------
+    # Changing policy is an administrator action now, so the write carries
+    # the administrator's approval; the read does not need one.
     status, settings = member("/api/admin/employee/settings",
-                              MODEL_NAME="gpt-4o-mini")
+                              MODEL_NAME="gpt-4o-mini", admin_token=admin_token)
     check("settings readable", status == 200 and "check1" in settings, settings)
     check("api key never returned in the clear",
           settings.get("API_KEY") == "" and "API_KEY_MASK" in settings, settings)
