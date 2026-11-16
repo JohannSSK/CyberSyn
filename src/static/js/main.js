@@ -740,13 +740,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const chatPayload = {
         Parent_id: state.parentId,
         Employee_id: state.employeeId,
-        ...flags,
         API_KEY: workspace.apiKey.value.trim(),
         MODEL_NAME: workspace.modelName.value.trim() || "gpt-4o-mini",
         prompt: promptText,
         bypass: Boolean(isBypass),
+        session_token: isBypass ? state.bypassToken : null,
         chat_id: activeChatId
     };
+    state.bypassToken = null;
     const thinking = startThinking(flags, isBypass);
     workspace.btnSendPrompt.disabled = true;
     try {
@@ -782,6 +783,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!state.lastInterceptedPrompt) return;
         const bypassPassword = modal.bypassPassword.value.trim();
         const adminUser = state.adminUsername || admin.username.value.trim();
+        state.bypassToken = null;
 
         if (!bypassPassword) {
             showToast('Please enter the admin password to approve override.', 'warning');
@@ -796,6 +798,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     body: JSON.stringify({ username: adminUser, password: bypassPassword })
                 });
                 const verifyData = await verifyRes.json();
+                state.bypassToken = verifyData.session_token || null;
                 if (!verifyData.success) {
                     showToast('Incorrect admin password.', 'error');
                     return;
