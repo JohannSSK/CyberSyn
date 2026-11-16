@@ -33,11 +33,7 @@
         logout: { icon: "logout", label: "Signed out" }
     };
 
-    var STAGE_LABEL = {
-        check1: "Check 1 · Personal & Greek IDs",
-        check2: "Check 2 · Confidential context",
-        check3: "Check 3 · Prompt injection"
-    };
+    var Stages = window.Stages;
 
     // Neutral palette: the variants step in lightness, not hue,
     // so several reasons stay distinguishable without four colours.
@@ -183,7 +179,7 @@
             var who = names[item.employee_id] || ("Member " + item.employee_id);
             var detail = item.detail
                 ? Dom.esc(item.detail)
-                : (item.stage ? Dom.esc(STAGE_LABEL[item.stage] || item.stage) : "");
+                : (item.stage ? Dom.esc(Stages.label(item.stage) || item.stage) : "");
             row.innerHTML =
                 '<span class="tl-mark">' + Icons.html(info.icon) + "</span>" +
                 '<span class="tl-body"><strong>' + Dom.esc(who) + " · " +
@@ -219,7 +215,7 @@
             renderBars($("#reasons"), data.reasons || [], stats.blocked || 0);
 
             var stages = (data.stages || []).map(function (s) {
-                return { label: STAGE_LABEL[s.label] || s.label, count: s.count, percent: s.percent };
+                return { label: Stages.label(s.label) || s.label, count: s.count, percent: s.percent };
             });
             renderBars($("#stages"), stages, stats.blocked || 0);
 

@@ -63,6 +63,70 @@
         nodes.input.style.height = Math.min(nodes.input.scrollHeight, 180) + "px";
     }
 
+    /* ------------------------------------------------------------------
+       Waiting indicator
+
+       The server runs every check and then the model call inside one request,
+       so there is no real progress to report. What is honest is to say which
+       stage is being worked through and cycle through the ones that are
+       actually switched on, rather than freezing on one word or claiming
+       completion it cannot know about.
+       ------------------------------------------------------------------ */
+
+    var Stages = window.Stages;
+
+    var pending = null;
+
+
+    function showPending(promptText, bypass) {
+        hidePending();
+
+        var order = ["check1", "check2", "check3"].filter(function (id) {
+            return state.settings[id] !== false;
+        });
+        var script = order.map(function (id) { return Stages.checking(id); });
+        script.unshift("Thinking");
+        script.push(bypass ? "Sending with approval" : "Waiting for the model");
+
+        var wrap = Dom.el("div", "msg");
+        var head = Dom.el("div", "msg-head");
+        head.innerHTML = Icons.html("profile") + '<span class="who">You</span>';
+        wrap.appendChild(head);
+        wrap.appendChild(Dom.el("div", "bubble bubble-user", promptText));
+
+        var note = Dom.el("div", "msg-pending");
+        note.innerHTML =
+            '<span class="pending-dots" aria-hidden="true">' +
+            "<i></i><i></i><i></i></span>" +
+            '<span class="pending-text"></span>';
+        wrap.appendChild(note);
+
+        nodes.stream.appendChild(wrap);
+        scrollToEnd(true);
+
+        var label = note.querySelector(".pending-text");
+        var index = 0;
+        var tick = setInterval(function () {
+            label.textContent = script[index % script.length] + "…";
+            index += 1;
+        }, 900);
+        label.textContent = script[0] + "…";
+
+        pending = {
+            wrap: wrap,
+            stop: function () {
+                clearInterval(tick);
+                if (wrap.parentNode) wrap.remove();
+            }
+        };
+        return pending;
+    }
+
+    function hidePending() {
+        if (pending) pending.stop();
+        pending = null;
+    }
+
     function scrollToEnd(smooth) {
         requestAnimationFrame(function () {
             nodes.viewport.scrollTo({
@@ -323,54 +387,97 @@
         var card = Dom.el("div", "bubble bubble-blocked");
         card.innerHTML =
             '<div class="blocked-head">' + Icons.html("warning") +
-            "<span>Not sent — blocked by " + Dom.esc(blockInfo.stage) + "</span></div>" +
-            '<div class="blocked-reason">Sensitive content was found locally, so nothing ' +
-            "left this machine.</div>";
+            "<span>Not sent — stopped by " + Dom.esc(Stages.name(blockInfo.stage)) + "</span></div>" +
+            '<p class="blocked-what">Nothing left this machine. The message was screened ' +
+            "on this computer, matched a rule, and was refused before it reached any " +
+            "AI provider.</p>" +
+            '<p class="blocked-why">' + Dom.esc(Stages.reason(blockInfo)) + "</p>";
 
+        // Everything the scanner flagged, not just the first thing.
         var summary = Dom.el("div", "blocked-matches");
-        summary.innerHTML =
-            '<div class="blocked-match"><span class="badge badge-danger">' +
-            Dom.esc(blockInfo.main_cause) + "</span>" +
-            "<span>line " + Dom.esc(blockInfo.line) + "</span>" +
-            "<code>" + Dom.esc(blockInfo.snippet) + "</code></div>";
+        var found = Array.isArray(blockInfo.matches) ? blockInfo.matches : [];
+        if (!found.length) {
+            found = [{
+                main_cause: blockInfo.main_cause,
+                line: blockInfo.line,
+                snippet: blockInfo.snippet
+            }];
+        }
+        summary.innerHTML = found.map(function (match) {
+            return '<div class="blocked-match">' +
+                '<span class="badge badge-danger">' +
+                Dom.esc(match.main_cause || "match") + "</span>" +
+                "<span>line " + Dom.esc(match.line) + "</span>" +
+                "<code>" + Dom.esc(match.snippet || "") + "</code>" +
+                "</div>";
+        }).join("");
         card.appendChild(summary);
 
-        // Override: the browser collects the approval, the server enforces it.
+        /* Bypass: a button, not a password box sitting in every blocked card.
+           Pressing it asks who is approving, and the server is what enforces
+           it — the browser only collects the approval. */
         var panel = Dom.el("div", "override-panel");
         panel.innerHTML =
-            '<input type="password" placeholder="Administrator password" ' +
-            'autocomplete="off" aria-label="Administrator password">' +
-            '<button type="button" class="btn btn-sm btn-warning">Approve &amp; send</button>' +
-            '<p class="override-note">An administrator must approve this. The approval ' +
-            "is recorded in the audit trail.</p>";
+            '<button type="button" class="btn btn-sm override-ask">Send anyway</button>' +
+            '<p class="override-note">Needs an administrator password, and is ' +
+            "recorded in the audit trail.</p>";
 
-        var input = panel.querySelector("input");
-        var button = panel.querySelector("button");
+        var ask = panel.querySelector(".override-ask");
 
-        Dom.on(button, "click", function () {
-            var password = input.value;
-            if (!password) { Loading.toast("Enter the administrator password.", "warn"); input.focus(); return; }
-            Loading.withButton(button, function () {
-                // Exchange the password for an admin session token, then send.
-                return Api.post("/api/admin/login", {
-                    username: (Api.Session.getAdmin() || {}).username,
-                    password: password
-                }, { member: false, onUnauthorised: false });
-            }).then(function (data) {
-                var token = data.session_token;
-                Api.Session.setAdmin(token, {
-                    parentId: parseInt(data.Parent_id, 10),
-                    username: data.username
-                });
-                send(promptText, true, token);
-                wrap.remove();
-            }).catch(function (err) {
-                Loading.toast(err.message || "That password was not accepted.", "error");
+        Dom.on(ask, "click", function () {
+            var form = Dom.el("div", "override-form");
+            form.innerHTML =
+                '<label class="override-label" for="override-password">' +
+                "Administrator password</label>" +
+                '<input type="password" id="override-password" class="input" ' +
+                'placeholder="Administrator password" autocomplete="off">' +
+                '<div class="override-actions">' +
+                '<button type="button" class="btn btn-sm btn-primary override-send">' +
+                "Approve &amp; send</button>" +
+                '<button type="button" class="btn btn-sm btn-ghost override-cancel">' +
+                "Cancel</button>" +
+                "</div>";
+            panel.replaceChild(form, ask);
+
+            var input = form.querySelector("input");
+            var approve = form.querySelector(".override-send");
+            input.focus();
+
+            Dom.on(form.querySelector(".override-cancel"), "click", function () {
+                panel.replaceChild(ask, form);
             });
-        });
 
-        Dom.on(input, "keydown", function (e) {
-            if (e.key === "Enter") { e.preventDefault(); button.click(); }
+            function submit() {
+                var password = input.value;
+                if (!password) {
+                    Loading.toast("Enter the administrator password.", "warn");
+                    input.focus();
+                    return;
+                }
+                Loading.withButton(approve, function () {
+                    // Exchange the password for an admin session token, then send.
+                    return Api.post("/api/admin/login", {
+                        username: (Api.Session.getAdmin() || {}).username,
+                        password: password
+                    }, { member: false, onUnauthorised: false });
+                }).then(function (data) {
+                    var token = data.session_token;
+                    Api.Session.setAdmin(token, {
+                        parentId: parseInt(data.Parent_id, 10),
+                        username: data.username
+                    });
+                    wrap.remove();
+                    send(promptText, true, token);
+                }).catch(function (err) {
+                    Loading.toast(err.message || "That password was not accepted.", "error");
+                    input.select();
+                });
+            }
+
+            Dom.on(approve, "click", submit);
+            Dom.on(input, "keydown", function (e) {
+                if (e.key === "Enter") { e.preventDefault(); submit(); }
+            });
         });
 
         card.appendChild(panel);
@@ -388,7 +495,7 @@
         state.busy = true;
         nodes.send.disabled = true;
 
-        var scan = Loading.showScan(state.settings, bypass);
+        var waiting = showPending(text, bypass);
 
         var payload = {
             prompt: text,
@@ -402,10 +509,10 @@
 
         Api.post("/api/admin/employee/chat", payload, { timeout: 120000 })
             .then(function (data) {
-                scan.hide();
+                hidePending();
                 if (data.blocked) {
+                    // The card says everything; nothing should pop up.
                     renderBlocked(data.block_info || {}, text);
-                    Loading.toast("Blocked by " + (data.block_info || {}).stage + ".", "warn");
                     return;
                 }
                 state.chatId = data.chat_id || state.chatId;
@@ -424,7 +531,8 @@
                 loadChats();
             })
             .catch(function (err) {
-                scan.hide();
+                waiting.stop();
+                pending = null;
                 Loading.toast(err.message, "error");
             })
             .finally(function () {

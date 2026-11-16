@@ -70,45 +70,136 @@
     }
 
     /* Pages that show other people's activity: statistics and the team
-       roster. The API refuses a non-administrator either way, but the page
-       itself should never render for one, so members are sent back to their
-       chat instead of being shown an empty dashboard.
+       roster. The API refuses a non-administrator either way, but a member
+       opening one is asked for the administrator password rather than being
+       turned away — the page is reachable, just not unlocked.
 
        The gate is client-side because sessions are bearer tokens held in
        localStorage, not cookies — the server cannot see them on a page
        request. Authoritative enforcement stays at the API. */
-    var ADMIN_ONLY = ["/stats", "/team"];
+    var ADMIN_ONLY = {
+        "/stats": { title: "Statistics", what: "team activity, blocks and trends" },
+        "/team": { title: "Team", what: "every member and how their gate is configured" }
+    };
 
     function isAdminOnly(path) {
-        return ADMIN_ONLY.indexOf((path || "").replace(/\/+$/, "") || "/") !== -1;
+        var key = (path || "").replace(/\/+$/, "") || "/";
+        return Object.prototype.hasOwnProperty.call(ADMIN_ONLY, key);
+    }
+
+    /**
+     * Ask for the administrator password, then reload so the page script runs
+     * again with a token in hand.
+     */
+    function adminGate(page) {
+        var admin = Session.getAdmin() || {};
+        var known = !!admin.username;
+
+        var overlay = global.Dom.el("div", "overlay");
+        overlay.setAttribute("role", "dialog");
+        overlay.setAttribute("aria-modal", "true");
+
+        var modal = global.Dom.el("div", "modal");
+        modal.innerHTML =
+            '<div class="modal-head">' +
+            "  <div>" +
+            '    <span class="eyebrow">Administrator only</span>' +
+            '    <h3 style="margin:4px 0 0">' + global.Dom.esc(page.title) +
+            " needs the administrator password</h3>" +
+            "  </div>" +
+            "</div>" +
+            '<div class="modal-body">' +
+            '  <p class="small muted" style="margin:0 0 16px">This page shows ' +
+            global.Dom.esc(page.what) +
+            ". Enter the administrator password to open it.</p>" +
+            (known
+                ? ""
+                : '  <div class="field">' +
+                  '    <label for="admin-gate-username">Administrator username</label>' +
+                  '    <input type="text" id="admin-gate-username" class="input"' +
+                  '           autocomplete="username">' +
+                  "  </div>") +
+            '  <div class="field">' +
+            '    <label for="admin-gate-password">Administrator password</label>' +
+            '    <input type="password" id="admin-gate-password" class="input"' +
+            '           autocomplete="off" autofocus>' +
+            "  </div>" +
+            '  <p class="form-msg" data-gate-msg></p>' +
+            "</div>" +
+            '<div class="modal-foot">' +
+            '  <button type="button" class="btn btn-ghost" data-gate-cancel>Back to chat</button>' +
+            '  <button type="button" class="btn btn-primary" data-gate-unlock>Unlock</button>' +
+            "</div>";
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+
+        var input = modal.querySelector("#admin-gate-password");
+        var usernameField = modal.querySelector("#admin-gate-username");
+        var unlock = modal.querySelector("[data-gate-unlock]");
+        var message = modal.querySelector("[data-gate-msg]");
+        if (known) {
+            input.placeholder = "Password for " + admin.username;
+        }
+        (usernameField || input).focus();
+
+        function close() { overlay.remove(); }
+
+        function submit() {
+            var password = input.value;
+            if (!password) {
+                message.textContent = "Enter the administrator password.";
+                input.focus();
+                return;
+            }
+            message.textContent = "";
+            var username = known ? admin.username : usernameField.value.trim();
+            if (!username) {
+                message.textContent = "Enter the administrator username.";
+                usernameField.focus();
+                return;
+            }
+            global.Loading.withButton(unlock, function () {
+                return global.Api.post("/api/admin/login", {
+                    username: username,
+                    password: password
+                }, { member: false, onUnauthorised: false });
+            }).then(function (data) {
+                Session.setAdmin(data.session_token, {
+                    parentId: parseInt(data.Parent_id, 10),
+                    username: data.username
+                });
+                // Reload so the page script sees the token and fills itself in.
+                location.reload();
+            }).catch(function (err) {
+                message.textContent = err.message || "That password was not accepted.";
+                input.select();
+            });
+        }
+
+        global.Dom.on(unlock, "click", submit);
+        global.Dom.on(modal.querySelector("[data-gate-cancel]"), "click", function () {
+            location.replace("/workspace");
+        });
+        global.Dom.on(input, "keydown", function (event) {
+            if (event.key === "Enter") { event.preventDefault(); submit(); }
+        });
+        return { close: close };
     }
 
     function guardAdmin() {
         if (!guard()) return false;
-        if (isAdminOnly(location.pathname) && !Session.getAdminToken()) {
-            global.Loading.toast("That page needs an administrator sign-in.", "warn");
-            setTimeout(function () { location.replace("/workspace"); }, 700);
-            return false;
-        }
-        return true;
-    }
+        var key = location.pathname.replace(/\/+$/, "") || "/";
+        if (!ADMIN_ONLY[key]) return true;
+        if (Session.getAdminToken()) return true;
 
-    /* Hide the same entries from the sidebar for members: a link that can
-       only bounce you back is worse than no link. */
-    function markAdminNav() {
-        var isAdmin = !!Session.getAdminToken();
-        global.Dom.$$("[data-nav]").forEach(function (link) {
-            if (isAdminOnly(link.getAttribute("data-nav"))) {
-                link.classList.toggle("hidden", !isAdmin);
-            }
-        });
+        adminGate(ADMIN_ONLY[key]);
+        return false;
     }
 
     document.addEventListener("DOMContentLoaded", function () {
         paintIcons(document);
         markActive();
         paintMember();
-        markAdminNav();
 
         global.Dom.$$("[data-action='sign-out']").forEach(function (btn) {
             global.Dom.on(btn, "click", signOut);
@@ -133,6 +224,7 @@
         signOut: signOut,
         guard: guard,
         guardAdmin: guardAdmin,
+        adminGate: adminGate,
         isAdminOnly: isAdminOnly,
         paintMember: paintMember,
         paintIcons: paintIcons

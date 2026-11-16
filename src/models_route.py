@@ -9,6 +9,7 @@ port.
 """
 
 import json
+import urllib.error
 import urllib.request
 
 from flask import Blueprint
@@ -27,18 +28,65 @@ SKIP = ("tts", "image", "embedding", "lyria", "veo", "imagen", "aqa",
         "search", "instruct", "moderation", "dall", "whisper", "davinci",
         "babbage")
 
-TIMEOUT = 15
+TIMEOUT = 20
 
 
-def fetch_json(url, headers):
-    req = urllib.request.Request(url, headers=headers)
-    with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
-        return json.load(resp)
+class ProviderError(Exception):
+    """A provider call failed, carrying enough detail to act on.
+
+    The old code reported only the exception's class name, so a rejected key
+    and a network outage both came back as "Could not reach openai: HTTPError"
+    and there was nothing to fix from.
+    """
+
+    def __init__(self, provider, detail, status=None):
+        super().__init__(detail)
+        self.provider = provider
+        self.detail = detail
+        self.status = status
+
+
+def fetch_json(url, headers, provider):
+    """GET JSON, turning every transport or HTTP failure into ProviderError."""
+    request = urllib.request.Request(
+        url, headers=dict(headers, **{"User-Agent": "CyberSyn/1.0"})
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
+            return json.load(response)
+    except urllib.error.HTTPError as exc:
+        # The provider's own explanation is the useful part: "Incorrect API
+        # key provided", "You exceeded your current quota", and so on.
+        detail = ""
+        try:
+            body = exc.read().decode("utf-8", "replace")[:400]
+        except Exception:  # noqa: BLE001 - the body is a nicety, not a need
+            body = ""
+        if body:
+            try:
+                parsed = json.loads(body)
+                detail = (parsed.get("error") or {}).get("message", "") or \
+                    parsed.get("message", "")
+            except ValueError:
+                detail = body.strip().splitlines()[0][:200] if body.strip() else ""
+        raise ProviderError(
+            provider,
+            detail or f"the provider returned HTTP {exc.code}",
+            status=exc.code,
+        )
+    except urllib.error.URLError as exc:
+        raise ProviderError(provider, f"could not connect ({exc.reason})")
+    except json.JSONDecodeError:
+        raise ProviderError(provider, "the provider returned something that was not JSON")
+    except TimeoutError:
+        raise ProviderError(provider, f"no answer within {TIMEOUT}s")
 
 
 def openai_models(key):
     body = fetch_json(
-        "https://api.openai.com/v1/models", {"Authorization": "Bearer " + key}
+        "https://api.openai.com/v1/models",
+        {"Authorization": "Bearer " + key},
+        "openai",
     )
     names = [m["id"] for m in body.get("data", [])]
     chat = [n for n in names if not any(s in n for s in SKIP)]
@@ -49,13 +97,16 @@ def anthropic_models(key):
     body = fetch_json(
         "https://api.anthropic.com/v1/models?limit=100",
         {"x-api-key": key, "anthropic-version": "2023-06-01"},
+        "anthropic",
     )
     return sorted(m["id"] for m in body.get("data", []))
 
 
 def gemini_models(key):
     body = fetch_json(
-        "https://generativelanguage.googleapis.com/v1beta/models?key=" + key, {}
+        "https://generativelanguage.googleapis.com/v1beta/models?key=" + key,
+        {},
+        "gemini",
     )
     names = [
         m["name"].split("/")[-1]
@@ -102,10 +153,20 @@ def list_models():
             models = gemini_models(key)
         else:
             models = openai_models(key)
-    except Exception as exc:
+    except ProviderError as exc:
+        # Name the provider and repeat what it said, so the message tells the
+        # member whether the key, the account or the network is at fault.
         return {
             "models": [],
-            "message": f"Could not reach {provider}: {type(exc).__name__}",
+            "provider": exc.provider,
+            "status": exc.status,
+            "message": f"{exc.provider}: {exc.detail}",
+        }, 502
+    except Exception as exc:  # noqa: BLE001 - never leak a trace to the client
+        return {
+            "models": [],
+            "provider": provider,
+            "message": f"{provider}: {type(exc).__name__}",
         }, 502
 
     if not models:
