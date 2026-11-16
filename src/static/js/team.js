@@ -1,146 +1,91 @@
+/* ==========================================================================
+   team.js — who is in the workspace and how each gate is configured.
+   The full numbers live on the statistics page; this is the roster.
+   ========================================================================== */
+
 (function () {
-    const ADMIN_TOKEN_KEY = "cybersyn_admin_token";
-    const notice = document.getElementById("team-notice");
-    const cards = document.getElementById("team-cards");
-    const empty = document.getElementById("team-empty");
+    "use strict";
 
-    function el(tag, cls, text) {
-        const node = document.createElement(tag);
-        if (cls) node.className = cls;
-        if (text !== undefined && text !== null) node.textContent = text;
-        return node;
+    var Api = window.Api;
+    var Dom = window.Dom;
+    var Loading = window.Loading;
+    var $ = Dom.$;
+
+    function rateColour(rate) {
+        if (rate >= 40) return "var(--danger)";
+        if (rate >= 18) return "var(--warn)";
+        return "var(--success)";
     }
 
-    function stageLabel(stage) {
-        const m = /^check([0-9]+)$/i.exec(stage || "");
-        return m ? "Check " + m[1] : (stage || "Unknown");
-    }
+    function memberRow(member) {
+        var row = Dom.el("div", "member-card");
+        row.style.gridTemplateColumns = "none";
 
-    function showNotice(text) {
-        notice.textContent = text;
-        notice.classList.remove("hidden");
-    }
+        var head = Dom.el("div", "member-head");
+        head.innerHTML =
+            '<span class="avatar">' + Dom.esc(member.username.charAt(0).toUpperCase()) + "</span>" +
+            '<span class="member-id"><strong>' + Dom.esc(member.username) + "</strong>" +
+            "<small>" + Dom.esc(member.model || "gpt-4o-mini") +
+            (member.has_key ? "" : " · no API key yet") +
+            " · " + member.checks_on + " of 3 checks on</small></span>";
 
-    function numberCell(label, value) {
-        const box = el("div", "member-num");
-        box.append(el("span", "member-num-label", label), el("strong", "member-num-value", String(value)));
-        return box;
-    }
+        var donut = Dom.el("div", "donut");
+        donut.style.setProperty("--pct", member.block_rate);
+        donut.style.setProperty("--donut-color", rateColour(member.block_rate));
+        donut.title = member.blocked + " of " + member.sent + " messages blocked";
+        donut.appendChild(Dom.el("span", "", member.block_rate + "%"));
+        head.appendChild(donut);
+        row.appendChild(head);
 
-    function barRow(label, count, percent, fillClass) {
-        const row = el("div", "bar-row");
-        const top = el("div", "bar-row-top");
-        top.append(el("span", "", label), el("span", "bar-row-value", count + " (" + percent + "%)"));
-        const track = el("div", "bar-track");
-        const fill = el("div", "bar-fill " + (fillClass || ""));
-        fill.style.width = (count > 0 ? Math.max(percent, 3) : 0) + "%";
-        track.appendChild(fill);
-        row.append(top, track);
+        var tiles = Dom.el("div", "tiles");
+        [
+            ["Sent", member.sent, ""],
+            ["Blocked", member.blocked, "tile-danger"],
+            ["Overrides", member.overrides, "tile-warn"]
+        ].forEach(function (entry) {
+            var tile = Dom.el("div", "tile " + entry[2]);
+            tile.innerHTML = '<div class="tile-label">' + entry[0] + "</div>" +
+                '<div class="tile-value" style="font-size:20px">' + entry[1] + "</div>";
+            tiles.appendChild(tile);
+        });
+        row.appendChild(tiles);
         return row;
     }
 
-    function memberCard(m) {
-        const card = el("article", "member-card");
+    function load(button) {
+        var task = function () {
+            return Api.post("/api/admin/team", { token: Api.Session.getAdminToken() },
+                { member: false, onUnauthorised: false });
+        };
+        var request = button ? Loading.withButton(button, task) : task();
 
-        const head = el("div", "member-head");
-        head.setAttribute("role", "button");
-        head.setAttribute("aria-expanded", "false");
-        const who = el("div", "");
-        who.append(el("div", "member-name", m.username), el("div", "member-sub", m.checks_on + " of 3 checks on"));
-        const right = el("div", "member-head-right");
-        const donut = el("div", "member-donut");
-        donut.style.setProperty("--pct", m.block_rate);
-        donut.appendChild(el("span", "member-donut-text", m.block_rate + "%"));
-        right.append(donut, el("span", "member-chevron"));
-        head.append(who, right);
+        return request.then(function (data) {
+            var members = data.members || [];
+            var stats = data.stats || {};
 
-        const details = el("div", "member-details");
-        const inner = el("div", "member-details-inner");
+            $("#tile-count").textContent = stats.members || 0;
+            $("#tile-blocked").textContent = stats.blocked || 0;
+            $("#tile-rate").textContent = (stats.block_rate || 0) + "%";
+            $("#tile-keys").textContent =
+                members.filter(function (m) { return m.has_key; }).length + " of " + members.length;
 
-        const nums = el("div", "member-nums");
-        nums.append(numberCell("Sent", m.sent), numberCell("Answered", m.answered), numberCell("Blocked", m.blocked));
-
-        const answeredPct = m.sent ? Math.round(100 * m.answered / m.sent) : 0;
-        const blockedPct = m.sent ? 100 - answeredPct : 0;
-        const split = el("div", "member-split");
-        const ansBar = el("div", "member-split-ans");
-        ansBar.style.width = answeredPct + "%";
-        const blkBar = el("div", "member-split-blk");
-        blkBar.style.width = blockedPct + "%";
-        split.append(ansBar, blkBar);
-        const legend = el("div", "member-legend");
-        legend.append(el("span", "", "Answered " + answeredPct + "%"), el("span", "", "Blocked " + blockedPct + "%"));
-
-        const reasonsWrap = el("div", "member-list");
-        if (m.reasons.length === 0) reasonsWrap.appendChild(el("div", "member-empty", "No blocked prompts yet."));
-        m.reasons.forEach(r => reasonsWrap.appendChild(barRow(r.label, r.count, r.percent, "")));
-
-        const stagesWrap = el("div", "member-list");
-        if (m.stages.length === 0) stagesWrap.appendChild(el("div", "member-empty", "No checks triggered yet."));
-        m.stages.forEach(s => stagesWrap.appendChild(barRow(stageLabel(s.label), s.count, s.percent, "bar-fill-check")));
-
-        inner.append(
-            nums,
-            split,
-            legend,
-            el("div", "member-section-title", "Block reasons"),
-            reasonsWrap,
-            el("div", "member-section-title", "Blocks by check"),
-            stagesWrap
-        );
-
-        head.addEventListener("click", () => {
-            const open = !card.classList.contains("is-open");
-            card.classList.toggle("is-open", open);
-            head.setAttribute("aria-expanded", String(open));
-        });
-
-        details.appendChild(inner);
-        card.append(head, details);
-        return card;
-    }
-
-    function renderMembers(members) {
-        cards.replaceChildren();
-        empty.classList.toggle("hidden", members.length > 0);
-        members.forEach(m => cards.appendChild(memberCard(m)));
-    }
-
-    async function load() {
-        const token = localStorage.getItem(ADMIN_TOKEN_KEY);
-        if (!token) {
-            document.getElementById("team-admin-line").textContent = "Not signed in";
-            showNotice("Sign in as an administrator first.");
-            return;
-        }
-        notice.classList.add("hidden");
-        try {
-            const res = await fetch("/api/admin/team", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ token: token })
-            });
-            const data = await res.json();
-            if (data.error) {
-                if (res.status === 401) localStorage.removeItem(ADMIN_TOKEN_KEY);
-                document.getElementById("team-admin-line").textContent = "Not signed in";
-                showNotice(data.error_message || "Could not load the team.");
+            var list = $("#team-list");
+            list.innerHTML = "";
+            if (!members.length) {
+                list.appendChild(Dom.el("p", "small muted",
+                    "No team members yet. Add one from the sign-in screen."));
                 return;
             }
-            const s = data.stats;
-            document.getElementById("team-admin-line").textContent = "Signed in as " + data.admin;
-            document.getElementById("stat-members").textContent = s.members;
-            document.getElementById("stat-sent").textContent = s.sent;
-            document.getElementById("stat-blocked").textContent = s.blocked;
-            document.getElementById("stat-rate").textContent = s.block_rate + "%";
-            const count = data.members.length;
-            document.getElementById("team-count").textContent = count + (count === 1 ? " member" : " members");
-            renderMembers(data.members);
-        } catch (err) {
-            showNotice("Could not reach the server.");
-        }
+            members.forEach(function (member) { list.appendChild(memberRow(member)); });
+        }).catch(function (err) {
+            Loading.toast(err.message, "error");
+        });
     }
 
-    document.getElementById("btn-team-refresh").addEventListener("click", load);
+    if (!Api.Session.getAdminToken()) {
+        Loading.toast("The team roster needs an administrator sign-in.", "warn");
+    }
+
+    Dom.on($("#btn-refresh"), "click", function () { load($("#btn-refresh")); });
     load();
 })();

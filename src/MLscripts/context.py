@@ -1,5 +1,3 @@
-import contextlib
-import io
 import json
 import os
 import re
@@ -81,31 +79,20 @@ CODE_SYNTAX = re.compile(
     r"\w+\s*=\s*[\[\{\(]|print\(.*\)|console\.log\()"
 )
 
-_classifier = None
+try:
+    from model_cache import classify
+except ImportError:  # pragma: no cover - standalone use from another cwd
+    from .model_cache import classify
 
 
 def get_classifier():
-    global _classifier
-    if _classifier is None:
-        with contextlib.redirect_stderr(io.StringIO()):
-            from transformers import pipeline, logging
-            logging.set_verbosity_error()
-            try:
-                _classifier = pipeline(
-                    "zero-shot-classification",
-                    model="valhalla/distilbart-mnli-12-1",
-                    local_files_only=True,
-                )
-            except Exception:
-                _classifier = pipeline(
-                    "zero-shot-classification",
-                    model="valhalla/distilbart-mnli-12-1",
-                )
-    return _classifier
+    """Kept for callers that want the pipeline itself."""
+    from model_cache import get_zero_shot
+
+    return get_zero_shot()
 
 
-def analyze_stdin():
-    raw_text = sys.stdin.read()
+def analyze(raw_text):
     if not raw_text.strip():
         return {"blocked": False, "score": 0.0, "main_cause": None, "matches": []}
 
@@ -146,10 +133,9 @@ def analyze_stdin():
     # Only load & run the heavy neural network on lines not already caught above
     default_score = 0.0
     if unknown_chunks:
-        clf = get_classifier()
-        results = clf(
+        results = classify(
             [c["text"] for c in unknown_chunks],
-            candidate_labels=LABELS,
+            LABELS,
             hypothesis_template="This text is {}.",
         )
         if isinstance(results, dict):
@@ -199,6 +185,11 @@ def analyze_stdin():
         response["blocked"] = True
 
     return response
+
+
+def analyze_stdin():
+    """CLI entry point: read the prompt from stdin and return the verdict."""
+    return analyze(sys.stdin.read())
 
 
 if __name__ == "__main__":

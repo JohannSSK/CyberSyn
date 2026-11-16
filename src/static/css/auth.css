@@ -1,0 +1,314 @@
+/* ==========================================================================
+   auth.css — the sign-in portal.
+
+   This screen is deliberately its own thing: a warm, near-black split panel,
+   quieter than the app it opens into. The layout, proportions and palette
+   are the original design and are kept as-is — only the button loading
+   state is new, because every action in the app gives feedback.
+
+   Everything is scoped to .auth-shell so the rest of the app keeps its
+   cool navy palette and nothing leaks between the two.
+   ========================================================================== */
+
+.auth-shell {
+    --auth-ink: #1c1917;
+    --auth-ink-soft: #a8a29e;
+    --auth-panel-bg: #2a2926;
+    --auth-panel-2: #33322f;
+    --auth-field-bg: #1f1e1c;
+    --auth-line: #46443f;
+    --auth-text: #ecebe7;
+    --auth-muted: #a8a59d;
+    --auth-danger: #e8a09a;
+
+    display: grid;
+    grid-template-columns: minmax(340px, 5fr) 7fr;
+    align-items: stretch;
+    width: 100%;
+    min-height: 100vh;
+    background: var(--auth-ink);
+    color: var(--auth-text);
+}
+
+.auth-shell .hidden { display: none !important; }
+
+/* ---- left: brand ---- */
+
+.auth-brand {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 40px;
+    padding: 48px 56px;
+    background: var(--auth-ink);
+    color: #fafaf9;
+}
+
+.auth-logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.auth-logo .icon { width: 28px; height: 28px; color: var(--auth-text); }
+
+.auth-brand-body h2 {
+    margin: 0 0 16px;
+    font-size: 30px;
+    line-height: 1.25;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: #fafaf9;
+}
+
+.auth-brand-body > p {
+    margin: 0 0 32px;
+    max-width: 440px;
+    font-size: 15px;
+    line-height: 1.65;
+    color: var(--auth-ink-soft);
+}
+
+.auth-points {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    max-width: 440px;
+}
+
+.auth-points li {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-left: 16px;
+    border-left: 2px solid #57534e;
+}
+
+.auth-points strong { font-size: 14px; font-weight: 600; color: #fafaf9; }
+
+.auth-points span { font-size: 13px; line-height: 1.55; color: var(--auth-ink-soft); }
+
+.auth-brand-foot { font-size: 12px; letter-spacing: 0.04em; color: #78716c; }
+
+/* ---- right: the form ---- */
+
+.auth-panel {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 48px 32px;
+    background: var(--auth-panel-bg);
+}
+
+.auth-step {
+    width: 100%;
+    max-width: 400px;
+    animation: authFadeIn 0.3s ease;
+}
+
+@keyframes authFadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.auth-progress { display: flex; gap: 6px; margin-bottom: 28px; }
+
+.auth-progress span {
+    flex: 1;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--auth-line);
+}
+
+.auth-progress span.is-active { background: #ecebe7; }
+
+.auth-eyebrow {
+    margin-bottom: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--auth-muted);
+}
+
+.auth-title {
+    margin: 0 0 10px;
+    font-size: 28px;
+    line-height: 1.2;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    color: #ecebe7;
+}
+
+.auth-lead {
+    margin: 0 0 28px;
+    font-size: 15px;
+    line-height: 1.6;
+    color: var(--auth-muted);
+}
+
+.auth-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 18px; }
+
+.auth-field label { font-size: 13px; font-weight: 600; color: #d6d3cc; }
+
+.auth-field input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 12px 14px;
+    font-size: 15px;
+    font-family: inherit;
+    color: var(--auth-text);
+    background: var(--auth-field-bg);
+    border: 1px solid var(--auth-line);
+    border-radius: 8px;
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.auth-field input::placeholder { color: #7d7a72; }
+
+.auth-field input:focus {
+    border-color: #ecebe7;
+    box-shadow: 0 0 0 3px rgba(236, 235, 231, 0.12);
+}
+
+.auth-inline-msg {
+    min-height: 1em;
+    margin: -6px 0 12px;
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--auth-danger);
+}
+
+/* Primary action: light on dark, the one high-contrast element on the page. */
+.auth-btn-primary {
+    position: relative;
+    width: 100%;
+    margin-top: 6px;
+    padding: 13px 16px;
+    font-size: 15px;
+    font-weight: 600;
+    font-family: inherit;
+    color: #1f1e1c;
+    background: #ecebe7;
+    border: 1px solid #ecebe7;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.05s ease;
+}
+
+.auth-btn-primary:hover { background: #ffffff; }
+.auth-btn-primary:active { transform: translateY(1px); }
+.auth-btn-primary:focus-visible { outline: 2px solid #ecebe7; outline-offset: 2px; }
+.auth-btn-primary:disabled { opacity: 0.85; cursor: progress; }
+
+/* The spinner is dark, because this button is light. */
+.auth-btn-primary .btn-spinner::after {
+    border-color: rgba(0, 0, 0, 0.25);
+    border-top-color: #1f1e1c;
+}
+
+.auth-secondary {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    margin-top: 22px;
+    padding-top: 20px;
+    border-top: 1px solid var(--auth-line);
+}
+
+.auth-link {
+    padding: 0;
+    font-size: 13px;
+    font-weight: 500;
+    font-family: inherit;
+    color: var(--auth-muted);
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-decoration: none;
+    transition: color 0.15s ease;
+}
+
+.auth-link:hover { color: #ecebe7; text-decoration: underline; }
+.auth-link-danger:hover { color: var(--auth-danger); }
+
+.auth-context {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 16px;
+    margin-bottom: 22px;
+    background: var(--auth-panel-2);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+}
+
+.auth-context-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+
+.auth-context-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--auth-muted);
+}
+
+.auth-context-text strong {
+    font-size: 14px;
+    color: #ecebe7;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.auth-context-actions { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
+
+.auth-footnote {
+    width: 100%;
+    max-width: 400px;
+    margin-top: 40px;
+    font-size: 12px;
+    line-height: 1.6;
+    color: #a8a29e;
+    text-align: center;
+}
+
+@media (max-width: 860px) {
+    .auth-shell { grid-template-columns: 1fr; }
+    .auth-brand { padding: 28px 24px; gap: 16px; }
+    .auth-brand-body h2 { font-size: 22px; margin-bottom: 0; }
+    .auth-brand-body > p, .auth-points, .auth-brand-foot { display: none; }
+    .auth-panel { padding: 36px 24px; justify-content: flex-start; }
+}
+
+/* The language switch on the portal uses the portal's warm palette, not the
+   app's blue one, so it reads as part of the login screen. */
+.auth-panel { position: relative; }
+
+.auth-lang {
+    position: absolute;
+    top: 18px;
+    right: 20px;
+    z-index: 2;
+}
+
+.auth-shell .lang-switch {
+    border-color: var(--auth-line);
+    background: var(--auth-field-bg);
+}
+
+.auth-shell .lang-btn { color: var(--auth-muted); }
+.auth-shell .lang-btn:hover { color: var(--auth-text); }
+
+.auth-shell .lang-btn.is-active {
+    background: var(--auth-panel-2);
+    color: var(--auth-text);
+    box-shadow: inset 0 0 0 1px var(--auth-line);
+}

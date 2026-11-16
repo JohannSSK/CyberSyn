@@ -16,3 +16,6 @@ src/backend/secret.key
 # Editor / scratch backups
 *.bak
 *.before-undo
+
+# Generated submission bundles (see tools/ to rebuild)
+*.patch

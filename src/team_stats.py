@@ -1,30 +1,30 @@
+"""Team statistics for the administrator dashboard.
+
+Answers the analyst's question — "which teams sent client data to
+unapproved AI tools this week?" — and hands the page a per-member breakdown,
+a daily trend, and a timestamped stream of every step each member took.
+
+Blocks and approved overrides are counted separately: an override is in the
+audit trail, but the message *was* sent, so it is not a block.
+"""
+
 import json
-from datetime import datetime, timezone
+from collections import Counter
 
-from flask import jsonify, request
+from flask import Blueprint
 
-from admin_session import _connect, _hash
-from block_log import block_rows
+import block_log
+from auth import admin_from_token, _connect
+from config import DB_FILE, DEFAULT_MODEL
 
+team_stats_api = Blueprint("team_stats_api", __name__)
 
-def admin_from_token(db_file, token):
-    if not isinstance(token, str) or not token.strip():
-        return None
-    con = _connect(db_file)
-    row = con.execute(
-        "SELECT a.id, a.username, s.expires_at FROM ADMIN_SESSIONS s "
-        "JOIN ADMINS a ON a.id = s.admin_id WHERE s.token_hash = ?",
-        (_hash(token.strip()),),
-    ).fetchone()
-    con.close()
-    if row is None:
-        return None
-    if datetime.fromisoformat(row["expires_at"]) < datetime.now(timezone.utc):
-        return None
-    return row
+OVERRIDE_STAGE = "override"
+DAYS = 14
 
 
 def count_answered(raw):
+    """The lifetime answered total, kept outside the chat rows."""
     try:
         logs = json.loads(raw or "[]")
     except (TypeError, ValueError):
@@ -33,78 +33,139 @@ def count_answered(raw):
 
 
 def pct(part, whole):
-    return round(100 * part / whole) if whole else 0
+    return round(part * 100 / whole) if whole else 0
 
 
-def tally(items):
-    counts = {}
-    for item in items:
-        counts[item] = counts.get(item, 0) + 1
-    return counts
+def tally(values):
+    return Counter(v for v in values if v)
 
 
-def ranked(counts, total):
-    rows = [{"label": k, "count": v, "percent": pct(v, total)} for k, v in counts.items()]
-    return sorted(rows, key=lambda r: (-r["count"], r["label"]))
+def ranked(counter, total, limit=6):
+    """Top items as {label, count, percent}, largest first."""
+    items = [
+        {"label": label, "count": count, "percent": pct(count, total)}
+        for label, count in counter.most_common(limit)
+    ]
+    return items
 
 
-def register(app, db_file):
-    @app.post("/api/admin/team")
-    def admin_team_stats():
-        data = request.get_json(silent=True)
-        token = data.get("token") if isinstance(data, dict) else None
-        admin = admin_from_token(db_file, token)
-        if admin is None:
-            return jsonify({"error": True, "error_message": "Your administrator session has ended."}), 401
+def member_stats(db_file, parent_id, employee_id, username, settings,
+                 answered, blocks, created_at):
+    """Everything the page charts for one member."""
+    stopped = [b for b in blocks if b["stage"] != OVERRIDE_STAGE]
+    blocked = len(stopped)
+    overrides = len(blocks) - blocked
+    sent = answered + blocked
+    checks_on = sum(int(settings[k]) for k in ("check1", "check2", "check3")) \
+        if settings else 3
 
-        con = _connect(db_file)
-        employees = con.execute(
-            "SELECT id, username, CHAT_LOGS FROM EMPLOYEES WHERE Parent_id = ? "
-            "ORDER BY username COLLATE NOCASE",
-            (admin["id"],),
+    return {
+        "id": employee_id,
+        "username": username,
+        "member_since": created_at,
+        "sent": sent,
+        "answered": answered,
+        "blocked": blocked,
+        "overrides": overrides,
+        "block_rate": pct(blocked, sent),
+        "checks_on": checks_on,
+        "checks_off": 3 - checks_on,
+        "model": (settings["MODEL_NAME"] if settings else None) or DEFAULT_MODEL,
+        "has_key": bool(settings and settings["API_KEY"]),
+        "reasons": ranked(tally(b["reason"] for b in stopped), blocked),
+        "stages": ranked(tally(b["stage"] for b in stopped), blocked),
+        "trend": block_log.daily_counts(db_file, parent_id, employee_id, DAYS),
+        "timeline": block_log.timeline(db_file, parent_id, employee_id,
+                                       limit=60),
+    }
+
+
+def build_stats(db_file, parent_id):
+    con = _connect(db_file)
+
+    employees = con.execute(
+        "SELECT id, username, created_at FROM EMPLOYEES WHERE Parent_id = ? "
+        "ORDER BY username",
+        (parent_id,),
+    ).fetchall()
+
+    settings = {
+        r["Employee_id"]: r
+        for r in con.execute(
+            "SELECT * FROM SETTINGS WHERE Parent_id = ?", (parent_id,)
         ).fetchall()
-        settings = {
-            r["Employee_id"]: r for r in con.execute(
-                "SELECT Employee_id, check1, check2, check3 FROM SETTINGS WHERE Parent_id = ?",
-                (admin["id"],),
-            ).fetchall()
-        }
-        answered_map = {r["Employee_id"]: r["answered"] for r in con.execute("SELECT Employee_id, answered FROM EMPLOYEE_STATS WHERE Parent_id = ?", (admin["id"],)).fetchall()}
-        con.close()
+    }
+    answered_map = {
+        r["Employee_id"]: r["answered"]
+        for r in con.execute(
+            "SELECT Employee_id, answered FROM EMPLOYEE_STATS WHERE Parent_id = ?",
+            (parent_id,),
+        ).fetchall()
+    }
+    con.close()
 
-        blocks = {}
-        for row in block_rows(db_file, admin["id"]):
-            blocks.setdefault(row["Employee_id"], []).append(row)
+    blocks_by_member = {}
+    for row in block_log.block_rows(db_file, parent_id):
+        blocks_by_member.setdefault(row["Employee_id"], []).append(row)
 
-        members = []
-        for emp in employees:
-            s = settings.get(emp["id"])
-            checks_on = sum(int(s[k]) for k in ("check1", "check2", "check3")) if s else 3
-            answered = answered_map.get(emp["id"], 0)
-            emp_blocks = blocks.get(emp["id"], [])
-            blocked = len(emp_blocks)
-            sent = answered + blocked
-            members.append({
-                "username": emp["username"],
-                "sent": sent,
-                "answered": answered,
-                "blocked": blocked,
-                "block_rate": pct(blocked, sent),
-                "checks_on": checks_on,
-                "reasons": ranked(tally(b["reason"] for b in emp_blocks), blocked),
-                "stages": ranked(tally(b["stage"] for b in emp_blocks), blocked),
-            })
+    members = [
+        member_stats(
+            db_file, parent_id, emp["id"], emp["username"],
+            settings.get(emp["id"]),
+            answered_map.get(emp["id"], 0),
+            blocks_by_member.get(emp["id"], []),
+            emp["created_at"],
+        )
+        for emp in employees
+    ]
 
-        total_sent = sum(m["sent"] for m in members)
-        total_blocked = sum(m["blocked"] for m in members)
-        return jsonify({
-            "error": False,
-            "admin": admin["username"],
-            "stats": {
-                "members": len(members),
-                "sent": total_sent,
-                "blocked": total_blocked,
-                "block_rate": pct(total_blocked, total_sent),
-            },
-            "members": members,
-        })
+    total_sent = sum(m["sent"] for m in members)
+    total_blocked = sum(m["blocked"] for m in members)
+    total_overrides = sum(m["overrides"] for m in members)
+
+    all_stages = Counter()
+    all_reasons = Counter()
+    for member in members:
+        for item in member["stages"]:
+            all_stages[item["label"]] += item["count"]
+        for item in member["reasons"]:
+            all_reasons[item["label"]] += item["count"]
+
+    trend = block_log.daily_counts(db_file, parent_id, None, DAYS)
+
+    return {
+        "members": members,
+        "stats": {
+            "members": len(members),
+            "sent": total_sent,
+            "blocked": total_blocked,
+            "overrides": total_overrides,
+            "block_rate": pct(total_blocked, total_sent),
+        },
+        "stages": ranked(all_stages, total_blocked),
+        "reasons": ranked(all_reasons, total_blocked),
+        "trend": trend,
+        "timeline": block_log.timeline(db_file, parent_id, None, limit=120),
+        "days": DAYS,
+    }
+
+
+@team_stats_api.post("/api/admin/team")
+def team():
+    """Full statistics for the signed-in administrator's workspace."""
+    from web import get_json_dict
+
+    data = get_json_dict() or {}
+    admin = admin_from_token(DB_FILE, data.get("token"))
+    if admin is None:
+        return {"error": True, "error_message": "Your session has ended. Sign in again."}, 401
+
+    payload = build_stats(DB_FILE, int(admin["id"]))
+    payload["error"] = False
+    payload["admin"] = admin["username"]
+    payload["error_message"] = "NULL"
+    return payload
+
+
+def register(app):
+    app.register_blueprint(team_stats_api)

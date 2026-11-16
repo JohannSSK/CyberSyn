@@ -122,14 +122,16 @@ flowchart TB
 
 **Request lifecycle**
 
-1. The browser posts a prompt to `POST /api/admin/employee/chat`.
-2. The server resolves the member's saved settings (enabled checks, encrypted API key, model).
-3. Enabled scanners run **in order** as separate processes, each reading the prompt on stdin and
+1. The browser posts a prompt to `POST /api/admin/employee/chat`, with the session token issued at sign-in.
+2. The server authorises the caller — the member's own token, and an administrator's token as well
+   when the request is an override. Unauthorised calls are refused before any work is done.
+3. The server resolves the member's saved settings (enabled checks, encrypted API key, model).
+4. Enabled scanners run **in order** as separate processes, each reading the prompt on stdin and
    printing a JSON verdict. A scanner that fails, times out (60 s) or prints no verdict **blocks** the
    request (fail closed).
-4. On a hit: the block is written to `BLOCK_LOG` with stage and reason, and the response carries full
+5. On a hit: the block is written to `BLOCK_LOG` with stage and reason, and the response carries full
    `block_info` — stage, cause, line, start/end offsets, snippet and every match.
-5. On a clean pass: the prompt goes to the selected provider and the exchange is saved to the chat
+6. On a clean pass: the prompt goes to the selected provider and the exchange is saved to the chat
    history.
 
 ## The three-gate pipeline
@@ -206,9 +208,11 @@ Non-secret defaults (host, port, database and script paths, route names) live in
 | Keys at rest | Provider API keys are encrypted with Fernet before touching SQLite. The key lives outside the database (env var or a `0600` file in the data volume) and is never returned by the API — only a mask such as `****7890` |
 | Key in transit to the browser | `settings_payload()` always returns an empty `API_KEY` field |
 | Passwords | `werkzeug` salted hashes; legacy plaintext rows are transparently upgraded to hashes on next successful login |
-| Sessions | Random tokens; only the SHA-256 hash is stored, with a 7-day expiry checked on every use |
+| Sessions | Random tokens for both administrators and team members; only the SHA-256 hash is stored, with a 7-day expiry checked on every use |
+| Authenticated routes | Every route that touches a member's prompts, history or settings requires that member's session token. A pair of IDs is never enough, and a member cannot act as another member |
+| Chat privacy | An administrator's token manages policy but never reads a member's chats: history routes accept the member's own session only |
 | Fail-closed | Scanner crash, timeout, or unparseable output → the request is refused and never forwarded |
-| Overrides | Admin-approved sends require the administrator password and are marked as bypassed in the transcript |
+| Overrides | An override needs a valid **administrator session token**, verified server-side (not only in the browser), and is written to the audit log as `override / administrator approved` |
 | Data minimisation | Only what the audit trail needs is stored: stage, reason, member and timestamp — **not** the prompt text of an approved message |
 | Local inspection | Prompts are analysed in-process on the host; they are never sent to a third-party classifier for inspection |
 | Container hardening | Multi-stage build, non-root user, no compiler or pip cache in the final image, baked model so scanning works offline |
@@ -223,6 +227,21 @@ Non-secret defaults (host, port, database and script paths, route names) live in
 
 Smoke-tested flows (administrator login, member add/login, settings with key masking, team stats, and
 fail-closed refusal when a scanner is unavailable) are exercised against a running instance.
+
+### Authorisation tests
+
+```bash
+python3 tools/test_auth.py
+```
+
+21 tests, no network and no models needed (the scanners and the AI call are stubbed). They cover the
+token primitives — issue, expiry, revocation, rejection of forged tokens — and then hold the HTTP
+boundary to its contract: every member route refuses an unauthenticated caller with `401`, a member
+cannot act as another member, an override is refused without a real administrator session, and an
+administrator's token manages policy but cannot read a member's chats.
+
+These exist because the gap they close was invisible: the routes looked fine and returned sensible
+errors, they simply never checked who was calling. A test is what stops that from returning.
 
 Detection quality is measured with the labelled harness in `tools/`:
 
@@ -246,22 +265,51 @@ models.
 ├── includes/constants.json  # host, port, paths, route names
 ├── requirements.txt
 ├── setup.sh                 # local dev environment
+├── assets/icons/            # 27 PNG icons, rendered by tools/build_icons.py
 ├── src/
-│   ├── app.py               # Flask app, API, chat pipeline, settings
+│   ├── app.py               # create_app(): wiring only, no route bodies
+│   ├── routes/              # one blueprint per area
+│   │   ├── pages.py         # the seven page routes
+│   │   ├── admin_api.py     # admin auth, members, accounts, overrides
+│   │   ├── member_api.py    # settings and models for a signed-in member
+│   │   ├── chat_api.py      # the screened chat call
+│   │   ├── chat_history.py  # list/open/rename/delete/search/edit
+│   │   └── assets.py        # serves assets/ at /assets/<path>
 │   ├── MLscripts/
 │   │   ├── greek_pii.py     # check 1 — PII & Greek identifiers
 │   │   ├── context.py       # check 2 — confidential company context
-│   │   └── injection.py     # check 3 — prompt injection
-│   ├── admin_session.py     # token sessions (hashed, expiring)
+│   │   ├── injection.py     # check 3 — prompt injection
+│   │   └── model_cache.py   # loads each model once, then scans in-process
+│   ├── scanners.py          # in-process runner (subprocess fallback)
+│   ├── scanning.py          # run_check(): the three checks, in order
+│   ├── admin_session.py     # administrator token sessions (hashed, expiring)
+│   ├── members.py           # authorisation for member routes
+│   ├── passwords.py         # hashing and verification
 │   ├── secret_store.py      # Fernet encryption of API keys
-│   ├── block_log.py         # block audit trail
+│   ├── block_log.py         # block audit trail + activity log
 │   ├── chat_store.py        # chats and message history
-│   ├── team_stats.py        # per-member statistics
+│   ├── team_stats.py        # per-member statistics, trends, timeline
 │   ├── models_route.py      # live model discovery per provider
-│   ├── templates/           # index, team, help, sign-up pages
-│   └── static/              # css, js (incl. runtime EN/EL i18n)
-└── tools/                   # evaluation harness
+│   ├── ai_client.py         # provider call, keyed by member
+│   ├── config.py db.py errors.py web.py
+│   ├── templates/           # base.html + one template per page
+│   │   └── partials/sidebar.html   # the shared navigation, defined once
+│   └── static/
+│       ├── css/             # base, components, auth, workspace, page, stats
+│       └── js/
+│           ├── core/        # dom, icons, api, loading, markdown, shell
+│           └── auth.js workspace.js profile.js settings.js stats.js team.js
+└── tools/
+    ├── evaluate.py          # precision / recall / F1 harness
+    ├── smoke.py             # drives the whole app over HTTP (22 checks)
+    ├── test_auth.py         # authorisation unit tests
+    ├── build_icons.py       # renders icons.js -> assets/icons/*.png
+    └── icons/               # Pillow-only SVG rasteriser used by the above
 ```
+
+Every module has one job: `app.py` composes, `routes/` answer, `src/*.py` hold
+the domain logic, and the browser gets one CSS file and one JS file per concern
+rather than a single bundle.
 
 ## API reference
 
@@ -273,9 +321,13 @@ Greek-text, multi-line-code and blocked-prompt cases.
 | `POST /api/admin/login`, `/api/admin` | Administrator authentication and management |
 | `POST /api/admin/employee`, `.../employee/login`, `.../employee/account` | Team member lifecycle |
 | `POST /api/admin/employee/settings` | Per-member policy: enabled checks, model, API key |
-| `POST /api/admin/employee/chat` | The screened chat call (with `bypass` for admin-approved sends) |
-| `POST /api/admin/employee/chats[/open\|/rename\|/delete]` | Chat history |
+| `POST /api/admin/employee/chat` | The screened chat call (`bypass` plus `admin_token` for admin-approved sends) |
+| `POST /api/admin/employee/chats[/open\|/rename\|/delete]` | Chat history (member's own session only) |
 | `POST /api/admin/employee/models` | Model discovery for the pasted key's provider |
+
+Every route below `/api/admin/employee/` takes the `session_token` issued at team-member sign-in;
+`/api/admin/employee/settings` also accepts the administrator's token so an administrator can set a
+member's policy.
 | `POST /api/admin/team` | Team statistics |
 | `POST /api/admin/session`, `/api/admin/logout` | Session validation and teardown |
 

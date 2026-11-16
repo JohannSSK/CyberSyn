@@ -1,43 +1,59 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cybersyn - Team and stats</title>
-    <link rel="stylesheet" href="{{ url_for("static", filename="css/style.css") }}">
-    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-</head>
-<body class="team-page-body">
-<main class="team-page">
-    <header class="team-header">
-        <div>
-            <div class="auth-eyebrow">Administrator</div>
-            <h1 class="team-title">Team and stats</h1>
-            <p class="team-sub" id="team-admin-line">Loading...</p>
-        </div>
-        <div class="team-header-actions">
-            <button type="button" class="link-small" id="btn-team-refresh">Refresh</button>
-            <a href="/" class="link-small">Back to sign in</a>
-        </div>
-    </header>
+{% extends "base.html" %}
 
-    <div id="team-notice" class="team-notice hidden"></div>
+{% block title %}Team — CyberSyn{% endblock %}
 
-    <section class="team-stats">
-        <div class="team-stat"><span class="team-stat-label">Team members</span><strong id="stat-members">--</strong></div>
-        <div class="team-stat"><span class="team-stat-label">Prompts sent</span><strong id="stat-sent">--</strong></div>
-        <div class="team-stat"><span class="team-stat-label">Blocked</span><strong id="stat-blocked">--</strong></div>
-        <div class="team-stat"><span class="team-stat-label">Block rate</span><strong id="stat-rate">--</strong></div>
-    </section>
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/page.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/stats.css') }}">
+{% endblock %}
 
-    <div class="team-panel-head">
-        <h2>Members</h2>
-        <span class="team-sub" id="team-count"></span>
+{% block body %}
+<div class="app-shell">
+    <div class="layout">
+        {% include "partials/sidebar.html" %}
+
+        <main class="layout-main">
+            <header class="page-head">
+                <div class="row-between wrap">
+                    <div>
+                        <span class="eyebrow">Administrator</span>
+                        <h1>Team</h1>
+                        <p class="dim">Everyone in this workspace and how their gate is configured.</p>
+                    </div>
+                    <button type="button" class="btn btn-sm" id="btn-refresh">Refresh</button>
+                </div>
+            </header>
+
+            <div class="page-body">
+                <div class="tiles">
+                    <div class="tile tile-accent">
+                        <div class="tile-label"><span data-icon="team"></span> Members</div>
+                        <div class="tile-value" id="tile-count">—</div>
+                    </div>
+                    <div class="tile tile-danger">
+                        <div class="tile-label"><span data-icon="warning"></span> Blocked</div>
+                        <div class="tile-value" id="tile-blocked">—</div>
+                    </div>
+                    <div class="tile tile-success">
+                        <div class="tile-label"><span data-icon="shield"></span> Block rate</div>
+                        <div class="tile-value" id="tile-rate">—</div>
+                    </div>
+                    <div class="tile">
+                        <div class="tile-label"><span data-icon="key"></span> Keys configured</div>
+                        <div class="tile-value" id="tile-keys">—</div>
+                    </div>
+                </div>
+
+                <section class="card">
+                    <div class="card-title"><span data-icon="profile"></span> Members</div>
+                    <div id="team-list" class="stack-sm"></div>
+                </section>
+            </div>
+        </main>
     </div>
-    <section id="team-cards" class="team-cards"></section>
-    <div id="team-empty" class="team-empty hidden">No team members yet. Add one from the sign-in page.</div>
-</main>
-<script src="{{ url_for("static", filename="js/team.js") }}"></script>
-<script src="{{ url_for('static', filename='js/i18n.js') }}"></script>
-</body>
-</html>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/team.js') }}"></script>
+{% endblock %}

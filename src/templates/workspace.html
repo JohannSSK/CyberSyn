@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block title %}Workspace — CyberSyn{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/workspace.css') }}">
+{% endblock %}
+
+{% block body %}
+<div class="app-shell">
+    <div class="workspace">
+
+        {# The shared navigation, plus this page's conversation list. #}
+        {% set sidebar_extra = "partials/chat_list.html" %}
+        {% include "partials/sidebar.html" %}
+
+        <main class="workspace-main">
+            <header class="topbar">
+                <button type="button" class="icon-btn" data-action="toggle-sidebar"
+                        aria-label="Toggle sidebar"><span data-icon="menu"></span></button>
+
+                <button type="button" class="topbar-title" id="btn-rename-chat"
+                        title="Rename this chat">
+                    <span id="active-chat-title">New chat</span>
+                    <span data-icon="edit"></span>
+                </button>
+
+                <div class="search-box">
+                    <span data-icon="search"></span>
+                    <input type="search" id="chat-search" placeholder="Search this chat…"
+                           aria-label="Search this chat" autocomplete="off">
+                    <span class="search-count hidden" id="search-count"></span>
+                    <button type="button" class="search-clear hidden" id="search-clear"
+                            aria-label="Clear search"><span data-icon="close"></span></button>
+                </div>
+
+                <div class="topbar-spacer"></div>
+
+                <div class="topbar-status" id="checks-status">
+                    <span class="dot" style="color: var(--success)"></span>
+                    <span id="checks-summary">3 of 3 checks active</span>
+                </div>
+
+                <button type="button" class="icon-btn danger" id="btn-delete-chat"
+                        title="Delete this chat" aria-label="Delete this chat">
+                    <span data-icon="delete"></span>
+                </button>
+            </header>
+
+            <div class="stream" id="chat-stream">
+                <div class="stream-inner" id="chat-messages"></div>
+            </div>
+
+            <footer class="composer">
+                <div class="composer-inner">
+                    <form id="form-send" class="composer-box">
+                        <textarea id="prompt-input" rows="1"
+                                  placeholder="Ask anything…  (Enter to send, Shift+Enter for a new line)"
+                                  aria-label="Message"></textarea>
+                        <button type="submit" class="composer-send" id="btn-send"
+                                title="Send" aria-label="Send message">
+                            <span data-icon="send"></span>
+                        </button>
+                    </form>
+                    <div class="composer-foot">
+                        <span data-icon="shield"></span>
+                        <span>Checked on this machine before anything reaches the AI provider.</span>
+                        <span class="composer-hint">Enter ⏎</span>
+                    </div>
+                </div>
+            </footer>
+        </main>
+
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/workspace.js') }}"></script>
+{% endblock %}

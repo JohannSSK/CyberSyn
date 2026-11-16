@@ -1,0 +1,49 @@
+{# Shared navigation. Included by every signed-in page so the sidebar is
+   defined once rather than copied into each template. #}
+<aside class="sidebar" data-sidebar>
+    <div class="sidebar-brand">
+        <span data-icon="shield"></span>
+        <span>CyberSyn</span>
+    </div>
+
+    <nav class="sidebar-nav">
+        <a href="/workspace" class="nav-item" data-nav="/workspace">
+            <span data-icon="chat"></span><span>Chat</span>
+        </a>
+        <a href="/stats" class="nav-item" data-nav="/stats">
+            <span data-icon="stats"></span><span>Statistics</span>
+        </a>
+        <a href="/profile" class="nav-item" data-nav="/profile">
+            <span data-icon="profile"></span><span>Profile</span>
+        </a>
+        <a href="/settings" class="nav-item" data-nav="/settings">
+            <span data-icon="settings"></span><span>Settings</span>
+        </a>
+        <a href="/team" class="nav-item" data-nav="/team">
+            <span data-icon="team"></span><span>Team</span>
+        </a>
+    </nav>
+
+    {# Pages with their own list above the footer set `sidebar_extra` to a
+       partial before including this one. Chat uses it for the conversations. #}
+    {% if sidebar_extra %}{% include sidebar_extra %}{% endif %}
+
+    <div class="sidebar-spacer"></div>
+
+    <div class="sidebar-foot">
+        <div class="sidebar-user">
+            <span class="avatar" data-member-avatar>M</span>
+            <span class="who">
+                <strong data-member-name>Member</strong>
+                <small data-workspace></small>
+            </span>
+        </div>
+        <div data-lang-switch></div>
+        <a href="/help" class="nav-item" data-nav="/help">
+            <span data-icon="help"></span><span>Help &amp; info</span>
+        </a>
+        <button type="button" class="nav-item" data-action="sign-out">
+            <span data-icon="logout"></span><span>Sign out</span>
+        </button>
+    </div>
+</aside>

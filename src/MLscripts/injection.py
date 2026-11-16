@@ -1,5 +1,3 @@
-import contextlib
-import io
 import json
 import os
 import re
@@ -11,9 +9,6 @@ os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
 os.environ["HF_HUB_VERBOSITY"] = "error"
 warnings.filterwarnings("ignore")
 
-from transformers import pipeline, logging
-
-logging.set_verbosity_error()
 
 LABELS = [
     "meta-instruction telling an AI to stop its task or reveal its instructions",
@@ -39,15 +34,13 @@ CODE_SYNTAX = re.compile(
     r"^\s*(def |class |import |from |return |if |elif |else:|for |while |try:|except|\w+\s*=\s*.+|print\(|.*[{}();].*)"
 )
 
-with contextlib.redirect_stderr(io.StringIO()):
-    classifier = pipeline(
-        "zero-shot-classification",
-        model="valhalla/distilbart-mnli-12-1", local_files_only=True,
-    )
+try:
+    from model_cache import classify
+except ImportError:  # pragma: no cover - standalone use from another cwd
+    from .model_cache import classify
 
 
-def analyze_stdin():
-    raw_text = sys.stdin.read()
+def analyze(raw_text):
     if not raw_text.strip():
         return {
             "blocked": False,
@@ -106,9 +99,7 @@ def analyze_stdin():
         offset += len(line)
 
     if nl_chunks:
-        results = classifier(
-            [c["clean"] for c in nl_chunks], candidate_labels=LABELS
-        )
+        results = classify([c["clean"] for c in nl_chunks], LABELS)
         if isinstance(results, dict):
             results = [results]
 
@@ -158,6 +149,11 @@ def analyze_stdin():
         response["blocked"] = True
 
     return response
+
+
+def analyze_stdin():
+    """CLI entry point: read the prompt from stdin and return the verdict."""
+    return analyze(sys.stdin.read())
 
 
 if __name__ == "__main__":
