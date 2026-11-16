@@ -265,23 +265,51 @@ models.
 ├── includes/constants.json  # host, port, paths, route names
 ├── requirements.txt
 ├── setup.sh                 # local dev environment
+├── assets/icons/            # 27 PNG icons, rendered by tools/build_icons.py
 ├── src/
-│   ├── app.py               # Flask app, API, chat pipeline, settings
+│   ├── app.py               # create_app(): wiring only, no route bodies
+│   ├── routes/              # one blueprint per area
+│   │   ├── pages.py         # the seven page routes
+│   │   ├── admin_api.py     # admin auth, members, accounts, overrides
+│   │   ├── member_api.py    # settings and models for a signed-in member
+│   │   ├── chat_api.py      # the screened chat call
+│   │   ├── chat_history.py  # list/open/rename/delete/search/edit
+│   │   └── assets.py        # serves assets/ at /assets/<path>
 │   ├── MLscripts/
 │   │   ├── greek_pii.py     # check 1 — PII & Greek identifiers
 │   │   ├── context.py       # check 2 — confidential company context
-│   │   └── injection.py     # check 3 — prompt injection
+│   │   ├── injection.py     # check 3 — prompt injection
+│   │   └── model_cache.py   # loads each model once, then scans in-process
+│   ├── scanners.py          # in-process runner (subprocess fallback)
+│   ├── scanning.py          # run_check(): the three checks, in order
 │   ├── admin_session.py     # administrator token sessions (hashed, expiring)
-│   ├── auth.py              # session issuing + authorisation for member routes
+│   ├── members.py           # authorisation for member routes
+│   ├── passwords.py         # hashing and verification
 │   ├── secret_store.py      # Fernet encryption of API keys
-│   ├── block_log.py         # block audit trail
+│   ├── block_log.py         # block audit trail + activity log
 │   ├── chat_store.py        # chats and message history
-│   ├── team_stats.py        # per-member statistics
+│   ├── team_stats.py        # per-member statistics, trends, timeline
 │   ├── models_route.py      # live model discovery per provider
-│   ├── templates/           # index, team, help, sign-up pages
-│   └── static/              # css, js (incl. runtime EN/EL i18n)
-└── tools/                   # evaluation harness
+│   ├── ai_client.py         # provider call, keyed by member
+│   ├── config.py db.py errors.py web.py
+│   ├── templates/           # base.html + one template per page
+│   │   └── partials/sidebar.html   # the shared navigation, defined once
+│   └── static/
+│       ├── css/             # base, components, auth, workspace, page, stats
+│       └── js/
+│           ├── core/        # dom, icons, api, loading, markdown, shell
+│           └── auth.js workspace.js profile.js settings.js stats.js team.js
+└── tools/
+    ├── evaluate.py          # precision / recall / F1 harness
+    ├── smoke.py             # drives the whole app over HTTP (22 checks)
+    ├── test_auth.py         # authorisation unit tests
+    ├── build_icons.py       # renders icons.js -> assets/icons/*.png
+    └── icons/               # Pillow-only SVG rasteriser used by the above
 ```
+
+Every module has one job: `app.py` composes, `routes/` answer, `src/*.py` hold
+the domain logic, and the browser gets one CSS file and one JS file per concern
+rather than a single bundle.
 
 ## API reference
 

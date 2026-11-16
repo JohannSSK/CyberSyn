@@ -10,56 +10,9 @@
 <div class="app-shell">
     <div class="workspace">
 
-        <aside class="sidebar" data-sidebar>
-            <div class="sidebar-brand">
-                <img src="/assets/icons/shield.png" alt="" width="24" height="24" class="icon">
-                <span>CyberSyn</span>
-            </div>
-
-            <nav class="sidebar-nav">
-                <a href="/workspace" class="nav-item" data-nav="/workspace">
-                    <span data-icon="chat"></span><span>Chat</span>
-                </a>
-                <a href="/stats" class="nav-item" data-nav="/stats">
-                    <span data-icon="stats"></span><span>Statistics</span>
-                </a>
-                <a href="/profile" class="nav-item" data-nav="/profile">
-                    <span data-icon="profile"></span><span>Profile</span>
-                </a>
-                <a href="/settings" class="nav-item" data-nav="/settings">
-                    <span data-icon="settings"></span><span>Settings</span>
-                </a>
-                <a href="/team" class="nav-item" data-nav="/team">
-                    <span data-icon="team"></span><span>Team</span>
-                </a>
-            </nav>
-
-            <div class="sidebar-section-head">
-                <span class="eyebrow">Conversations</span>
-                <button type="button" class="icon-btn" id="btn-new-chat"
-                        title="Start a new chat" aria-label="Start a new chat">
-                    <span data-icon="plus"></span>
-                </button>
-            </div>
-
-            <div class="chat-list" id="chat-list"></div>
-
-            <div class="sidebar-foot">
-                <div class="sidebar-user">
-                    <span class="avatar" data-member-avatar>M</span>
-                    <span class="who">
-                        <strong data-member-name>Member</strong>
-                        <small data-workspace></small>
-                    </span>
-                </div>
-                <a href="/help" class="nav-item" data-nav="/help">
-                    <span data-icon="help"></span><span>Help &amp; info</span>
-                </a>
-                <button type="button" class="nav-item" data-action="sign-out">
-                    <span data-icon="logout"></span><span>Sign out</span>
-                </button>
-            </div>
-        </aside>
+        {# The shared navigation, plus this page's conversation list. #}
+        {% set sidebar_extra = "partials/chat_list.html" %}
+        {% include "partials/sidebar.html" %}
 
         <main class="workspace-main">
             <header class="topbar">

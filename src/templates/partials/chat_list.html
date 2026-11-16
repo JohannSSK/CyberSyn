@@ -1,0 +1,11 @@
+{# The chat list: the workspace's extra sidebar section. Included by
+   partials/sidebar.html when a page sets `sidebar_extra`. #}
+<div class="sidebar-section-head">
+    <span class="eyebrow">Conversations</span>
+    <button type="button" class="icon-btn" id="btn-new-chat"
+            title="Start a new chat" aria-label="Start a new chat">
+        <span data-icon="plus"></span>
+    </button>
+</div>
+
+<div class="chat-list" id="chat-list"></div>

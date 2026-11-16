@@ -287,3 +287,28 @@
     .auth-brand-body > p, .auth-points, .auth-brand-foot { display: none; }
     .auth-panel { padding: 36px 24px; justify-content: flex-start; }
 }
+
+/* The language switch on the portal uses the portal's warm palette, not the
+   app's blue one, so it reads as part of the login screen. */
+.auth-panel { position: relative; }
+
+.auth-lang {
+    position: absolute;
+    top: 18px;
+    right: 20px;
+    z-index: 2;
+}
+
+.auth-shell .lang-switch {
+    border-color: var(--auth-line);
+    background: var(--auth-field-bg);
+}
+
+.auth-shell .lang-btn { color: var(--auth-muted); }
+.auth-shell .lang-btn:hover { color: var(--auth-text); }
+
+.auth-shell .lang-btn.is-active {
+    background: var(--auth-panel-2);
+    color: var(--auth-text);
+    box-shadow: inset 0 0 0 1px var(--auth-line);
+}
