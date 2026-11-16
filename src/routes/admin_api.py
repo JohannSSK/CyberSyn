@@ -8,7 +8,7 @@ from flask import Blueprint
 
 import admin_session
 from auth import admin_from_token
-from config import DB_FILE, NULL
+from config import DB_FILE, NULL, ROUTES
 from db import get_db
 from web import (clean_str, fail_admin, fail_admin_login, get_json_dict, ok,
                   require_body)
@@ -19,7 +19,7 @@ from passwords import (admin_password_problem, hash_password, upgrade_password,
 admin_api = Blueprint("admin_api", __name__)
 
 
-@admin_api.post("/api/admin/login")
+@admin_api.post(ROUTES["ADMIN_LOGIN"])
 def admin_login():
     data = get_json_dict()
     if data is None:
@@ -49,7 +49,7 @@ def admin_login():
     }
 
 
-@admin_api.post("/api/admin")
+@admin_api.post(ROUTES["ADMIN"])
 def admin_manage():
     data = get_json_dict()
     if data is None:
@@ -104,7 +104,7 @@ def admin_manage():
     return {"error": False, "Parent_id": str(pid), "error_message": NULL}
 
 
-@admin_api.post("/api/admin/team/list")
+@admin_api.post(ROUTES["TEAM_LIST"])
 def team_list():
     """Members of the signed-in administrator's workspace."""
     data = require_body()
@@ -121,7 +121,7 @@ def team_list():
     return ok(members=members)
 
 
-@admin_api.post("/api/admin/password")
+@admin_api.post(ROUTES["ADMIN_PASSWORD"])
 def change_admin_password():
     """Administrator changes their own password."""
     data = require_body()

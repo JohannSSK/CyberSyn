@@ -11,7 +11,7 @@ port.
 from flask import Blueprint
 
 from auth import admin_from_token, member_from_token
-from config import DB_FILE
+from config import DB_FILE, ROUTES
 from members import get_settings
 from providers import (ProviderError, best_error, choices, detect, get,
                        validate_base_url)
@@ -28,7 +28,7 @@ def _stored_key(member, admin):
     return decrypt_secret(get_settings(parent_id, employee_id)["API_KEY"] or "").strip()
 
 
-@models_api.post("/api/admin/employee/models")
+@models_api.post(ROUTES["MODELS"])
 def list_models():
     data = get_json_dict() or {}
     token = data.get("session_token")
@@ -85,7 +85,7 @@ def list_models():
     }
 
 
-@models_api.post("/api/admin/employee/providers")
+@models_api.post(ROUTES["PROVIDERS"])
 def list_providers():
     """The providers the connection page offers.
 

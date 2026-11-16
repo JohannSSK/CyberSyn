@@ -14,10 +14,8 @@ before giving up, so behaviour degrades rather than breaks.
 import importlib
 import inspect
 import sys
-from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-ML_DIR = HERE / "MLscripts"
+from config import ML_DIR
 
 # stage -> (module name, function name). The functions must accept a prompt
 # string and return a verdict dict with a "blocked" field.

@@ -1,24 +1,41 @@
 {
   "HOST": "127.0.0.1",
   "PORT": 5000,
-
   "PATHS": {
     "DB_FILE": "src/backend/app.db",
-    "FRONTEND_DIR": "src/frontend",
     "BACKEND_DIR": "src/backend",
+    "FRONTEND_DIR": "src/static",
+    "TEMPLATES_DIR": "src/templates",
     "ML_DIR": "src/MLscripts",
     "ASSETS_DIR": "assets",
     "CHECK1_SCRIPT": "src/MLscripts/greek_pii.py",
     "CHECK2_SCRIPT": "src/MLscripts/context.py",
     "CHECK3_SCRIPT": "src/MLscripts/injection.py"
   },
-
   "ROUTES": {
     "ADMIN_LOGIN": "/api/admin/login",
     "ADMIN": "/api/admin",
+    "ADMIN_PASSWORD": "/api/admin/password",
+    "ADMIN_SESSION": "/api/admin/session",
+    "ADMIN_LOGOUT": "/api/admin/logout",
+    "TEAM": "/api/admin/team",
+    "TEAM_LIST": "/api/admin/team/list",
     "EMPLOYEE": "/api/admin/employee",
     "EMPLOYEE_LOGIN": "/api/admin/employee/login",
+    "EMPLOYEE_LOGOUT": "/api/admin/employee/logout",
+    "EMPLOYEE_ACCOUNT": "/api/admin/employee/account",
     "SETTINGS": "/api/admin/employee/settings",
-    "CHAT": "/api/admin/employee/chat"
+    "MODELS": "/api/admin/employee/models",
+    "PROVIDERS": "/api/admin/employee/providers",
+    "OVERRIDE_CHECK": "/api/admin/employee/override/check",
+    "CHAT": "/api/admin/employee/chat",
+    "CHAT_REGENERATE": "/api/admin/employee/chat/regenerate",
+    "CHATS": "/api/admin/employee/chats",
+    "CHATS_OPEN": "/api/admin/employee/chats/open",
+    "CHATS_DELETE": "/api/admin/employee/chats/delete",
+    "CHATS_RENAME": "/api/admin/employee/chats/rename",
+    "CHATS_SEARCH": "/api/admin/employee/chats/search",
+    "MESSAGE_EDIT": "/api/admin/employee/chats/message/edit",
+    "MESSAGE_DELETE": "/api/admin/employee/chats/message/delete"
   }
 }

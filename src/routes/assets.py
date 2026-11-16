@@ -7,9 +7,7 @@ exposes it at /assets/... so templates can use an ordinary URL.
 
 from flask import Blueprint, abort, send_from_directory
 
-from config import ROOT_DIR
-
-ASSETS_DIR = ROOT_DIR / "assets"
+from config import ASSETS_DIR
 
 assets = Blueprint("assets", __name__)
 

@@ -165,10 +165,52 @@ Your data (accounts, chats, block log, generated encryption key) lives in the `c
 ## Local development
 
 ```bash
-./setup.sh          # creates .venv, installs dependencies, pre-downloads the model
-cd src && python app.py seed   # optional: creates admin johann / admin_secret_123
-cd src && python app.py        # http://127.0.0.1:5000
+./setup.sh                 # creates .venv, installs dependencies, fetches the model
+./run.sh                   # starts the server
+./run.sh seed <username>   # creates the first administrator
 ```
+
+There is no default account. A gateway that ships with a known username and password
+is a gateway anyone can sign in to, so `seed` has to be given one. Omit the password
+and a random one is generated and printed once.
+
+`run.sh` reads the host, the port and every path from `includes/constants.json`, so
+editing that file is enough to move the app. The environment still wins where it has
+to — a container cannot bind `0.0.0.0` by editing a tracked file:
+
+```bash
+CYBERSYN_HOST=0.0.0.0 ./run.sh
+```
+
+Both scripts work on Linux and macOS, under bash, zsh, fish, dash or ksh, and from any
+directory, including when symlinked onto your `PATH`. **Windows is not supported:**
+the scanners need `torch` and `spaCy`, which do not build reliably there. Use WSL
+(`wsl --install`, then run `setup.sh` inside Ubuntu) or `docker compose up --build`.
+`setup.sh` detects Windows and says so rather than failing halfway through.
+
+## Testing
+
+Everything in `tools/` runs from the repository root and needs no arguments:
+
+```bash
+python3 tools/test_constants.py    # includes/constants.json is real, and is actually used
+python3 tools/test_auth.py         # authorisation on the member routes
+python3 tools/test_screening.py    # the screening stage: bounded, parallel, fail-closed
+python3 tools/test_providers.py    # provider discovery and address safety
+python3 tools/test_provider_errors.py
+python3 tools/test_models.py       # model discovery uses the stored key
+node tools/test_frontend.js        # browser behaviour (needs: npm install jsdom)
+node tools/test_account_pages.js
+```
+
+`smoke.py` is the only one that needs a running server — start one first, then:
+
+```bash
+./run.sh &  python3 tools/smoke.py
+```
+
+It follows `includes/constants.json` too, so it finds the server wherever that file
+says it is; `python3 tools/smoke.py http://host:port` overrides it.
 
 ## Configuration
 

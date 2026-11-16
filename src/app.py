@@ -19,8 +19,8 @@ from werkzeug.exceptions import HTTPException
 import admin_session
 import db
 import scanners
-from config import (DEBUG, HOST, PORT, TEMPLATES_DIR, DB_FILE, WARM_MODELS,
-                    STATIC_DIR)
+from config import (BACKEND_DIR, DEBUG, HOST, PORT, TEMPLATES_DIR, DB_FILE,
+                    WARM_MODELS, STATIC_DIR)
 from errors import ApiError
 from secret_store import migrate_api_keys
 
@@ -132,6 +132,7 @@ def main():
     if len(sys.argv) > 1 and sys.argv[1] == "seed":
         return db.seed(*sys.argv[2:4])
 
+    print("Data directory:", BACKEND_DIR)
     print("Database file :", DB_FILE)
     print("Routes:")
     for rule in app.url_map.iter_rules():

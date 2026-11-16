@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 from flask import Blueprint, jsonify, request
 
 from auth import _connect, _hash
+from config import ROUTES
 
 SESSION_DAYS = 7
 TABLE_SQL = (
@@ -85,7 +86,7 @@ def register(app):
     app.register_blueprint(admin_session_api)
 
 
-@admin_session_api.post("/api/admin/session")
+@admin_session_api.post(ROUTES["ADMIN_SESSION"])
 def restore():
     """Tell the browser whether a remembered admin token is still good."""
     from auth import admin_from_token
@@ -103,7 +104,7 @@ def restore():
     })
 
 
-@admin_session_api.post("/api/admin/logout")
+@admin_session_api.post(ROUTES["ADMIN_LOGOUT"])
 def logout():
     from config import DB_FILE
 
