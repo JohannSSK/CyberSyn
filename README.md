@@ -10,8 +10,6 @@
 
 ## Contents
 
-- [The problem](#the-problem)
-- [The solution](#the-solution)
 - [Key features](#key-features)
 - [Architecture](#architecture)
 - [The three-gate pipeline](#the-three-gate-pipeline)
@@ -25,21 +23,6 @@
 - [Limitations & roadmap](#limitations--roadmap)
 
 ---
-
-## The problem
-
-Adoption of generative AI inside companies has outrun every control around it.
-
-| Reality | Consequence |
-|---|---|
-| Staff paste source code, contracts and customer lists into public chatbots | Client and IP data leaves the perimeter through a browser tab |
-| IT has no inventory of which AI tools are actually used | "Shadow AI" is invisible to risk management |
-| Blocking AI outright is unenforceable | People route around controls; the risk just moves |
-| Inspecting prompts means inspecting people | Any solution must itself respect GDPR and data minimisation |
-
-A policy document does not stop a paste. **A gate in the path of the prompt does.**
-
-## The solution
 
 CyberSyn is a self-hosted **AI gateway for teams**. Team members chat with the AI model of their choice
 through CyberSyn; administrators define what must never leave. Every prompt is screened by three local
