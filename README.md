@@ -212,6 +212,22 @@ node tools/test_account_pages.js
 It follows `includes/constants.json` too, so it finds the server wherever that file
 says it is; `python3 tools/smoke.py http://host:port` overrides it.
 
+### Debugging a blocked prompt
+
+`tools/test_mls.py` puts a prompt through one scanner and prints the verdict it
+returns, so "why did that get blocked?" does not need `print()` statements:
+
+```bash
+python3 tools/test_mls.py                        # pick a scanner, then type a prompt
+python3 tools/test_mls.py context "sk-abc..."    # straight to the JSON
+python3 tools/test_mls.py all -                   # all three, prompt on stdin
+python3 tools/test_mls.py --list                  # which scanners load here
+```
+
+It loads the scanners through `src/scanners.py`, the same way a request does, so
+the JSON is what the app would act on. Finish a pasted prompt with a line
+containing only `.`, or pipe it in with `-` when the prompt has such a line.
+
 ## Configuration
 
 All settings are optional; defaults suit the Docker flow.
