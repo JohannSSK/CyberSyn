@@ -25,6 +25,9 @@ from team_stats import register as register_team_stats
 from block_log import record_block
 from chat_store import init_tables as init_chat_tables, bump_answered, register as register_chat_routes, list_chats, get_chat, newest_chat, save_exchange
 from secret_store import encrypt_secret, decrypt_secret, mask_stored_key, migrate_api_keys
+from auth import (admin_from_token, create_employee_session,
+                  init_tables as init_auth_tables, require_member,
+                  revoke_employee_sessions)
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -60,7 +63,9 @@ DEBUG = os.environ.get("CYBERSYN_DEBUG", "0") == "1"
 PATHS = CONSTANTS["PATHS"]
 ROUTES = CONSTANTS["ROUTES"]
 
-DB_FILE = ROOT_DIR / PATHS["DB_FILE"]
+# Overridable so tests (and a container with a mounted volume) can point the
+# database somewhere other than the tracked default.
+DB_FILE = Path(os.environ.get("CYBERSYN_DB_FILE") or (ROOT_DIR / PATHS["DB_FILE"]))
 DB_FILE.parent.mkdir(parents=True, exist_ok=True)
 
 NULL = "NULL"
@@ -494,6 +499,7 @@ def employee_manage():
                (parent_id, row["id"]))
     db.execute("DELETE FROM EMPLOYEES WHERE id = ?", (row["id"],))
     db.commit()
+    revoke_employee_sessions(DB_FILE, parent_id, row["id"])
     return jsonify({"error": False, "error_message": NULL})
 
 
@@ -530,6 +536,7 @@ def employee_login():
     return jsonify({
         "error": False,
         "Employee_id": str(row["id"]),
+        "session_token": create_employee_session(DB_FILE, parent_id, row["id"]),
         "chats": list_chats(DB_FILE, parent_id, row["id"]),
         "chat_id": latest["id"] if latest else None,
         "CHAT_LOGS": latest["messages"] if latest else [],
@@ -547,6 +554,11 @@ def employee_settings():
     data = get_json_dict()
     if data is None:
         return fail3("Request body must be a JSON object.", 400)
+    # A member may change their own settings, and an administrator may set the
+    # policy for any member of their team. Nobody else may — policy is not
+    # something an unauthenticated caller gets to switch off.
+    if require_member(DB_FILE, data, allow_admin=True)[0] is None:
+        return fail3("Your session has ended. Sign in again to change these settings.", 401)
     parent_id = to_int(data.get("Parent_id"))
     employee_id = to_int(data.get("Employee_id"))
     if parent_id is None:
@@ -741,6 +753,23 @@ def employee_chat():
         if employee_id is None:
             raise ChatError("'Employee_id' must be a positive integer.", 400)
 
+        # Only the signed-in member may send prompts on their own behalf.
+        # Checked before the member lookup so an outsider cannot use this route
+        # to enumerate which member IDs exist.
+        if require_member(DB_FILE, data)[0] is None:
+            raise ChatError("Your session has ended. Sign in again to continue.", 401)
+
+        # The browser collects an administrator's approval for an override; the
+        # server is what enforces it, against that administrator's own session
+        # token. Authorised here, before any work is done, so an unapproved
+        # override is refused rather than quietly failing later.
+        if data.get("bypass") is True:
+            admin = admin_from_token(DB_FILE, data.get("admin_token"))
+            if admin is None or int(admin["id"]) != parent_id:
+                raise ChatError(
+                    "Overriding a block needs a valid administrator session. "
+                    "Ask an administrator to approve this message.", 401)
+
         emp = employee_row(parent_id, employee_id)
         if emp is None:
             raise ChatError(not_found_employee_message(parent_id, employee_id), 404)
@@ -776,7 +805,10 @@ def employee_chat():
             raise ChatError("No API_KEY provided.", 400)
 
         # Privacy checks (fail closed: any scanner error stops the request).
-        if not bypass:
+        if bypass:
+            record_block(DB_FILE, parent_id, employee_id, "override",
+                         "administrator approved")
+        else:
             for stage, _ in CHECKS:
                 if not flags[stage]:
                     continue
@@ -880,11 +912,12 @@ def seed():
 
 init_db()
 init_session_table(DB_FILE)
+init_auth_tables(DB_FILE)
 check_schema()
 migrate_api_keys(DB_FILE)
 
 from models_route import register as register_models
-register_models(app)
+register_models(app, DB_FILE)
 register_admin_session(app, DB_FILE)
 register_team_stats(app, DB_FILE)
 init_chat_tables(DB_FILE)

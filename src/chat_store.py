@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from flask import jsonify, request
 
 from admin_session import _connect
+from auth import require_member
 
 EARLIER_TITLE = "Earlier chat"
 TITLE_LEN = 48
@@ -215,11 +216,16 @@ def _chat_id(data):
 
 
 def register(app, db_file):
+    # Chat history is a member's own content: only that member's session may
+    # read it. An administrator's token is deliberately not accepted here.
     @app.post("/api/admin/employee/chats")
     def chats_list():
-        ids = _ids(request.get_json(silent=True))
+        data = request.get_json(silent=True)
+        ids = _ids(data)
         if ids is None:
             return jsonify({"error": True, "error_message": "Parent_id and Employee_id are required."}), 400
+        if require_member(db_file, data)[0] is None:
+            return jsonify({"error": True, "error_message": "Your session has ended. Sign in again."}), 401
         return jsonify({"error": False, "chats": list_chats(db_file, ids[0], ids[1])})
 
     @app.post("/api/admin/employee/chats/open")
@@ -228,6 +234,8 @@ def register(app, db_file):
         ids, chat_id = _ids(data), _chat_id(data)
         if ids is None or chat_id is None:
             return jsonify({"error": True, "error_message": "Parent_id, Employee_id and chat_id are required."}), 400
+        if require_member(db_file, data)[0] is None:
+            return jsonify({"error": True, "error_message": "Your session has ended. Sign in again."}), 401
         chat = get_chat(db_file, ids[0], ids[1], chat_id)
         if chat is None:
             return jsonify({"error": True, "error_message": "That chat was not found."}), 404
@@ -239,6 +247,8 @@ def register(app, db_file):
         ids, chat_id = _ids(data), _chat_id(data)
         if ids is None or chat_id is None:
             return jsonify({"error": True, "error_message": "Parent_id, Employee_id and chat_id are required."}), 400
+        if require_member(db_file, data)[0] is None:
+            return jsonify({"error": True, "error_message": "Your session has ended. Sign in again."}), 401
         if not delete_chat(db_file, ids[0], ids[1], chat_id):
             return jsonify({"error": True, "error_message": "That chat was not found."}), 404
         return jsonify({"error": False, "deleted": chat_id})
@@ -249,6 +259,8 @@ def register(app, db_file):
         ids, chat_id = _ids(data), _chat_id(data)
         if ids is None or chat_id is None:
             return jsonify({"error": True, "error_message": "Parent_id, Employee_id and chat_id are required."}), 400
+        if require_member(db_file, data)[0] is None:
+            return jsonify({"error": True, "error_message": "Your session has ended. Sign in again."}), 401
         title = " ".join(str(data.get("title") or "").split())[:80]
         if not title:
             return jsonify({"error": True, "error_message": "Title cannot be empty."}), 400

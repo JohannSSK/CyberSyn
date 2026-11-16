@@ -3,6 +3,8 @@ import urllib.request
 
 from flask import jsonify, request
 
+from auth import admin_from_token, member_from_token
+
 SKIP = ("tts", "image", "embedding", "lyria", "veo", "imagen", "aqa", "robotics", "live", "audio", "computer-use", "transcribe", "realtime", "search", "instruct", "moderation", "dall", "whisper", "davinci", "babbage")
 
 
@@ -36,10 +38,16 @@ def anthropic_models(key):
     return [m["id"] for m in body.get("data", [])]
 
 
-def register(app):
+def register(app, db_file=None):
     @app.post("/api/admin/employee/models")
     def list_models():
         data = request.get_json(silent=True) or {}
+        # Listing models makes an outbound call on the caller's behalf, so it
+        # needs a live session rather than being an open relay.
+        if db_file is not None:
+            token = data.get("session_token")
+            if member_from_token(db_file, token) is None and admin_from_token(db_file, token) is None:
+                return jsonify({"models": [], "message": "Your session has ended. Sign in again."}), 401
         key = str(data.get("API_KEY") or "").strip()
         if not key:
             return jsonify({"models": [], "message": "Paste an API key first."}), 400

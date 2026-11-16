@@ -1,27 +1,10 @@
 import json
-from datetime import datetime, timezone
 
 from flask import jsonify, request
 
-from admin_session import _connect, _hash
+from admin_session import _connect
+from auth import admin_from_token
 from block_log import block_rows
-
-
-def admin_from_token(db_file, token):
-    if not isinstance(token, str) or not token.strip():
-        return None
-    con = _connect(db_file)
-    row = con.execute(
-        "SELECT a.id, a.username, s.expires_at FROM ADMIN_SESSIONS s "
-        "JOIN ADMINS a ON a.id = s.admin_id WHERE s.token_hash = ?",
-        (_hash(token.strip()),),
-    ).fetchone()
-    con.close()
-    if row is None:
-        return None
-    if datetime.fromisoformat(row["expires_at"]) < datetime.now(timezone.utc):
-        return None
-    return row
 
 
 def count_answered(raw):
@@ -82,17 +65,21 @@ def register(app, db_file):
             checks_on = sum(int(s[k]) for k in ("check1", "check2", "check3")) if s else 3
             answered = answered_map.get(emp["id"], 0)
             emp_blocks = blocks.get(emp["id"], [])
-            blocked = len(emp_blocks)
+            # An approved override is kept in the audit trail, but it is not a
+            # block: the message was sent, so it is already counted as answered.
+            stopped = [b for b in emp_blocks if b["stage"] != "override"]
+            blocked = len(stopped)
             sent = answered + blocked
             members.append({
                 "username": emp["username"],
                 "sent": sent,
                 "answered": answered,
                 "blocked": blocked,
+                "overrides": len(emp_blocks) - blocked,
                 "block_rate": pct(blocked, sent),
                 "checks_on": checks_on,
-                "reasons": ranked(tally(b["reason"] for b in emp_blocks), blocked),
-                "stages": ranked(tally(b["stage"] for b in emp_blocks), blocked),
+                "reasons": ranked(tally(b["reason"] for b in stopped), blocked),
+                "stages": ranked(tally(b["stage"] for b in stopped), blocked),
             })
 
         total_sent = sum(m["sent"] for m in members)

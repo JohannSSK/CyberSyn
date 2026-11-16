@@ -80,6 +80,7 @@ document.addEventListener('DOMContentLoaded', () => {
         adminUsername: null,
         employeeId: null,
         employeeUsername: null,
+        employeeToken: null,
         lastInterceptedPrompt: null,
         settings: {
             check1: true,
@@ -530,6 +531,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (!data.error) {
                 state.employeeId = data.Employee_id;
+                state.employeeToken = data.session_token || null;
                 applyServerSettings(data.settings);
                 state.employeeUsername = username;
 
@@ -609,6 +611,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function handleWorkspaceLogout() {
         state.employeeId = null;
         state.employeeUsername = null;
+        state.employeeToken = null;
         employee.password.value = '';
         switchView('portal');
     }
@@ -647,6 +650,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const payload = {
             Parent_id: state.parentId,
             Employee_id: state.employeeId,
+            session_token: state.employeeToken,
             check1: Boolean(workspace.check1.checked),
             check2: Boolean(workspace.check2.checked),
             check3: Boolean(workspace.check3.checked),
@@ -742,9 +746,13 @@ document.addEventListener('DOMContentLoaded', () => {
         Employee_id: state.employeeId,
         API_KEY: workspace.apiKey.value.trim(),
         MODEL_NAME: workspace.modelName.value.trim() || "gpt-4o-mini",
+        ...flags,
         prompt: promptText,
         bypass: Boolean(isBypass),
-        session_token: isBypass ? state.bypassToken : null,
+        // The member's own session proves who is sending; an administrator's
+        // session is sent separately and only for an approved override.
+        session_token: state.employeeToken,
+        admin_token: isBypass ? state.bypassToken : null,
         chat_id: activeChatId
     };
     state.bypassToken = null;
@@ -1041,7 +1049,11 @@ function appendMessageBubble(text, sender, isBypass = false, animate = false) {
 }
 
     async function chatApi(path, extra) {
-        const body = Object.assign({ Parent_id: state.parentId, Employee_id: state.employeeId }, extra || {});
+        const body = Object.assign({
+            Parent_id: state.parentId,
+            Employee_id: state.employeeId,
+            session_token: state.employeeToken
+        }, extra || {});
         const res = await fetch(path, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -1265,7 +1277,7 @@ function appendMessageBubble(text, sender, isBypass = false, animate = false) {
             const res = await fetch("/api/admin/employee/models", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ API_KEY: key })
+                body: JSON.stringify({ API_KEY: key, session_token: state.employeeToken })
             });
             const data = await res.json();
             if (!res.ok || !data.models || !data.models.length) { lastKey = ""; return; }
