@@ -8,35 +8,58 @@ back to the member's stored key.
 
     python3 tools/test_models.py
 """
-import os, sys, tempfile
+import os
+import sys
+import tempfile
 
 DB = tempfile.mktemp(suffix=".db")
 os.environ["CYBERSYN_DB_FILE"] = DB
 sys.path.insert(0, "src")
 
-from app import create_app
-import db as db_module
+import providers  # noqa: E402
 
-db_module.seed()   # creates admin johann / admin_secret_123
+from app import create_app  # noqa: E402
+import db as db_module  # noqa: E402
+
+db_module.seed("tester", "test-pw-123")   # no default account exists
 app = create_app()
 con = app.test_client()
 
 captured = {}
 import routes.chat_api  # noqa: F401  (registered below)
 
-# Stub the outbound call so we can see which key the route actually used.
-import models_route
-def fake_openai(key):
-    captured["key"] = key
-    return ["gpt-4o", "gpt-4o-mini"]
-models_route.openai_models = fake_openai
+
+# Stub the one outbound call so we can see which key and which address the
+# route actually used. Everything above it is the real code path.
+def fake_fetch_json(url, headers, provider, timeout=None):
+    captured["url"] = url
+    captured["headers"] = headers
+    captured["provider"] = provider.key
+    if "openai.com" not in url:
+        raise providers.ProviderError(provider.key, "the provider returned HTTP 401",
+                                      status=401)
+    return {
+        "data": [
+            {"id": "gpt-4o"},
+            {"id": "gpt-4o-mini"},
+            {"id": "text-embedding-3-large"},   # not a chat model
+            {"id": "tts-1"},                    # not a chat model
+        ]
+    }
+
+
+providers.fetch_json = fake_fetch_json
 
 results = []
+
+
 def check(name, ok, extra=""):
     results.append((name, ok, extra))
-    print(("  PASS  " if ok else "  FAIL  ") + name + (f" -> {extra}" if extra and not ok else ""))
+    print(("  PASS  " if ok else "  FAIL  ") + name
+          + (f" -> {extra}" if extra and not ok else ""))
 
-r = con.post("/api/admin/login", json={"username": "johann", "password": "admin_secret_123"})
+
+r = con.post("/api/admin/login", json={"username": "tester", "password": "test-pw-123"})
 check("admin signs in", r.status_code == 200, r.get_json())
 admin = r.get_json()
 admin_token, parent_id = admin["session_token"], int(admin["Parent_id"])
@@ -53,20 +76,40 @@ member = r.get_json()
 SAVED_KEY = "sk-saved-key-ABCD"
 member_body = {"session_token": member["session_token"],
                "Parent_id": parent_id, "Employee_id": member["Employee_id"]}
-r = con.post("/api/admin/employee/settings", json=dict(member_body, API_KEY=SAVED_KEY))
-check("key saved", r.status_code == 200, r.get_json())
+
+# Saving is an administrator action now, so it carries the admin's approval.
+r = con.post("/api/admin/employee/settings",
+             json=dict(member_body, API_KEY=SAVED_KEY, admin_token=admin_token))
+check("key saved with administrator approval", r.status_code == 200, r.get_json())
+
+r = con.post("/api/admin/employee/settings", json=dict(member_body, API_KEY="sk-nope"))
+check("key saved without approval -> 401", r.status_code == 401, r.get_json())
+check("refusal explains what is needed",
+      "administrator" in (r.get_json().get("error_message") or "").lower(),
+      r.get_json())
 
 # The regression: no API_KEY in the body, only a session token.
+captured.clear()
 r = con.post("/api/admin/employee/models", json={"session_token": member["session_token"]})
 body = r.get_json()
 check("models route returns 200 with no pasted key", r.status_code == 200, body)
-check("route used the SAVED key", captured.get("key") == SAVED_KEY, repr(captured.get("key")))
-check("models listed", body.get("models") == ["gpt-4o", "gpt-4o-mini"], body)
+check("route used the SAVED key",
+      (captured.get("headers") or {}).get("Authorization") == "Bearer " + SAVED_KEY,
+      repr(captured.get("headers")))
+check("models listed, chat models only",
+      body.get("models") == ["gpt-4o", "gpt-4o-mini"], body)
+check("provider reported back", body.get("provider") == "openai", body)
 
 # A freshly pasted key still wins over the stored one.
 captured.clear()
 r = con.post("/api/admin/employee/models", json=dict(member_body, API_KEY="sk-pasted-XYZ"))
-check("pasted key takes precedence", captured.get("key") == "sk-pasted-XYZ", repr(captured.get("key")))
+check("pasted key takes precedence",
+      (captured.get("headers") or {}).get("Authorization") == "Bearer sk-pasted-XYZ",
+      repr(captured.get("headers")))
+
+# Reading settings needs no approval; only changing them does.
+r = con.post("/api/admin/employee/settings", json=member_body)
+check("settings can be read without approval", r.status_code == 200, r.get_json())
 
 # No key anywhere -> a clear 400, not a crash.
 con.post("/api/admin/employee", json={"method": "add", "Parent_id": parent_id,
@@ -80,6 +123,19 @@ check("no key anywhere -> 400", r.status_code == 400, r.get_json())
 # Anonymous callers are still refused.
 r = con.post("/api/admin/employee/models", json={})
 check("anonymous refused", r.status_code == 401, r.get_json())
+
+r = con.post("/api/admin/employee/providers", json={})
+check("anonymous cannot list providers", r.status_code == 401, r.get_json())
+
+r = con.post("/api/admin/employee/providers", json=member_body)
+names = [p["key"] for p in r.get_json().get("providers", [])]
+check("provider list is offered", r.status_code == 200 and "auto" in names, r.get_json())
+check("gemini is offered", "gemini" in names, names)
+check("groq is offered", "groq" in names, names)
+
+# A member's own session may not quietly change policy.
+r = con.post("/api/admin/employee/settings", json=dict(member_body, check1=False))
+check("turning a check off needs approval", r.status_code == 401, r.get_json())
 
 os.unlink(DB)
 failed = [n for n, ok, _ in results if not ok]

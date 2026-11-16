@@ -11,7 +11,10 @@ import json, sys, threading, tempfile, os
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 sys.path.insert(0, "src")
-import models_route
+import providers
+from providers import ProviderError
+
+PROBE = providers.get("custom")
 
 results = []
 def check(name, ok, extra=""):
@@ -39,9 +42,9 @@ Handler.code, Handler.body = 401, json.dumps(
                           "You can find your API key at https://platform.openai.com.",
                "type": "invalid_request_error"}}).encode()
 try:
-    models_route.fetch_json(URL, {"Authorization": "Bearer sk-bad"}, "openai")
+    providers.fetch_json(URL, {"Authorization": "Bearer sk-bad"}, providers.get("openai"))
     check("401 raises", False, "no exception")
-except models_route.ProviderError as e:
+except ProviderError as e:
     check("401 carries the status", e.status == 401, e.status)
     check("401 repeats the provider's reason", "Incorrect API key provided" in e.detail, e.detail)
 
@@ -49,23 +52,23 @@ except models_route.ProviderError as e:
 Handler.code, Handler.body = 429, json.dumps(
     {"error": {"message": "You exceeded your current quota, please check your plan."}}).encode()
 try:
-    models_route.fetch_json(URL, {}, "openai")
-except models_route.ProviderError as e:
+    providers.fetch_json(URL, {}, providers.get("openai"))
+except ProviderError as e:
     check("429 explanation surfaced", "quota" in e.detail.lower(), e.detail)
 
 # 3. A body that is not JSON at all (a proxy login page, say).
 Handler.code, Handler.body = 200, b"<html>sign in to the network</html>"
 try:
-    models_route.fetch_json(URL, {}, "gemini")
+    providers.fetch_json(URL, {}, providers.get("gemini"))
     check("non-JSON body detected", False, "no exception")
-except models_route.ProviderError as e:
+except ProviderError as e:
     check("non-JSON body detected", "not JSON" in e.detail, e.detail)
 
 # 4. Unreachable host.
 try:
-    models_route.fetch_json("http://127.0.0.1:9/models", {}, "anthropic")
+    providers.fetch_json("http://127.0.0.1:9/models", {}, providers.get("anthropic"))
     check("connection failure detected", False, "no exception")
-except models_route.ProviderError as e:
+except ProviderError as e:
     check("connection failure names the provider", e.provider == "anthropic", e.provider)
     check("connection failure is readable", "could not connect" in e.detail, e.detail)
 
@@ -73,14 +76,14 @@ except models_route.ProviderError as e:
 Handler.code, Handler.body = 401, json.dumps(
     {"error": {"message": "Incorrect API key provided: sk-SECRET-1234."}}).encode()
 try:
-    models_route.fetch_json(URL, {}, "openai")
-except models_route.ProviderError as e:
+    providers.fetch_json(URL, {}, providers.get("openai"))
+except ProviderError as e:
     check("detail is truncated, not unbounded", len(e.detail) <= 400, len(e.detail))
 
 # 6. The happy path still parses.
 Handler.code, Handler.body = 200, json.dumps(
     {"data": [{"id": "gpt-4o"}, {"id": "tts-1"}]}).encode()
-body = models_route.fetch_json(URL, {}, "openai")
+body = providers.fetch_json(URL, {}, providers.get("openai"))
 check("success returns parsed JSON", body["data"][0]["id"] == "gpt-4o", body)
 
 srv.shutdown()

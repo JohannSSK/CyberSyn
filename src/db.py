@@ -35,6 +35,8 @@ CREATE TABLE IF NOT EXISTS SETTINGS (
     check3      INTEGER NOT NULL DEFAULT 1,
     API_KEY     TEXT NOT NULL DEFAULT '',
     MODEL_NAME  TEXT NOT NULL DEFAULT 'gpt-4o-mini',
+    PROVIDER    TEXT NOT NULL DEFAULT 'auto',
+    API_BASE    TEXT NOT NULL DEFAULT '',
     PRIMARY KEY (Parent_id, Employee_id)
 );
 """
@@ -43,7 +45,7 @@ EXPECTED_COLUMNS = {
     "ADMINS": {"id", "username", "password"},
     "EMPLOYEES": {"id", "Parent_id", "username", "password", "CHAT_LOGS"},
     "SETTINGS": {"Parent_id", "Employee_id", "check1", "check2", "check3",
-                 "API_KEY", "MODEL_NAME"},
+                 "API_KEY", "MODEL_NAME", "PROVIDER", "API_BASE"},
 }
 
 
@@ -75,8 +77,24 @@ def init_db():
     cols = {r[1] for r in con.execute("PRAGMA table_info(EMPLOYEES)")}
     if "created_at" not in cols:
         con.execute("ALTER TABLE EMPLOYEES ADD COLUMN created_at TEXT")
+    _add_settings_columns(con)
     con.commit()
     con.close()
+
+
+# Columns added after the first release. CREATE TABLE IF NOT EXISTS never
+# touches a table that exists, so live databases need the ALTER.
+SETTINGS_MIGRATIONS = {
+    "PROVIDER": "TEXT NOT NULL DEFAULT 'auto'",
+    "API_BASE": "TEXT NOT NULL DEFAULT ''",
+}
+
+
+def _add_settings_columns(con):
+    cols = {r[1] for r in con.execute("PRAGMA table_info(SETTINGS)")}
+    for name, definition in SETTINGS_MIGRATIONS.items():
+        if name not in cols:
+            con.execute(f"ALTER TABLE SETTINGS ADD COLUMN {name} {definition}")
 
 
 def check_schema():
@@ -95,8 +113,35 @@ def check_schema():
         )
 
 
-def seed(username="johann", password="admin_secret_123"):
-    """Create the demonstration administrator if it does not exist."""
+def seed(username=None, password=None):
+    """Create one administrator.
+
+    There is no default account. A gateway that ships with a known
+    username and password is a gateway anyone can sign in to, so both have
+    to be supplied — by argument, or by CYBERSYN_SEED_USERNAME and
+    CYBERSYN_SEED_PASSWORD. Given a username but no password, a random one
+    is generated and printed once.
+    """
+    import os
+    import secrets
+
+    username = username or os.environ.get("CYBERSYN_SEED_USERNAME")
+    password = password or os.environ.get("CYBERSYN_SEED_PASSWORD")
+    if not username:
+        print(
+            "Refusing to create an account with a default username.\n"
+            "  python3 src/app.py seed <username> [password]\n"
+            "  CYBERSYN_SEED_USERNAME=... CYBERSYN_SEED_PASSWORD=... "
+            "python3 src/app.py seed",
+            file=sys.stderr,
+        )
+        return 1
+
+    generated = False
+    if not password:
+        password = secrets.token_urlsafe(18)
+        generated = True
+
     con = connect()
     row = con.execute(
         "SELECT id FROM ADMINS WHERE username = ?", (username,)
@@ -107,7 +152,12 @@ def seed(username="johann", password="admin_secret_123"):
             (username, hash_password(password)),
         )
         con.commit()
-        print(f"Created admin {username} / {password}")
+        print(f"Created admin '{username}'.")
     else:
-        print(f"Admin {username} already exists.")
+        print(f"Admin '{username}' already exists.")
+        con.close()
+        return 0
     con.close()
+    if generated:
+        print(f"Generated password (shown once): {password}")
+    return 0

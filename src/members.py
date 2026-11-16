@@ -47,9 +47,27 @@ def default_settings_values(parent_id):
             "check1": int(row["check1"]), "check2": int(row["check2"]),
             "check3": int(row["check3"]), "API_KEY": row["API_KEY"] or "",
             "MODEL_NAME": row["MODEL_NAME"] or DEFAULT_MODEL,
+            "PROVIDER": _provider_of(row), "API_BASE": _base_of(row),
         }
-    return {"check1": 1, "check2": 1, "check3": 1,
-            "API_KEY": "", "MODEL_NAME": DEFAULT_MODEL}
+    return {"check1": 1, "check2": 1, "check3": 1, "API_KEY": "",
+            "MODEL_NAME": DEFAULT_MODEL, "PROVIDER": "auto", "API_BASE": ""}
+
+
+def _value(row, name, default=""):
+    """Read a column that older databases may not have yet."""
+    try:
+        value = row[name]
+    except (IndexError, KeyError):
+        return default
+    return default if value is None else value
+
+
+def _provider_of(row):
+    return _value(row, "PROVIDER", "auto") or "auto"
+
+
+def _base_of(row):
+    return _value(row, "API_BASE", "") or ""
 
 
 def create_default_settings(parent_id, employee_id):
@@ -64,9 +82,11 @@ def create_default_settings(parent_id, employee_id):
     d = default_settings_values(parent_id)
     db.execute(
         "INSERT INTO SETTINGS (Parent_id, Employee_id, check1, check2, check3, "
-        "API_KEY, MODEL_NAME) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "API_KEY, MODEL_NAME, PROVIDER, API_BASE) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (parent_id, employee_id, d["check1"], d["check2"], d["check3"],
-         d["API_KEY"], d["MODEL_NAME"]),
+         d["API_KEY"], d["MODEL_NAME"], d.get("PROVIDER", "auto"),
+         d.get("API_BASE", "")),
     )
     db.commit()
 
@@ -94,6 +114,8 @@ def settings_payload(parent_id, employee_id, row):
         "API_KEY": "",
         "API_KEY_MASK": mask_stored_key(row["API_KEY"]),
         "MODEL_NAME": row["MODEL_NAME"] or DEFAULT_MODEL,
+        "PROVIDER": _provider_of(row),
+        "API_BASE": _base_of(row),
     }
 
 
@@ -120,8 +142,44 @@ def settings_updates(data):
     if "MODEL_NAME" in data:
         if not non_empty_str(data["MODEL_NAME"]):
             raise ApiError("'MODEL_NAME' must be a non-empty string.", 400)
-        updates["MODEL_NAME"] = data["MODEL_NAME"].strip()
+        updates["MODEL_NAME"] = data["MODEL_NAME"].strip()[:200]
+    if "PROVIDER" in data:
+        updates["PROVIDER"] = _clean_provider(data["PROVIDER"])
+    if "API_BASE" in data:
+        updates["API_BASE"] = _clean_base(data["API_BASE"])
     return updates
+
+
+def _clean_provider(value):
+    """A provider is one of the registry's keys, or 'auto'."""
+    from errors import ApiError
+    from providers import get
+
+    text = str(value or "").strip().lower()
+    if text == "auto":
+        return "auto"
+    if get(text) is None:
+        raise ApiError(f"'{text}' is not a provider this gateway supports.", 400)
+    return text
+
+
+def _clean_base(value):
+    """An optional custom address. Empty clears it; otherwise it is checked.
+
+    The check matters: this is a URL a user types and the server is what
+    would fetch it, so an unchecked value turns the gateway into a way to
+    reach things inside the network.
+    """
+    from errors import ApiError
+    from providers import ProviderError, validate_base_url
+
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    try:
+        return validate_base_url(text)
+    except ProviderError as exc:
+        raise ApiError(str(exc), 400)
 
 
 def save_settings(parent_id, employee_id, updates):
@@ -134,3 +192,8 @@ def save_settings(parent_id, employee_id, updates):
         )
         db.commit()
     return get_settings(parent_id, employee_id)
+
+
+def provider_and_base(settings_row):
+    """(provider, api_base) for a settings row, tolerating older schemas."""
+    return _provider_of(settings_row), _base_of(settings_row)

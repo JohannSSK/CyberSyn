@@ -7,7 +7,8 @@ because setting team policy is the administrator's job).
 
 from flask import Blueprint
 
-from auth import (admin_from_token, create_employee_session, require_member,
+from auth import (admin_from_token, create_employee_session, member_from_token,
+                  require_member, revoke_employee_session,
                   revoke_employee_sessions)
 from block_log import record_activity
 from config import DB_FILE
@@ -21,6 +22,21 @@ from members import (create_default_settings, employee_row, get_settings,
 from passwords import hash_password, upgrade_password, verify_password
 
 member_api = Blueprint("member_api", __name__)
+
+
+def require_admin_approval(data, parent_id):
+    """Demand a live administrator session for this workspace.
+
+    Returns the administrator row. The browser asks for the password and
+    sends the token it gets back; this is what makes the answer binding,
+    because a client-side check alone would be a suggestion.
+    """
+    admin = admin_from_token(DB_FILE, data.get("admin_token"))
+    if admin is None or int(admin["id"]) != parent_id:
+        raise ApiError(
+            "Changing these settings needs the administrator password.", 401
+        )
+    return admin
 
 
 def _credentials(data):
@@ -133,6 +149,24 @@ def employee_login():
     }
 
 
+@member_api.post("/api/admin/employee/logout")
+def employee_logout():
+    """End the caller's own session on the server as well as in the browser.
+
+    Without this, signing out only cleared localStorage and the token stayed
+    valid for a week — a copy of it could not be revoked by the member who
+    was given it.
+    """
+    data = get_json_dict()
+    if data is None:
+        return fail("Request body must be a JSON object.", 400)
+    token = data.get("session_token")
+    member = member_from_token(DB_FILE, token)
+    if member is not None:
+        revoke_employee_session(DB_FILE, token)
+    return ok()
+
+
 @member_api.post("/api/admin/employee/settings")
 def employee_settings():
     """Read or change a member's policy.
@@ -162,6 +196,16 @@ def employee_settings():
         updates = settings_updates(data)
     except ApiError as exc:
         return fail(exc.message, exc.status)
+
+    # Reading policy is the member's own business; changing it is not. These
+    # settings decide whether prompts are screened and where they are sent,
+    # so a member cannot turn them down on their own authority — including
+    # by replaying a request with the checks switched off.
+    if updates:
+        try:
+            require_admin_approval(data, parent_id)
+        except ApiError as exc:
+            return fail(exc.message, exc.status)
 
     create_default_settings(parent_id, employee_id)
     row = save_settings(parent_id, employee_id, updates)

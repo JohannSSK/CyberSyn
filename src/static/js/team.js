@@ -87,5 +87,8 @@
     }
 
     Dom.on($("#btn-refresh"), "click", function () { load($("#btn-refresh")); });
-    load();
+    window.Shell.withAdminPage({
+        title: "Team",
+        what: "every member and how their gate is configured"
+    }).then(function () { load(); }).catch(function () { });
 })();

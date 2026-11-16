@@ -8,121 +8,24 @@ live session — otherwise it would be an open relay for anyone who finds the
 port.
 """
 
-import json
-import urllib.error
-import urllib.request
-
 from flask import Blueprint
 
 from auth import admin_from_token, member_from_token
 from config import DB_FILE
 from members import get_settings
+from providers import (ProviderError, best_error, choices, detect, get,
+                       validate_base_url)
 from secret_store import decrypt_secret
 from web import get_json_dict
 
 models_api = Blueprint("models_api", __name__)
 
-# Model families that cannot hold a chat conversation.
-SKIP = ("tts", "image", "embedding", "lyria", "veo", "imagen", "aqa",
-        "robotics", "live", "audio", "computer-use", "transcribe", "realtime",
-        "search", "instruct", "moderation", "dall", "whisper", "davinci",
-        "babbage")
 
-TIMEOUT = 20
-
-
-class ProviderError(Exception):
-    """A provider call failed, carrying enough detail to act on.
-
-    The old code reported only the exception's class name, so a rejected key
-    and a network outage both came back as "Could not reach openai: HTTPError"
-    and there was nothing to fix from.
-    """
-
-    def __init__(self, provider, detail, status=None):
-        super().__init__(detail)
-        self.provider = provider
-        self.detail = detail
-        self.status = status
-
-
-def fetch_json(url, headers, provider):
-    """GET JSON, turning every transport or HTTP failure into ProviderError."""
-    request = urllib.request.Request(
-        url, headers=dict(headers, **{"User-Agent": "CyberSyn/1.0"})
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
-            return json.load(response)
-    except urllib.error.HTTPError as exc:
-        # The provider's own explanation is the useful part: "Incorrect API
-        # key provided", "You exceeded your current quota", and so on.
-        detail = ""
-        try:
-            body = exc.read().decode("utf-8", "replace")[:400]
-        except Exception:  # noqa: BLE001 - the body is a nicety, not a need
-            body = ""
-        if body:
-            try:
-                parsed = json.loads(body)
-                detail = (parsed.get("error") or {}).get("message", "") or \
-                    parsed.get("message", "")
-            except ValueError:
-                detail = body.strip().splitlines()[0][:200] if body.strip() else ""
-        raise ProviderError(
-            provider,
-            detail or f"the provider returned HTTP {exc.code}",
-            status=exc.code,
-        )
-    except urllib.error.URLError as exc:
-        raise ProviderError(provider, f"could not connect ({exc.reason})")
-    except json.JSONDecodeError:
-        raise ProviderError(provider, "the provider returned something that was not JSON")
-    except TimeoutError:
-        raise ProviderError(provider, f"no answer within {TIMEOUT}s")
-
-
-def openai_models(key):
-    body = fetch_json(
-        "https://api.openai.com/v1/models",
-        {"Authorization": "Bearer " + key},
-        "openai",
-    )
-    names = [m["id"] for m in body.get("data", [])]
-    chat = [n for n in names if not any(s in n for s in SKIP)]
-    return sorted(chat) or sorted(names)
-
-
-def anthropic_models(key):
-    body = fetch_json(
-        "https://api.anthropic.com/v1/models?limit=100",
-        {"x-api-key": key, "anthropic-version": "2023-06-01"},
-        "anthropic",
-    )
-    return sorted(m["id"] for m in body.get("data", []))
-
-
-def gemini_models(key):
-    body = fetch_json(
-        "https://generativelanguage.googleapis.com/v1beta/models?key=" + key,
-        {},
-        "gemini",
-    )
-    names = [
-        m["name"].split("/")[-1]
-        for m in body.get("models", [])
-        if "generateContent" in (m.get("supportedGenerationMethods") or [])
-    ]
-    return ["gemini/" + n for n in sorted(names)
-            if n.startswith("gemini") and not any(s in n for s in SKIP)]
-
-
-def guess_provider(key):
-    if key.startswith("sk-ant-"):
-        return "anthropic"
-    if key.startswith("AIza"):
-        return "gemini"
-    return "openai"
+def _stored_key(member, admin):
+    """The key already saved for this member, decrypted."""
+    parent_id = member["Parent_id"] if member else admin["id"]
+    employee_id = member["Employee_id"] if member else 0
+    return decrypt_secret(get_settings(parent_id, employee_id)["API_KEY"] or "").strip()
 
 
 @models_api.post("/api/admin/employee/models")
@@ -136,42 +39,66 @@ def list_models():
 
     key = str(data.get("API_KEY") or "").strip()
     if not key:
-        # No key pasted: use the one already saved for this member. The field
-        # only ever holds a mask, so asking the caller to re-paste a saved key
-        # made the list impossible to refresh after the first save.
-        parent_id = member["Parent_id"] if member else admin["id"]
-        employee_id = member["Employee_id"] if member else 0
-        key = decrypt_secret(get_settings(parent_id, employee_id)["API_KEY"] or "").strip()
+        # No key pasted: use the one already saved. The field only ever holds
+        # a mask, so demanding a re-paste made the list impossible to refresh
+        # after the first save.
+        key = _stored_key(member, admin)
         if not key:
             return {"models": [], "message": "Paste an API key first."}, 400
 
-    provider = str(data.get("provider") or guess_provider(key)).strip().lower()
+    requested = str(data.get("provider") or "auto").strip().lower()
+    base = str(data.get("API_BASE") or "").strip()
+
+    # Only a named provider may take a custom address, and it is checked
+    # before the request goes out: this is a URL a user typed, and the server
+    # is what would be making the call.
+    if base and requested in ("auto", "custom", ""):
+        named = get(requested) if requested not in ("auto", "") else get("custom")
+        try:
+            base = validate_base_url(base)
+        except ProviderError as exc:
+            exc.label = named.label
+            return {"models": [], "provider": named.key, "message": str(exc)}, 400
+
     try:
-        if provider == "anthropic":
-            models = anthropic_models(key)
-        elif provider == "gemini":
-            models = gemini_models(key)
-        else:
-            models = openai_models(key)
+        provider, models, errors = detect(key, requested or "auto", base)
     except ProviderError as exc:
-        # Name the provider and repeat what it said, so the message tells the
-        # member whether the key, the account or the network is at fault.
+        exc.label = (get(exc.provider) or get("custom")).label
+        return {"models": [], "provider": exc.provider, "status": exc.status,
+                "message": str(exc)}, 400
+
+    if provider is None:
+        failure = best_error(errors)
         return {
             "models": [],
-            "provider": exc.provider,
-            "status": exc.status,
-            "message": f"{exc.provider}: {exc.detail}",
-        }, 502
-    except Exception as exc:  # noqa: BLE001 - never leak a trace to the client
-        return {
-            "models": [],
-            "provider": provider,
-            "message": f"{provider}: {type(exc).__name__}",
+            "message": str(failure) if failure else "That key returned no models.",
+            "tried": [e.provider for e in errors],
         }, 502
 
-    if not models:
-        return {"models": [], "message": "That key returned no usable models."}, 200
-    return {"models": models, "message": None}
+    # Names come back namespaced for LiteLLM ("groq/llama-3.3-70b"), so the
+    # name the member picks is the name that gets used to send the prompt.
+    return {
+        "models": [provider.qualify(m) for m in models],
+        "provider": provider.key,
+        "provider_label": provider.label,
+        "message": None,
+    }
+
+
+@models_api.post("/api/admin/employee/providers")
+def list_providers():
+    """The providers the connection page offers.
+
+    A session is required because it tells the browser which addresses this
+    deployment is willing to call.
+    """
+    data = get_json_dict() or {}
+    token = data.get("session_token")
+    member = member_from_token(DB_FILE, token)
+    admin = None if member else admin_from_token(DB_FILE, token)
+    if member is None and admin is None:
+        return {"providers": [], "message": "Your session has ended. Sign in again."}, 401
+    return {"providers": choices(), "message": None}
 
 
 def register(app):

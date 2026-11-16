@@ -68,6 +68,24 @@
                     <div class="card-title"><span data-icon="key"></span> AI connection</div>
 
                     <div class="field" style="margin-bottom:16px">
+                        <label for="setting-provider">Provider</label>
+                        <select id="setting-provider" class="select">
+                            <option value="auto">Detect automatically</option>
+                        </select>
+                        <span class="hint" id="provider-state">Leave this on “detect” and the key
+                            is tried against every provider until one answers.</span>
+                    </div>
+
+                    <div class="field hidden" id="field-base" style="margin-bottom:16px">
+                        <label for="setting-base">Base URL</label>
+                        <input type="text" id="setting-base" class="input"
+                               placeholder="http://localhost:11434" autocomplete="off"
+                               spellcheck="false">
+                        <span class="hint">Where that provider is reached. Leave empty for the
+                            hosted address.</span>
+                    </div>
+
+                    <div class="field" style="margin-bottom:16px">
                         <label for="setting-model">Model</label>
                         <div class="row">
                             <select id="setting-model" class="select grow">
