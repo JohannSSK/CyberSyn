@@ -11,7 +11,7 @@ from ai_client import complete
 from auth import admin_from_token, require_member
 from block_log import record_activity, record_block
 from chat_store import bump_answered, save_exchange
-from config import CHECKS, DB_FILE, DEFAULT_MODEL
+from config import CHECKS, DB_FILE, DEFAULT_MODEL, ROUTES
 from errors import ApiError, ChatError
 from web import chat_response, get_json_dict, non_empty_str, to_int
 from members import (employee_row, get_settings, not_found_employee_message,
@@ -49,7 +49,7 @@ def _authorise_override(data, parent_id):
         )
 
 
-@chat_api.post("/api/admin/employee/chat")
+@chat_api.post(ROUTES["CHAT"])
 def employee_chat():
     data = get_json_dict()
     if data is None:
@@ -139,7 +139,7 @@ def employee_chat():
         return chat_response(True, message=exc.message, status=exc.status)
 
 
-@chat_api.post("/api/admin/employee/chat/regenerate")
+@chat_api.post(ROUTES["CHAT_REGENERATE"])
 def regenerate():
     """Ask the model for a different answer to the last prompt.
 

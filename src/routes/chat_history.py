@@ -10,7 +10,7 @@ from flask import Blueprint
 import chat_store
 from auth import require_member
 from block_log import record_activity
-from config import DB_FILE
+from config import DB_FILE, ROUTES
 from errors import ApiError
 from web import fail, get_json_dict, ok
 
@@ -39,7 +39,7 @@ def _chat_id(data):
         return None
 
 
-@chat_history.post("/api/admin/employee/chats")
+@chat_history.post(ROUTES["CHATS"])
 def chats_list():
     data = get_json_dict() or {}
     ids = _ids(data)
@@ -48,7 +48,7 @@ def chats_list():
     return ok(chats=chat_store.list_chats(DB_FILE, ids[0], ids[1]))
 
 
-@chat_history.post("/api/admin/employee/chats/open")
+@chat_history.post(ROUTES["CHATS_OPEN"])
 def chats_open():
     data = get_json_dict() or {}
     ids = _ids(data)
@@ -63,7 +63,7 @@ def chats_open():
     return ok(chat=chat)
 
 
-@chat_history.post("/api/admin/employee/chats/delete")
+@chat_history.post(ROUTES["CHATS_DELETE"])
 def chats_delete():
     data = get_json_dict() or {}
     ids = _ids(data)
@@ -78,7 +78,7 @@ def chats_delete():
     return ok(deleted=chat_id)
 
 
-@chat_history.post("/api/admin/employee/chats/rename")
+@chat_history.post(ROUTES["CHATS_RENAME"])
 def chats_rename():
     data = get_json_dict() or {}
     ids = _ids(data)
@@ -95,7 +95,7 @@ def chats_rename():
     return ok(chat_id=chat_id, title=title)
 
 
-@chat_history.post("/api/admin/employee/chats/search")
+@chat_history.post(ROUTES["CHATS_SEARCH"])
 def chats_search():
     """Search this member's own messages."""
     data = get_json_dict() or {}
@@ -109,7 +109,7 @@ def chats_search():
     return ok(results=results)
 
 
-@chat_history.post("/api/admin/employee/chats/message/edit")
+@chat_history.post(ROUTES["MESSAGE_EDIT"])
 def message_edit():
     data = get_json_dict() or {}
     ids = _ids(data)
@@ -134,7 +134,7 @@ def message_edit():
     return ok(messages=messages)
 
 
-@chat_history.post("/api/admin/employee/chats/message/delete")
+@chat_history.post(ROUTES["MESSAGE_DELETE"])
 def message_delete():
     data = get_json_dict() or {}
     ids = _ids(data)

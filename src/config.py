@@ -9,9 +9,6 @@ import os
 from pathlib import Path
 
 SRC_DIR = Path(__file__).resolve().parent
-STATIC_DIR = SRC_DIR / "static"
-TEMPLATES_DIR = SRC_DIR / "templates"
-ML_DIR = SRC_DIR / "MLscripts"
 
 
 def find_constants_file():
@@ -35,6 +32,23 @@ with open(CONSTANTS_FILE, "r", encoding="utf-8") as fh:
 
 PATHS = CONSTANTS["PATHS"]
 ROUTES = CONSTANTS["ROUTES"]
+
+
+def repo_path(key):
+    """A path from the PATHS table, relative to the repository root.
+
+    Every directory and file the app touches is named in constants.json and
+    resolved here, in one place. A path written directly into a module is a
+    second answer to a question the constants file has already answered.
+    """
+    return ROOT_DIR / PATHS[key]
+
+
+STATIC_DIR = repo_path("FRONTEND_DIR")
+TEMPLATES_DIR = repo_path("TEMPLATES_DIR")
+ML_DIR = repo_path("ML_DIR")
+ASSETS_DIR = repo_path("ASSETS_DIR")
+BACKEND_DIR = repo_path("BACKEND_DIR")
 
 
 def _env_flag(name, default=False):
@@ -61,8 +75,11 @@ PORT = int(os.environ.get("CYBERSYN_PORT") or CONSTANTS.get("PORT", 5000))
 DEBUG = _env_flag("CYBERSYN_DEBUG")
 
 # Tests (and a container with a mounted volume) point this somewhere else.
-DB_FILE = Path(os.environ.get("CYBERSYN_DB_FILE") or (ROOT_DIR / PATHS["DB_FILE"]))
+DB_FILE = Path(os.environ.get("CYBERSYN_DB_FILE") or repo_path("DB_FILE"))
 DB_FILE.parent.mkdir(parents=True, exist_ok=True)
+# The store named in the constants file, which is where DB_FILE lives unless
+# the environment has pointed the database somewhere else.
+BACKEND_DIR.mkdir(parents=True, exist_ok=True)
 
 # "NULL" is the wire format this API has always used for an absent value.
 # It is a string, not JSON null, because the front end was built against it.

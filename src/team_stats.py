@@ -15,7 +15,7 @@ from flask import Blueprint
 
 import block_log
 from auth import admin_from_token, _connect
-from config import DB_FILE, DEFAULT_MODEL
+from config import DB_FILE, DEFAULT_MODEL, ROUTES
 
 team_stats_api = Blueprint("team_stats_api", __name__)
 
@@ -150,7 +150,7 @@ def build_stats(db_file, parent_id):
     }
 
 
-@team_stats_api.post("/api/admin/team")
+@team_stats_api.post(ROUTES["TEAM"])
 def team():
     """Full statistics for the signed-in administrator's workspace."""
     from web import get_json_dict

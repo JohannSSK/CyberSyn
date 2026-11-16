@@ -47,6 +47,28 @@ const check = (name, ok, extra) => {
 const read = (rel) => fs.readFileSync(path.join(ROOT, "src", "static", "js", rel), "utf8");
 
 /** A page with the elements shell.js expects, and a stubbed Api. */
+/* Where the app listens, from includes/constants.json. The server binds to
+   whatever that file says, so a hardcoded 127.0.0.1:5000 here would break
+   the moment someone changes the port there. */
+function baseUrl() {
+    if (process.env.CYBERSYN_BASE) return process.env.CYBERSYN_BASE.replace(/\/$/, "");
+    let host = "127.0.0.1";
+    let port = 5000;
+    try {
+        const constants = JSON.parse(fs.readFileSync(
+            path.join(ROOT, "includes", "constants.json"), "utf8"));
+        if (constants.HOST) host = constants.HOST;
+        if (constants.PORT) port = constants.PORT;
+    } catch (err) {
+        /* A missing or malformed constants file is not this test's problem;
+           the defaults match config.py's own fallbacks. */
+    }
+    if (host === "0.0.0.0" || host === "::") host = "127.0.0.1";
+    return `http://${host}:${port}`;
+}
+
+const BASE = baseUrl();
+
 function makePage(options) {
     const opts = options || {};
     const dom = new JSDOM(
@@ -54,7 +76,7 @@ function makePage(options) {
            <div id="toast-container"></div>
            <div class="sidebar-unlock hidden" data-admin-lock></div>
          </body></html>`,
-        { url: "http://localhost:5000" + (opts.url || "/workspace"),
+        { url: BASE + (opts.url || "/workspace"),
           runScripts: "outside-only", pretendToBeVisual: true }
     );
     const win = dom.window;
@@ -268,7 +290,7 @@ console.log("\nAdministrator step-up");
 function finish() {
     console.log("\nBlocked message wording");
     const dom = new JSDOM("<!doctype html><html><body></body></html>",
-        { url: "http://localhost:5000/workspace", runScripts: "outside-only" });
+        { url: BASE + "/workspace", runScripts: "outside-only" });
     dom.window.eval(read("core/dom.js"));
     dom.window.eval(read("core/stages.js"));
     const Stages = dom.window.Stages;

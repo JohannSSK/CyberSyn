@@ -11,7 +11,7 @@ from auth import (admin_from_token, create_employee_session, member_from_token,
                   require_member, revoke_employee_session,
                   revoke_employee_sessions)
 from block_log import record_activity
-from config import DB_FILE
+from config import DB_FILE, ROUTES
 from db import get_db
 from errors import ApiError
 from web import (fail, fail_employee_login, get_json_dict, non_empty_str, ok,
@@ -48,7 +48,7 @@ def _credentials(data):
     return username.strip(), password
 
 
-@member_api.post("/api/admin/employee")
+@member_api.post(ROUTES["EMPLOYEE"])
 def employee_manage():
     """Add or remove a team member. Administrator action."""
     data = get_json_dict()
@@ -108,7 +108,7 @@ def employee_manage():
     return {"error": False, "error_message": "NULL"}
 
 
-@member_api.post("/api/admin/employee/login")
+@member_api.post(ROUTES["EMPLOYEE_LOGIN"])
 def employee_login():
     """Sign a member in and hand back their workspace."""
     from chat_store import list_chats, newest_chat
@@ -149,7 +149,7 @@ def employee_login():
     }
 
 
-@member_api.post("/api/admin/employee/logout")
+@member_api.post(ROUTES["EMPLOYEE_LOGOUT"])
 def employee_logout():
     """End the caller's own session on the server as well as in the browser.
 
@@ -167,7 +167,7 @@ def employee_logout():
     return ok()
 
 
-@member_api.post("/api/admin/employee/settings")
+@member_api.post(ROUTES["SETTINGS"])
 def employee_settings():
     """Read or change a member's policy.
 
@@ -215,7 +215,7 @@ def employee_settings():
     return settings_payload(parent_id, employee_id, row)
 
 
-@member_api.post("/api/admin/employee/account")
+@member_api.post(ROUTES["EMPLOYEE_ACCOUNT"])
 def employee_account():
     """A member changes their own username or password."""
     data = get_json_dict()
@@ -282,7 +282,7 @@ def employee_account():
     return ok(username=new_username)
 
 
-@member_api.post("/api/admin/employee/override/check")
+@member_api.post(ROUTES["OVERRIDE_CHECK"])
 def override_check():
     """Is this administrator token good enough to approve an override?
 

@@ -16,8 +16,31 @@ import os
 import sys
 import urllib.error
 import urllib.request
+from pathlib import Path
 
-BASE = (sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:5000").rstrip("/")
+
+def default_base():
+    """The address the app listens on, from includes/constants.json.
+
+    The server reads its host and port from that file, so a test that
+    hardcodes 127.0.0.1:5000 breaks the moment someone changes it there.
+    """
+    here = Path(__file__).resolve().parent
+    constants = here.parent / "includes" / "constants.json"
+    host, port = "127.0.0.1", 5000
+    try:
+        values = json.loads(constants.read_text(encoding="utf-8"))
+        host = values.get("HOST", host)
+        port = int(values.get("PORT", port))
+    except (OSError, ValueError):
+        pass
+    # 0.0.0.0 is a bind address, not somewhere to connect to.
+    if host in ("0.0.0.0", "::"):
+        host = "127.0.0.1"
+    return f"http://{host}:{port}"
+
+
+BASE = (sys.argv[1] if len(sys.argv) > 1 else default_base()).rstrip("/")
 
 PASSED = []
 FAILED = []
