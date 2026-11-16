@@ -4,10 +4,11 @@ import sys
 import warnings
 
 warnings.filterwarnings("ignore")
-import spacy
 
-nlp_en = spacy.load("en_core_web_sm")
-nlp_el = spacy.load("el_core_news_sm")
+try:
+    from model_cache import get_taggers
+except ImportError:  # pragma: no cover - standalone use from another cwd
+    from .model_cache import get_taggers
 
 PATTERNS = {
     "GREEK_AFM": r"\b\d{9}\b",
@@ -52,8 +53,7 @@ def get_line_number(text, char_offset):
     return text.count("\n", 0, char_offset) + 1
 
 
-def analyze_stdin():
-    raw_text = sys.stdin.read()
+def analyze(raw_text):
     if not raw_text.strip():
         return {
             "blocked": False,
@@ -91,8 +91,11 @@ def analyze_stdin():
                 }
             )
 
-    # 2. Check ML (spaCy) for Full Person Names (First + Last name, >= 2 words)
+    # 2. Check ML (spaCy) for Full Person Names (First + Last name, >= 2 words).
+    #    The pipelines are loaded here, not at import, so importing this module
+    #    stays cheap and the cost lands on a prompt that actually needs it.
     seen_spans = {(m["start_offset"], m["end_offset"]) for m in matches}
+    nlp_en, nlp_el = get_taggers()
     for nlp, script_regex in [
         (nlp_en, r"^[A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)+$"),
         (
@@ -168,6 +171,11 @@ def analyze_stdin():
         response["blocked"] = True
 
     return response
+
+
+def analyze_stdin():
+    """CLI entry point: read the prompt from stdin and return the verdict."""
+    return analyze(sys.stdin.read())
 
 
 if __name__ == "__main__":

@@ -31,6 +31,8 @@ os.environ["CYBERSYN_DB_FILE"] = str(Path(_TMP) / "test.db")
 sys.path.insert(0, str(SRC))
 import app as cybersyn  # noqa: E402  (import after the path/env setup)
 import auth  # noqa: E402
+import ai_client  # noqa: E402
+import scanning  # noqa: E402
 
 DB = cybersyn.DB_FILE
 
@@ -38,14 +40,17 @@ DB = cybersyn.DB_FILE
 def seed():
     """Create one administrator and one team member."""
     import sqlite3
+
+    from passwords import hash_password
+
     con = sqlite3.connect(DB)
     con.execute(
         "INSERT INTO ADMINS (username, password) VALUES (?, ?)",
-        ("boss", cybersyn.generate_password_hash("admin-pw")),
+        ("boss", hash_password("admin-pw")),
     )
     con.execute(
         "INSERT INTO EMPLOYEES (Parent_id, username, password) VALUES (?, ?, ?)",
-        (1, "member", cybersyn.generate_password_hash("member-pw")),
+        (1, "member", hash_password("member-pw")),
     )
     con.commit()
     con.close()
@@ -145,8 +150,11 @@ class RouteTests(unittest.TestCase):
 
         # Stub the two things that would need the network or a model, so the
         # tests measure authorisation only.
-        cybersyn.call_openai = lambda key, model, prompt: "stub reply"
-        cybersyn.run_check = lambda stage, prompt: {
+        # Patched where each is *used*: chat_api binds complete() at import.
+        from routes import chat_api
+
+        chat_api.complete = lambda key, model, prompt: "stub reply"
+        scanning.run_check = lambda stage, prompt: {
             "blocked": True, "stage": stage, "reason": "stub",
             "line": 1, "start": 0, "end": 1, "snippet": "", "matches": [],
         }

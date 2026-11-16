@@ -1,0 +1,95 @@
+"""In-process scanner registry.
+
+Each check used to run as a separate `python greek_pii.py` subprocess, so
+every prompt paid three interpreter start-ups and re-imported torch and
+spaCy from scratch — seconds of latency that had nothing to do with the
+actual work.
+
+This module imports the scanners once and calls them directly. The
+subprocess path survives as a fallback: if a scanner cannot be imported
+(a missing model, a broken dependency), we still try to run it as a script
+before giving up, so behaviour degrades rather than breaks.
+"""
+
+import importlib
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+ML_DIR = HERE / "MLscripts"
+
+# stage -> (module name, function name). The functions must accept a prompt
+# string and return a verdict dict with a "blocked" field.
+SCANNERS = {
+    "check1": "greek_pii",
+    "check2": "context",
+    "check3": "injection",
+}
+
+_cache = {}
+_failures = {}
+
+
+def _ensure_importable():
+    if str(ML_DIR) not in sys.path:
+        sys.path.insert(0, str(ML_DIR))
+
+
+def get_scanner(stage):
+    """Return the scanner's analyze() callable, or None if it cannot load."""
+    if stage in _failures:
+        return None
+    if stage in _cache:
+        return _cache[stage]
+
+    module_name = SCANNERS.get(stage)
+    if module_name is None:
+        _failures[stage] = "unknown stage"
+        return None
+
+    _ensure_importable()
+    try:
+        module = importlib.import_module(module_name)
+        fn = getattr(module, "analyze", None)
+        if not callable(fn):
+            raise AttributeError(f"{module_name}.analyze is not callable")
+    except Exception as exc:
+        _failures[stage] = f"{type(exc).__name__}: {exc}"
+        return None
+
+    _cache[stage] = fn
+    return fn
+
+
+def available(stage):
+    """True when this check can run in-process."""
+    return get_scanner(stage) is not None
+
+
+def disabled_reason(stage):
+    return _failures.get(stage)
+
+
+def run(stage, prompt):
+    """Run one check and return its verdict dict.
+
+    Raises RuntimeError if the check cannot run at all, so the caller can
+    keep the fail-closed guarantee: a scanner that will not run must stop
+    the prompt rather than wave it through.
+    """
+    fn = get_scanner(stage)
+    if fn is None:
+        raise RuntimeError(
+            f"{stage} is unavailable: {_failures.get(stage, 'not loaded')}"
+        )
+    return fn(prompt)
+
+
+def preload():
+    """Import every scanner module now.
+
+    Importing is cheap once the models are lazy — it only binds the
+    functions and compiles the regexes. The models themselves are loaded
+    by model_cache.warm() on a background thread.
+    """
+    return {stage: get_scanner(stage) is not None for stage in SCANNERS}

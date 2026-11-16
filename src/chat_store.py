@@ -1,14 +1,19 @@
-"""Chat storage: one CHATS row per conversation, plus lifetime answer counts.
-EMPLOYEE_STATS keeps the answered total even after a chat is deleted,
-so deleting a chat never lowers the admin team stats.
+"""Chat storage.
+
+One CHATS row per conversation, with the messages kept as a JSON array so a
+whole chat is a single read. Each message carries an id and a timestamp,
+which is what makes editing, deleting and regenerating a single message
+possible, and what the statistics page charts.
+
+EMPLOYEE_STATS keeps a lifetime answer count, so deleting a chat never
+lowers the team numbers.
 """
+
 import json
+import secrets
 from datetime import datetime, timezone
 
-from flask import jsonify, request
-
-from admin_session import _connect
-from auth import require_member
+from auth import _connect
 
 EARLIER_TITLE = "Earlier chat"
 TITLE_LEN = 48
@@ -33,6 +38,10 @@ CREATE TABLE IF NOT EXISTS EMPLOYEE_STATS (
 """
 
 
+# --------------------------------------------------------------------------
+# Helpers
+# --------------------------------------------------------------------------
+
 def _now():
     return datetime.now(timezone.utc).isoformat()
 
@@ -45,12 +54,45 @@ def _load(raw):
     return items if isinstance(items, list) else []
 
 
+def _dump(messages):
+    return json.dumps(messages, ensure_ascii=False)
+
+
+def _new_id():
+    return secrets.token_hex(8)
+
+
 def make_title(prompt):
     text = " ".join(str(prompt).split())
     if len(text) <= TITLE_LEN:
         return text
     return text[:TITLE_LEN - 3].rstrip() + "..."
 
+
+def normalise(messages):
+    """Give every message an id and a timestamp.
+
+    Chats written before this change have neither, so they are filled in
+    here rather than by a migration that could fail halfway.
+    """
+    changed = False
+    for index, item in enumerate(messages):
+        if not isinstance(item, dict):
+            continue
+        if not item.get("id"):
+            item["id"] = f"m{index}_{_new_id()}"
+            changed = True
+        if not item.get("created_at"):
+            item["created_at"] = _now()
+            changed = True
+        item.setdefault("blocked", False)
+        item.setdefault("edited", False)
+    return messages, changed
+
+
+# --------------------------------------------------------------------------
+# Schema
+# --------------------------------------------------------------------------
 
 def migrate_legacy(db_file):
     con = _connect(db_file)
@@ -63,18 +105,20 @@ def migrate_legacy(db_file):
         ).fetchone()
         if has_stats is None:
             con.execute(
-                "INSERT INTO EMPLOYEE_STATS (Parent_id, Employee_id, answered) VALUES (?, ?, ?)",
+                "INSERT INTO EMPLOYEE_STATS (Parent_id, Employee_id, answered) "
+                "VALUES (?, ?, ?)",
                 (emp["Parent_id"], emp["id"], len(logs)),
             )
         if logs:
             now = _now()
             con.execute(
-                "INSERT INTO CHATS (Parent_id, Employee_id, title, messages, created_at, updated_at) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
-                (emp["Parent_id"], emp["id"], EARLIER_TITLE,
-                 json.dumps(logs, ensure_ascii=False), now, now),
+                "INSERT INTO CHATS (Parent_id, Employee_id, title, messages, "
+                "created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+                (emp["Parent_id"], emp["id"], EARLIER_TITLE, _dump(logs), now, now),
             )
-            con.execute("UPDATE EMPLOYEES SET CHAT_LOGS = ? WHERE id = ?", ("[]", emp["id"]))
+            con.execute(
+                "UPDATE EMPLOYEES SET CHAT_LOGS = ? WHERE id = ?", ("[]", emp["id"])
+            )
             moved += 1
     con.commit()
     con.close()
@@ -85,40 +129,31 @@ def init_tables(db_file):
     con = _connect(db_file)
     con.executescript(TABLE_SQL)
     has_employees = con.execute(
-        "SELECT 1 FROM sqlite_master WHERE type = ? AND name = ?", ("table", "EMPLOYEES")
+        "SELECT 1 FROM sqlite_master WHERE type = ? AND name = ?",
+        ("table", "EMPLOYEES"),
     ).fetchone()
     con.close()
     if has_employees:
         moved = migrate_legacy(db_file)
         if moved:
-            print(f"chat_store: moved old chat history for {moved} team member(s) into CHATS.")
+            print(f"chat_store: moved old chat history for {moved} member(s) into CHATS.")
 
 
-def bump_answered(db_file, parent_id, employee_id):
-    con = _connect(db_file)
-    con.execute(
-        "INSERT OR IGNORE INTO EMPLOYEE_STATS (Parent_id, Employee_id, answered) VALUES (?, ?, 0)",
-        (parent_id, employee_id),
-    )
-    con.execute(
-        "UPDATE EMPLOYEE_STATS SET answered = answered + 1 WHERE Parent_id = ? AND Employee_id = ?",
-        (parent_id, employee_id),
-    )
-    con.commit()
-    con.close()
-
+# --------------------------------------------------------------------------
+# Reads
+# --------------------------------------------------------------------------
 
 def list_chats(db_file, parent_id, employee_id):
     con = _connect(db_file)
     rows = con.execute(
-        "SELECT id, title, messages, updated_at FROM CHATS "
+        "SELECT id, title, messages, updated_at, created_at FROM CHATS "
         "WHERE Parent_id = ? AND Employee_id = ? ORDER BY updated_at DESC, id DESC",
         (parent_id, employee_id),
     ).fetchall()
     con.close()
     return [
         {"id": r["id"], "title": r["title"], "updated_at": r["updated_at"],
-         "exchanges": len(_load(r["messages"]))}
+         "created_at": r["created_at"], "exchanges": len(_load(r["messages"]))}
         for r in rows
     ]
 
@@ -126,13 +161,22 @@ def list_chats(db_file, parent_id, employee_id):
 def get_chat(db_file, parent_id, employee_id, chat_id):
     con = _connect(db_file)
     row = con.execute(
-        "SELECT id, title, messages FROM CHATS WHERE id = ? AND Parent_id = ? AND Employee_id = ?",
+        "SELECT id, title, messages FROM CHATS WHERE id = ? AND Parent_id = ? "
+        "AND Employee_id = ?",
         (chat_id, parent_id, employee_id),
     ).fetchone()
-    con.close()
     if row is None:
+        con.close()
         return None
-    return {"id": row["id"], "title": row["title"], "messages": _load(row["messages"])}
+
+    messages, changed = normalise(_load(row["messages"]))
+    if changed:
+        con.execute(
+            "UPDATE CHATS SET messages = ? WHERE id = ?", (_dump(messages), chat_id)
+        )
+        con.commit()
+    con.close()
+    return {"id": row["id"], "title": row["title"], "messages": messages}
 
 
 def newest_chat(db_file, parent_id, employee_id):
@@ -146,31 +190,126 @@ def newest_chat(db_file, parent_id, employee_id):
     return get_chat(db_file, parent_id, employee_id, row["id"]) if row else None
 
 
-def save_exchange(db_file, parent_id, employee_id, chat_id, prompt, answer):
+def bump_answered(db_file, parent_id, employee_id):
+    con = _connect(db_file)
+    con.execute(
+        "INSERT OR IGNORE INTO EMPLOYEE_STATS (Parent_id, Employee_id, answered) "
+        "VALUES (?, ?, 0)",
+        (parent_id, employee_id),
+    )
+    con.execute(
+        "UPDATE EMPLOYEE_STATS SET answered = answered + 1 WHERE Parent_id = ? "
+        "AND Employee_id = ?",
+        (parent_id, employee_id),
+    )
+    con.commit()
+    con.close()
+
+
+# --------------------------------------------------------------------------
+# Writes
+# --------------------------------------------------------------------------
+
+def _write_messages(db_file, parent_id, employee_id, chat_id, messages):
+    con = _connect(db_file)
+    cur = con.execute(
+        "UPDATE CHATS SET messages = ?, updated_at = ? WHERE id = ? AND "
+        "Parent_id = ? AND Employee_id = ?",
+        (_dump(messages), _now(), chat_id, parent_id, employee_id),
+    )
+    con.commit()
+    ok = cur.rowcount > 0
+    con.close()
+    return ok
+
+
+def save_exchange(db_file, parent_id, employee_id, chat_id, prompt, answer,
+                  blocked=False, block_info=None):
+    """Append one exchange, creating the chat when chat_id is None."""
     now = _now()
+    entry = {
+        "id": _new_id(),
+        "prompt": prompt,
+        "answer": answer,
+        "created_at": now,
+        "blocked": bool(blocked),
+        "edited": False,
+    }
+    if blocked and block_info:
+        entry["block_info"] = block_info
+
     con = _connect(db_file)
     if chat_id is None:
         cur = con.execute(
-            "INSERT INTO CHATS (Parent_id, Employee_id, title, messages, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (parent_id, employee_id, make_title(prompt),
-             json.dumps([{"prompt": prompt, "answer": answer}], ensure_ascii=False), now, now),
+            "INSERT INTO CHATS (Parent_id, Employee_id, title, messages, "
+            "created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (parent_id, employee_id, make_title(prompt), _dump([entry]), now, now),
         )
         chat_id = cur.lastrowid
+        messages = [entry]
     else:
         row = con.execute(
-            "SELECT messages FROM CHATS WHERE id = ? AND Parent_id = ? AND Employee_id = ?",
+            "SELECT messages FROM CHATS WHERE id = ? AND Parent_id = ? AND "
+            "Employee_id = ?",
             (chat_id, parent_id, employee_id),
         ).fetchone()
-        messages = _load(row["messages"]) if row else []
-        messages.append({"prompt": prompt, "answer": answer})
+        messages = normalise(_load(row["messages"]))[0] if row else []
+        messages.append(entry)
         con.execute(
-            "UPDATE CHATS SET messages = ?, updated_at = ? WHERE id = ? AND Parent_id = ? AND Employee_id = ?",
-            (json.dumps(messages, ensure_ascii=False), now, chat_id, parent_id, employee_id),
+            "UPDATE CHATS SET messages = ?, updated_at = ? WHERE id = ? AND "
+            "Parent_id = ? AND Employee_id = ?",
+            (_dump(messages), now, chat_id, parent_id, employee_id),
         )
     con.commit()
     con.close()
-    return chat_id
+    return chat_id, entry
+
+
+def edit_message(db_file, parent_id, employee_id, chat_id, message_id, text):
+    """Replace the text of one message the member sent."""
+    chat = get_chat(db_file, parent_id, employee_id, chat_id)
+    if chat is None:
+        return None
+    for item in chat["messages"]:
+        if item.get("id") == message_id:
+            item["prompt"] = text
+            item["edited"] = True
+            item["edited_at"] = _now()
+            break
+    else:
+        return None
+    if not _write_messages(db_file, parent_id, employee_id, chat_id, chat["messages"]):
+        return None
+    return chat["messages"]
+
+
+def delete_message(db_file, parent_id, employee_id, chat_id, message_id):
+    chat = get_chat(db_file, parent_id, employee_id, chat_id)
+    if chat is None:
+        return None
+    remaining = [m for m in chat["messages"] if m.get("id") != message_id]
+    if len(remaining) == len(chat["messages"]):
+        return None
+    if not _write_messages(db_file, parent_id, employee_id, chat_id, remaining):
+        return None
+    return remaining
+
+
+def replace_answer(db_file, parent_id, employee_id, chat_id, message_id, answer):
+    """Store a regenerated answer for one message."""
+    chat = get_chat(db_file, parent_id, employee_id, chat_id)
+    if chat is None:
+        return None
+    for item in chat["messages"]:
+        if item.get("id") == message_id:
+            item["answer"] = answer
+            item["regenerated_at"] = _now()
+            break
+    else:
+        return None
+    if not _write_messages(db_file, parent_id, employee_id, chat_id, chat["messages"]):
+        return None
+    return chat["messages"]
 
 
 def rename_chat(db_file, parent_id, employee_id, chat_id, title):
@@ -197,73 +336,48 @@ def delete_chat(db_file, parent_id, employee_id, chat_id):
     return deleted
 
 
-def _ids(data):
-    if not isinstance(data, dict):
-        return None
-    try:
-        return int(data.get("Parent_id")), int(data.get("Employee_id"))
-    except (TypeError, ValueError):
-        return None
+# --------------------------------------------------------------------------
+# Search
+# --------------------------------------------------------------------------
 
+def search(db_file, parent_id, employee_id, query, limit=50):
+    """Find messages containing `query`, case-insensitively.
 
-def _chat_id(data):
-    if not isinstance(data, dict):
-        return None
-    try:
-        return int(data.get("chat_id"))
-    except (TypeError, ValueError):
-        return None
+    Returns the matching messages with their chat, so the browser can jump
+    straight to the conversation.
+    """
+    needle = (query or "").strip().lower()
+    if not needle:
+        return []
+    con = _connect(db_file)
+    rows = con.execute(
+        "SELECT id, title, messages FROM CHATS WHERE Parent_id = ? AND "
+        "Employee_id = ? ORDER BY updated_at DESC",
+        (parent_id, employee_id),
+    ).fetchall()
+    con.close()
 
-
-def register(app, db_file):
-    # Chat history is a member's own content: only that member's session may
-    # read it. An administrator's token is deliberately not accepted here.
-    @app.post("/api/admin/employee/chats")
-    def chats_list():
-        data = request.get_json(silent=True)
-        ids = _ids(data)
-        if ids is None:
-            return jsonify({"error": True, "error_message": "Parent_id and Employee_id are required."}), 400
-        if require_member(db_file, data)[0] is None:
-            return jsonify({"error": True, "error_message": "Your session has ended. Sign in again."}), 401
-        return jsonify({"error": False, "chats": list_chats(db_file, ids[0], ids[1])})
-
-    @app.post("/api/admin/employee/chats/open")
-    def chats_open():
-        data = request.get_json(silent=True)
-        ids, chat_id = _ids(data), _chat_id(data)
-        if ids is None or chat_id is None:
-            return jsonify({"error": True, "error_message": "Parent_id, Employee_id and chat_id are required."}), 400
-        if require_member(db_file, data)[0] is None:
-            return jsonify({"error": True, "error_message": "Your session has ended. Sign in again."}), 401
-        chat = get_chat(db_file, ids[0], ids[1], chat_id)
-        if chat is None:
-            return jsonify({"error": True, "error_message": "That chat was not found."}), 404
-        return jsonify({"error": False, "chat": chat})
-
-    @app.post("/api/admin/employee/chats/delete")
-    def chats_delete():
-        data = request.get_json(silent=True)
-        ids, chat_id = _ids(data), _chat_id(data)
-        if ids is None or chat_id is None:
-            return jsonify({"error": True, "error_message": "Parent_id, Employee_id and chat_id are required."}), 400
-        if require_member(db_file, data)[0] is None:
-            return jsonify({"error": True, "error_message": "Your session has ended. Sign in again."}), 401
-        if not delete_chat(db_file, ids[0], ids[1], chat_id):
-            return jsonify({"error": True, "error_message": "That chat was not found."}), 404
-        return jsonify({"error": False, "deleted": chat_id})
-
-    @app.post("/api/admin/employee/chats/rename")
-    def chats_rename():
-        data = request.get_json(silent=True)
-        ids, chat_id = _ids(data), _chat_id(data)
-        if ids is None or chat_id is None:
-            return jsonify({"error": True, "error_message": "Parent_id, Employee_id and chat_id are required."}), 400
-        if require_member(db_file, data)[0] is None:
-            return jsonify({"error": True, "error_message": "Your session has ended. Sign in again."}), 401
-        title = " ".join(str(data.get("title") or "").split())[:80]
-        if not title:
-            return jsonify({"error": True, "error_message": "Title cannot be empty."}), 400
-        if not rename_chat(db_file, ids[0], ids[1], chat_id, title):
-            return jsonify({"error": True, "error_message": "That chat was not found."}), 404
-        return jsonify({"error": False, "chat_id": chat_id, "title": title})
+    hits = []
+    for row in rows:
+        for item in normalise(_load(row["messages"]))[0]:
+            if not isinstance(item, dict):
+                continue
+            prompt, answer = str(item.get("prompt", "")), str(item.get("answer", ""))
+            haystack = f"{prompt}\n{answer}".lower()
+            if needle in haystack:
+                index = haystack.find(needle)
+                start = max(0, index - 40)
+                hits.append({
+                    "chat_id": row["id"],
+                    "chat_title": row["title"],
+                    "message_id": item.get("id"),
+                    "prompt": prompt,
+                    "answer": answer,
+                    "created_at": item.get("created_at"),
+                    "excerpt": ("…" if start else "")
+                    + f"{prompt}\n{answer}"[start:start + 160]
+                    + ("…" if len(haystack) > start + 160 else ""),
+                })
+                if len(hits) >= limit:
+                    return hits
+    return hits
