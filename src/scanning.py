@@ -157,14 +157,18 @@ def _run_subprocess(stage, prompt, timeout=CHECK_TIMEOUT):
     return result
 
 
-def run_check(stage, prompt, timeout=CHECK_TIMEOUT):
+def run_check(stage, prompt, timeout=CHECK_TIMEOUT, stop=None):
     """Run one check and return its verdict dict.
 
     Raises ChatError when the check cannot produce a verdict, so the caller
     can keep the fail-closed guarantee.
+
+    `stop` is set by screen() the moment any check refuses the prompt, so
+    the checks still running can abandon a long paste instead of pricing out
+    the rest of it. See scanners.run().
     """
     try:
-        return registry.run(stage, prompt)
+        return registry.run(stage, prompt, stop=stop)
     except Exception as exc:
         if not SCANNER_FALLBACK:
             raise ChatError(f"{stage} failed: {exc}")
@@ -191,12 +195,22 @@ def screen(prompt, flags):
     results = {}
     failures = {}
 
+    # Set the first time a check refuses the prompt. The others are already
+    # running by then, and there is nothing left for them to decide: the
+    # verdict cannot change, so they stop paying for the rest of the paste
+    # instead of finishing it. One flag per request, so a refusal here can
+    # never shorten another prompt's scan.
+    refused = threading.Event()
+
     def work(stage):
         # Each check gets whatever is left of the shared budget, so three
         # slow checks cost one budget between them rather than three.
         remaining = max(1.0, deadline - time.monotonic())
         try:
-            results[stage] = run_check(stage, prompt, remaining)
+            result = run_check(stage, prompt, remaining, stop=refused.is_set)
+            results[stage] = result
+            if result.get("blocked"):
+                refused.set()
         except Exception as exc:  # noqa: BLE001 - recorded, then refused
             failures[stage] = exc
 

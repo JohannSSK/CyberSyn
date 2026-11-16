@@ -18,6 +18,10 @@ LABELS = [
 INJECTION_LABEL = LABELS[0]
 THRESHOLD = 0.60
 
+# Score given to a line the regex caught outright. It sits above anything the
+# classifier can reach, so one such hit settles the verdict on its own.
+REGEX_SCORE = 0.99
+
 INJECTION_PATTERNS = re.compile(
     r"(ignore\s+(all\s+)?(previous|prior|above)\s+(instructions|rules|prompts)|"
     r"if\s+you\s+are\s+an?\s+(ai|llm|language\s+model|assistant)|"
@@ -35,18 +39,40 @@ CODE_SYNTAX = re.compile(
 )
 
 try:
-    from model_cache import classify
+    from model_cache import DETAIL_LINES, classify_batched
 except ImportError:  # pragma: no cover - standalone use from another cwd
-    from .model_cache import classify
+    from .model_cache import DETAIL_LINES, classify_batched
 
 
-def analyze(raw_text):
+def _already_blocked(matches):
+    """True when the injection regex has already decided the prompt is blocked.
+
+    Those hits score 0.99, above anything the classifier contributes, so the
+    remaining lines cannot change a verdict that is already made. Skipping
+    them is what stops a long paste from paying its full cost after the
+    outcome is settled. Only fires once the prompt is being refused, so a
+    prompt that reaches the model is scanned exactly as before.
+    """
+    return any(
+        m["cause"] == "PROMPT_INJECTION" and m["score"] >= REGEX_SCORE
+        for m in matches
+    )
+
+
+def analyze(raw_text, stop=None):
+    """Analyse a prompt.
+
+    `stop` is a callable returning True once another check has already
+    refused this prompt. Polled between classifier batches so a long
+    paste can be dropped part way through.
+    """
     if not raw_text.strip():
         return {
             "blocked": False,
             "score": 0.0,
             "main_cause": None,
             "matches": [],
+            "classifier_ran": False,
         }
 
     matches = []
@@ -98,26 +124,44 @@ def analyze(raw_text):
                     )
         offset += len(line)
 
+    classifier_ran = False
     if nl_chunks:
-        results = classify([c["clean"] for c in nl_chunks], LABELS)
-        if isinstance(results, dict):
-            results = [results]
+        # Lines with identical text always get the same verdict, so classify
+        # each distinct one once and copy the result back onto every copy.
+        distinct = {}
+        for chunk in nl_chunks:
+            distinct.setdefault(chunk["clean"], []).append(chunk)
+        keys = list(distinct)
 
-        for chunk, res in zip(nl_chunks, results):
-            top_label = res["labels"][0]
-            top_score = round(float(res["scores"][0]), 4)
+        # Stop early only once the verdict is settled *and* the leftover is
+        # big enough to be worth stopping for. Short prompts keep the full
+        # report, because finishing them costs almost nothing.
+        settled = _already_blocked(matches) and len(keys) > DETAIL_LINES
+        if not settled:
+            results = classify_batched(keys, LABELS, stop=stop)
+            if isinstance(results, dict):
+                results = [results]
+            # Nothing computed yet means another check refused the prompt
+            # before the first batch went in.
+            if results:
+                classifier_ran = True
 
-            if top_label == INJECTION_LABEL and top_score >= THRESHOLD:
-                matches.append(
-                    {
-                        "cause": "PROMPT_INJECTION",
-                        "score": top_score,
-                        "line": chunk["line"],
-                        "start_offset": chunk["start_offset"],
-                        "end_offset": chunk["end_offset"],
-                        "snippet": chunk["text"],
-                    }
-                )
+            for text, res in zip(keys, results):
+                top_label = res["labels"][0]
+                top_score = round(float(res["scores"][0]), 4)
+
+                if top_label == INJECTION_LABEL and top_score >= THRESHOLD:
+                    for chunk in distinct[text]:
+                        matches.append(
+                            {
+                                "cause": "PROMPT_INJECTION",
+                                "score": top_score,
+                                "line": chunk["line"],
+                                "start_offset": chunk["start_offset"],
+                                "end_offset": chunk["end_offset"],
+                                "snippet": chunk["text"],
+                            }
+                        )
 
     matches.sort(key=lambda x: x["start_offset"])
 
@@ -130,6 +174,10 @@ def analyze(raw_text):
         "end_offset": None,
         "snippet": None,
         "matches": matches,
+        # False means the regex had already refused the prompt, so the
+        # classifier was skipped. Never false on a prompt that is allowed
+        # through.
+        "classifier_ran": classifier_ran,
     }
 
     if matches:

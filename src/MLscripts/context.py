@@ -80,9 +80,9 @@ CODE_SYNTAX = re.compile(
 )
 
 try:
-    from model_cache import classify
+    from model_cache import DETAIL_LINES, classify_batched
 except ImportError:  # pragma: no cover - standalone use from another cwd
-    from .model_cache import classify
+    from .model_cache import DETAIL_LINES, classify_batched
 
 
 def get_classifier():
@@ -92,9 +92,32 @@ def get_classifier():
     return get_zero_shot()
 
 
-def analyze(raw_text):
+def _already_blocked(matches):
+    """True when a cheap regex has already decided the prompt is blocked.
+
+    The classifier is what decides *whether* to block. Once a regex has done
+    that by itself, running the model over the leftover lines can only add
+    extra highlights to a prompt that is already being refused — it cannot
+    un-block it, and it cannot change the verdict.
+
+    Deliberately narrow: a code-syntax hit is not blocking on its own, so a
+    pasted source file still goes to the classifier to find out whether it
+    carries anything worse than code.
+    """
+    return any(m["cause"] in BLOCKED_LABELS for m in matches)
+
+
+def analyze(raw_text, stop=None):
+    """Analyse a prompt.
+
+    `stop` is a callable that returns True once the verdict is already
+    settled by another check. It is polled between classifier batches
+    so a long paste can be dropped mid-scan; it never reduces the
+    scrutiny given to a prompt that is going to be sent anywhere.
+    """
     if not raw_text.strip():
-        return {"blocked": False, "score": 0.0, "main_cause": None, "matches": []}
+        return {"blocked": False, "score": 0.0, "main_cause": None,
+                "matches": [], "classifier_ran": False}
 
     matches = []
     unknown_chunks = []
@@ -132,28 +155,52 @@ def analyze(raw_text):
 
     # Only load & run the heavy neural network on lines not already caught above
     default_score = 0.0
+    classifier_ran = False
     if unknown_chunks:
-        results = classify(
-            [c["text"] for c in unknown_chunks],
-            LABELS,
-            hypothesis_template="This text is {}.",
-        )
-        if isinstance(results, dict):
-            results = [results]
-        default_score = round(float(results[0]["scores"][0]), 4)
+        # Two lines with the same text always get the same verdict, so each
+        # distinct line is classified once and the result is copied back onto
+        # every copy of it. A pasted invoice, log or export collapses from
+        # hundreds of repeated lines to a handful of calls, and nothing that
+        # would have been caught is missed: the lines skipped here are
+        # duplicates of lines that were examined.
+        distinct = {}
+        for chunk in unknown_chunks:
+            distinct.setdefault(chunk["text"], []).append(chunk)
+        keys = list(distinct)
 
-        for chunk, res in zip(unknown_chunks, results):
-            top_label = res["labels"][0]
-            top_score = round(float(res["scores"][0]), 4)
-            if top_label != SAFE_LABEL and top_score >= THRESHOLD:
-                matches.append({
-                    "cause": top_label,
-                    "score": top_score,
-                    "line": chunk["line"],
-                    "start_offset": chunk["start_offset"],
-                    "end_offset": chunk["end_offset"],
-                    "snippet": chunk["text"],
-                })
+        # Stop early only once the verdict is settled *and* the leftover is
+        # big enough to be worth stopping for. A short prompt still gets the
+        # complete report, because finishing it costs almost nothing.
+        settled = _already_blocked(matches) and len(keys) > DETAIL_LINES
+        if not settled:
+            results = classify_batched(
+                keys,
+                LABELS,
+                stop=stop,
+                hypothesis_template="This text is {}.",
+            )
+            if isinstance(results, dict):
+                results = [results]
+
+            # Another check can refuse the prompt before the first batch is
+            # even submitted, and then there is nothing computed to report.
+            if results:
+                classifier_ran = True
+                default_score = round(float(results[0]["scores"][0]), 4)
+
+            for text, res in zip(keys, results):
+                top_label = res["labels"][0]
+                top_score = round(float(res["scores"][0]), 4)
+                if top_label != SAFE_LABEL and top_score >= THRESHOLD:
+                    for chunk in distinct[text]:
+                        matches.append({
+                            "cause": top_label,
+                            "score": top_score,
+                            "line": chunk["line"],
+                            "start_offset": chunk["start_offset"],
+                            "end_offset": chunk["end_offset"],
+                            "snippet": chunk["text"],
+                        })
 
     matches.sort(key=lambda x: x["start_offset"])
 
@@ -166,6 +213,10 @@ def analyze(raw_text):
         "end_offset": None,
         "snippet": None,
         "matches": matches,
+        # False means the regexes had already refused the prompt, so the
+        # neural net was skipped rather than paid for. Never false on a
+        # prompt that is allowed through.
+        "classifier_ran": classifier_ran,
     }
 
     if matches:

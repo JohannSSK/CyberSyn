@@ -6,9 +6,9 @@ import warnings
 warnings.filterwarnings("ignore")
 
 try:
-    from model_cache import get_taggers
+    from model_cache import DETAIL_CHARS, get_taggers
 except ImportError:  # pragma: no cover - standalone use from another cwd
-    from .model_cache import get_taggers
+    from .model_cache import DETAIL_CHARS, get_taggers
 
 PATTERNS = {
     "GREEK_AFM": r"\b\d{9}\b",
@@ -53,6 +53,25 @@ def get_line_number(text, char_offset):
     return text.count("\n", 0, char_offset) + 1
 
 
+# Causes that refuse a prompt once they score high enough. Shared by the
+# verdict at the end and by the short-circuit below, so the two can never
+# disagree about what counts as blocking.
+BLOCKING_CAUSES = (
+    "GREEK_AFM",
+    "GREEK_AMKA",
+    "GREEK_PHONE",
+    "EMAIL",
+    "API_KEY",
+    "COMPANY",
+    "PERSON",
+)
+BLOCK_SCORE = 0.8
+
+
+def is_blocking(cause, score):
+    return cause in BLOCKING_CAUSES and score >= BLOCK_SCORE
+
+
 def analyze(raw_text):
     if not raw_text.strip():
         return {
@@ -60,6 +79,7 @@ def analyze(raw_text):
             "score": 0.0,
             "main_cause": None,
             "matches": [],
+            "classifier_ran": False,
         }
 
     matches = []
@@ -94,40 +114,56 @@ def analyze(raw_text):
     # 2. Check ML (spaCy) for Full Person Names (First + Last name, >= 2 words).
     #    The pipelines are loaded here, not at import, so importing this module
     #    stays cheap and the cost lands on a prompt that actually needs it.
-    seen_spans = {(m["start_offset"], m["end_offset"]) for m in matches}
-    nlp_en, nlp_el = get_taggers()
-    for nlp, script_regex in [
-        (nlp_en, r"^[A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)+$"),
-        (
-            nlp_el,
-            r"^[Α-ΩΆΈΉΊΌΎΏ][α-ωάέήίόύώϊϋΐΰ]+(?:\s+[Α-ΩΆΈΉΊΌΎΏ][α-ωάέήίόύώϊϋΐΰ]+)+$",
-        ),
-    ]:
-        for ent in nlp(raw_text).ents:
-            if ent.label_ == "PERSON":
-                name = ent.text.strip()
-                span = (ent.start_char, ent.end_char)
-                overlaps = any(
-                    not (end <= s or start >= e)
-                    for s, e in seen_spans
-                    for start, end in [span]
-                )
-                if (
-                    not overlaps
-                    and len(name.split()) >= 2
-                    and re.match(script_regex, name)
-                ):
-                    seen_spans.add(span)
-                    matches.append(
-                        {
-                            "cause": "PERSON",
-                            "score": 0.85,
-                            "line": get_line_number(raw_text, ent.start_char),
-                            "start_offset": ent.start_char,
-                            "end_offset": ent.end_char,
-                            "snippet": name,
-                        }
+    #
+    #    Skipped once a regex has already refused the prompt and the document
+    #    is long enough for the pass to be worth skipping. NER can only add
+    #    names to the report, never overturn the verdict, and it costs a full
+    #    pass of both pipelines over the whole text.
+    #
+    #    A weak AFM hit at 0.50 does not settle anything - that is not
+    #    blocking on its own, and a name found here could be - so the
+    #    short-circuit needs a score at or above the block threshold.
+    settled = (
+        any(is_blocking(m["cause"], m["score"]) for m in matches)
+        and len(raw_text) > DETAIL_CHARS
+    )
+    classifier_ran = False
+    if not settled:
+        classifier_ran = True
+        seen_spans = {(m["start_offset"], m["end_offset"]) for m in matches}
+        nlp_en, nlp_el = get_taggers()
+        for nlp, script_regex in [
+            (nlp_en, r"^[A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)+$"),
+            (
+                nlp_el,
+                r"^[Α-ΩΆΈΉΊΌΎΏ][α-ωάέήίόύώϊϋΐΰ]+(?:\s+[Α-ΩΆΈΉΊΌΎΏ][α-ωάέήίόύώϊϋΐΰ]+)+$",
+            ),
+        ]:
+            for ent in nlp(raw_text).ents:
+                if ent.label_ == "PERSON":
+                    name = ent.text.strip()
+                    span = (ent.start_char, ent.end_char)
+                    overlaps = any(
+                        not (end <= s or start >= e)
+                        for s, e in seen_spans
+                        for start, end in [span]
                     )
+                    if (
+                        not overlaps
+                        and len(name.split()) >= 2
+                        and re.match(script_regex, name)
+                    ):
+                        seen_spans.add(span)
+                        matches.append(
+                            {
+                                "cause": "PERSON",
+                                "score": 0.85,
+                                "line": get_line_number(raw_text, ent.start_char),
+                                "start_offset": ent.start_char,
+                                "end_offset": ent.end_char,
+                                "snippet": name,
+                            }
+                        )
 
     matches.sort(key=lambda x: x["start_offset"])
 
@@ -140,6 +176,10 @@ def analyze(raw_text):
         "end_offset": None,
         "snippet": None,
         "matches": matches,
+        # False means a regex had already refused the prompt, so the spaCy
+        # name pass was skipped. Never false on a prompt that is allowed
+        # through.
+        "classifier_ran": classifier_ran,
     }
 
     if matches:
@@ -155,19 +195,7 @@ def analyze(raw_text):
             }
         )
 
-    if (
-        response["main_cause"]
-        in [
-            "GREEK_AFM",
-            "GREEK_AMKA",
-            "GREEK_PHONE",
-            "EMAIL",
-            "API_KEY",
-            "COMPANY",
-            "PERSON",
-        ]
-        and response["score"] >= 0.8
-    ):
+    if is_blocking(response["main_cause"], response["score"]):
         response["blocked"] = True
 
     return response
