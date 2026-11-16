@@ -12,6 +12,7 @@ before giving up, so behaviour degrades rather than breaks.
 """
 
 import importlib
+import inspect
 import sys
 from pathlib import Path
 
@@ -70,19 +71,39 @@ def disabled_reason(stage):
     return _failures.get(stage)
 
 
-def run(stage, prompt):
+def run(stage, prompt, stop=None):
     """Run one check and return its verdict dict.
 
     Raises RuntimeError if the check cannot run at all, so the caller can
     keep the fail-closed guarantee: a scanner that will not run must stop
     the prompt rather than wave it through.
+
+    `stop` is passed through to scanners that accept it. It means "another
+    check has already refused this prompt", and lets a scanner drop the rest
+    of a long paste instead of pricing out work that cannot change the
+    answer. Scanners that do not accept it simply scan in full.
     """
     fn = get_scanner(stage)
     if fn is None:
         raise RuntimeError(
             f"{stage} is unavailable: {_failures.get(stage, 'not loaded')}"
         )
+    if stop is not None and _accepts_stop(fn):
+        return fn(prompt, stop=stop)
     return fn(prompt)
+
+
+def _accepts_stop(fn):
+    """True when a scanner understands the stop flag.
+
+    Decided from the signature rather than by trying the call and catching
+    TypeError, so a genuine TypeError raised inside a scanner is still a
+    failure instead of being mistaken for an old signature.
+    """
+    try:
+        return "stop" in inspect.signature(fn).parameters
+    except (TypeError, ValueError):
+        return False
 
 
 def preload():

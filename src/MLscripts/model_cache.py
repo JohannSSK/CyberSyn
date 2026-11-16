@@ -23,6 +23,26 @@ warnings.filterwarnings("ignore")
 
 ZERO_SHOT_MODEL = "valhalla/distilbart-mnli-12-1"
 
+
+def env_int(name, default):
+    """Read an int tuning knob, falling back to `default` on anything odd."""
+    try:
+        return int(os.environ[name])
+    except (KeyError, ValueError):
+        return default
+
+
+# Once a cheap regex has already refused the prompt, the neural net is only
+# buying extra highlights for a verdict that is already made. Below these the
+# leftover is cheap, so it is still examined and the report stays complete;
+# above them the paste stops paying for detail nobody is going to read.
+#
+# Lines for the classifier (its cost is per chunk), characters for spaCy (its
+# cost is per document). Set either to 0 to always finish the scan, or very
+# high to stop at the first blocking regex no matter the size.
+DETAIL_LINES = env_int("CYBERSYN_DETAIL_LINES", 12)
+DETAIL_CHARS = env_int("CYBERSYN_DETAIL_CHARS", 1000)
+
 _EN = "en_core_web_sm"
 _EL = "el_core_news_sm"
 
@@ -96,6 +116,39 @@ def classify(texts, labels, **kwargs):
     clf = get_zero_shot()
     with _lock:
         return clf(texts, candidate_labels=labels, **kwargs)
+
+
+# The classifier is fed in batches so a scan can be abandoned part way
+# through. Each sequence is scored on its own, so batching changes nothing
+# about the answers — only how many are computed before we stop asking.
+CLASSIFY_BATCH = env_int("CYBERSYN_CLASSIFY_BATCH", 8)
+
+
+def classify_batched(texts, labels, stop=None, **kwargs):
+    """Like classify(), but checking `stop` between batches.
+
+    `stop` is a callable returning True once the answer no longer matters —
+    another check has already refused the prompt, so finishing this scan
+    cannot change what the user is told. The remaining lines are dropped and
+    what has been computed so far is returned.
+
+    Only ever called with a stop flag that means "this prompt is already
+    refused". A prompt that is still going to be sent to a model is always
+    classified in full.
+    """
+    if stop is None:
+        return classify(texts, labels, **kwargs)
+
+    clf = get_zero_shot()
+    out = []
+    for start in range(0, len(texts), CLASSIFY_BATCH):
+        if stop():
+            break
+        batch = texts[start:start + CLASSIFY_BATCH]
+        with _lock:
+            got = clf(batch, candidate_labels=labels, **kwargs)
+        out.extend(got if isinstance(got, list) else [got])
+    return out
 
 
 def warm(names=("spacy", "zero-shot")):
