@@ -32,7 +32,8 @@ SIZE = 72           # final PNG edge, in pixels
 OVERSAMPLE = 6      # draw at 6x, then downsample for anti-aliasing
 CELL = 24           # the viewBox the paths are drawn on
 STROKE = "1.8"      # must match stroke-width in icons.js
-ACCENT = "#38BDF8"  # --accent, so the PNGs match the palette
+ACCENT = "#c9c4ba"  # a warm neutral between --text-dim and --text,
+                    # so the PNGs read on every surface in the palette
 
 MIN_INK = 0.02      # a usable icon is mostly transparent...
 MAX_INK = 0.55      # ...and carries a sensible amount of ink

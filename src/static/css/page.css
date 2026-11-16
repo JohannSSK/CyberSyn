@@ -34,9 +34,6 @@
     padding: 24px 32px 64px;
 }
 
-/* Sidebar spacing for pages without a conversation list. */
-.sidebar-spacer { flex: 1; min-height: 12px; }
-
 /* --------------------------------------------------------------------------
    Stat tiles
    -------------------------------------------------------------------------- */
@@ -50,7 +47,7 @@
 .tile {
     padding: 17px 18px;
     border-radius: var(--r-lg);
-    background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.012));
+    background: var(--surface-2);
     border: 1px solid var(--border-soft);
 }
 
@@ -122,16 +119,6 @@
 
 @media (max-width: 900px) {
     .layout { grid-template-columns: minmax(0, 1fr); }
-    .sidebar {
-        position: fixed;
-        z-index: 500;
-        top: 0; left: 0; bottom: 0;
-        width: var(--sidebar-w);
-        transform: translateX(-100%);
-        transition: transform var(--med) var(--ease);
-        box-shadow: var(--shadow-lg);
-    }
-    .sidebar.is-open { transform: none; }
     .page-head { padding: 22px 18px 18px; }
     .page-body { padding: 18px 18px 60px; }
 }

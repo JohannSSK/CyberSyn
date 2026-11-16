@@ -1,0 +1,214 @@
+/* ==========================================================================
+   sidebar.css — the shared navigation.
+
+   The sidebar markup lives in templates/partials/sidebar.html and is included
+   by every signed-in page, so its styles belong to every page too. They used
+   to sit in workspace.css, which only the chat screen loads — which is why
+   the navigation looked unstyled everywhere else. Loaded from base.html.
+
+   Entries are deliberately large, quiet buttons: no border until they are
+   active, no colour beyond the neutral ramp, and the icon sits small beside
+   the label rather than competing with it.
+   ========================================================================== */
+
+.sidebar {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    background: var(--surface);
+    border-right: 1px solid var(--border-soft);
+}
+
+.sidebar-brand {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    height: var(--topbar-h);
+    padding: 0 18px;
+    border-bottom: 1px solid var(--border-soft);
+    flex: none;
+}
+
+.sidebar-brand .icon { width: 22px; height: 22px; opacity: 0.9; }
+
+.sidebar-brand span {
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--text-strong);
+}
+
+.sidebar-nav { padding: 14px 12px 6px; flex: none; }
+
+/* ---- Navigation entries ------------------------------------------------ */
+
+.nav-item {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    width: 100%;
+    padding: 12px 14px;
+    margin-bottom: 4px;
+    border-radius: var(--r-md);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-dim);
+    background: transparent;
+    border: 1px solid transparent;
+    transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
+    text-align: left;
+    cursor: pointer;
+}
+
+.nav-item:hover { color: var(--text); background: var(--surface-2); }
+
+/* Active is a solid step up in elevation, not a coloured outline. */
+.nav-item.is-active {
+    color: var(--text-strong);
+    background: var(--surface-3);
+    border-color: transparent;
+}
+
+/* Sidebar icons are PNGs, so they carry their own colour and ignore
+   `color`. Dimming is what separates resting from active. */
+.nav-item .icon {
+    width: 15px;
+    height: 15px;
+    flex: none;
+    opacity: 0.5;
+    transition: opacity var(--fast) var(--ease);
+}
+
+.nav-item:hover .icon { opacity: 0.75; }
+.nav-item.is-active .icon { opacity: 1; }
+
+.nav-item .count { margin-left: auto; font-size: 11px; color: var(--text-muted); }
+
+/* ---- Conversation list (the chat screen's extra section) --------------- */
+
+.sidebar-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 12px 8px;
+    flex: none;
+}
+
+.sidebar-section-head .eyebrow { font-size: 10.5px; color: var(--text-muted); }
+
+.chat-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 0 12px 12px;
+}
+
+.chat-item {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    width: 100%;
+    padding: 10px 12px;
+    margin-bottom: 4px;
+    border-radius: var(--r-md);
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-dim);
+    font-size: 13px;
+    text-align: left;
+    transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+
+.chat-item:hover { background: var(--surface-2); color: var(--text); }
+
+.chat-item.is-active {
+    background: var(--surface-3);
+    border-color: transparent;
+    color: var(--text-strong);
+}
+
+.chat-item .icon { width: 14px; height: 14px; flex: none; opacity: 0.55; }
+
+.chat-item-title {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.chat-item .chat-item-meta { font-size: 10.5px; color: var(--text-muted); flex: none; }
+
+/* ---- Footer ------------------------------------------------------------ */
+
+.sidebar-spacer { flex: 1; min-height: 12px; }
+
+.sidebar-foot {
+    padding: 12px;
+    border-top: 1px solid var(--border-soft);
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.sidebar-foot .nav-item { margin-bottom: 0; }
+
+.sidebar-user {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 11px;
+    border-radius: var(--r-md);
+    background: var(--surface-2);
+    border: 1px solid var(--border-soft);
+}
+
+.avatar {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    flex: none;
+    border-radius: 50%;
+    background: var(--surface-4);
+    color: var(--text-strong);
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.sidebar-user .who { min-width: 0; }
+
+.sidebar-user .who strong {
+    display: block;
+    font-size: 13px;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sidebar-user .who small { font-size: 11px; color: var(--text-muted); }
+
+/* The language switch sits above Help, inset to line up with the entries. */
+.sidebar-foot .lang-switch { margin-left: 2px; align-self: flex-start; }
+
+/* --------------------------------------------------------------------------
+   Narrow screens: the sidebar becomes a drawer
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 900px) {
+    .sidebar {
+        position: fixed;
+        z-index: 500;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        width: var(--sidebar-w);
+        transform: translateX(-100%);
+        transition: transform var(--med) var(--ease);
+        box-shadow: var(--shadow-lg);
+    }
+
+    .sidebar.is-open { transform: none; }
+}

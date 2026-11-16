@@ -15,6 +15,8 @@ from flask import Blueprint
 
 from auth import admin_from_token, member_from_token
 from config import DB_FILE
+from members import get_settings
+from secret_store import decrypt_secret
 from web import get_json_dict
 
 models_api = Blueprint("models_api", __name__)
@@ -76,12 +78,21 @@ def guess_provider(key):
 def list_models():
     data = get_json_dict() or {}
     token = data.get("session_token")
-    if member_from_token(DB_FILE, token) is None and admin_from_token(DB_FILE, token) is None:
+    member = member_from_token(DB_FILE, token)
+    admin = None if member else admin_from_token(DB_FILE, token)
+    if member is None and admin is None:
         return {"models": [], "message": "Your session has ended. Sign in again."}, 401
 
     key = str(data.get("API_KEY") or "").strip()
     if not key:
-        return {"models": [], "message": "Paste an API key first."}, 400
+        # No key pasted: use the one already saved for this member. The field
+        # only ever holds a mask, so asking the caller to re-paste a saved key
+        # made the list impossible to refresh after the first save.
+        parent_id = member["Parent_id"] if member else admin["id"]
+        employee_id = member["Employee_id"] if member else 0
+        key = decrypt_secret(get_settings(parent_id, employee_id)["API_KEY"] or "").strip()
+        if not key:
+            return {"models": [], "message": "Paste an API key first."}, 400
 
     provider = str(data.get("provider") or guess_provider(key)).strip().lower()
     try:

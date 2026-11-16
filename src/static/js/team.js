@@ -11,6 +11,10 @@
     var Loading = window.Loading;
     var $ = Dom.$;
 
+    // The roster shows how every member's gate is configured, so it is
+    // administrator-only, as is the statistics page it summarises.
+    if (!window.Shell.guardAdmin()) return;
+
     function rateColour(rate) {
         if (rate >= 40) return "var(--danger)";
         if (rate >= 18) return "var(--warn)";
@@ -80,10 +84,6 @@
         }).catch(function (err) {
             Loading.toast(err.message, "error");
         });
-    }
-
-    if (!Api.Session.getAdminToken()) {
-        Loading.toast("The team roster needs an administrator sign-in.", "warn");
     }
 
     Dom.on($("#btn-refresh"), "click", function () { load($("#btn-refresh")); });

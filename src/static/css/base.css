@@ -5,33 +5,46 @@
    ========================================================================== */
 
 :root {
+    /* ------------------------------------------------------------------
+       Palette. These are the sign-in portal's colours: warm, near-black
+       charcoal with no hue to speak of. The whole app uses them now, so a
+       page never changes register when you sign in.
+
+       --bg/#1c1917 and --surface-2/#2a2926 are the portal's own two
+       backgrounds; the rest are interpolated between them and the portal's
+       border and text tones. Nothing here is saturated: the brightest value
+       is off-white, and the status colours are desaturated earth tones.
+       ------------------------------------------------------------------ */
+
     /* Surfaces, darkest to lightest */
-    --bg:            #080D19;
-    --bg-grad-a:     #0B1224;
-    --bg-grad-b:     #101A33;
-    --surface:       #111A2E;
-    --surface-2:     #17223B;
-    --surface-3:     #1E2B49;
-    --border:        #26334F;
-    --border-soft:   #1C2740;
+    --bg:            #1c1917;
+    --surface:       #242220;
+    --surface-2:     #2a2926;
+    --surface-3:     #33322f;
+    --surface-4:     #3b3936;
+    --border:        #3f3d39;
+    --border-soft:   #2e2c29;
 
     /* Text */
-    --text:          #E8EEF9;
-    --text-dim:      #A9B8D4;
-    --text-muted:    #7488AC;
+    --text:          #ecebe7;
+    --text-strong:   #fafaf9;
+    --text-dim:      #b3aea6;
+    --text-muted:    #85817a;
 
-    /* Accent + status */
-    --accent:        #38BDF8;
-    --accent-deep:   #0EA5E9;
-    --accent-soft:   rgba(56, 189, 248, 0.14);
-    --accent-line:   rgba(56, 189, 248, 0.38);
-    --violet:        #A78BFA;
-    --success:       #34D399;
-    --success-soft:  rgba(52, 211, 153, 0.14);
-    --warn:          #FBBF24;
-    --warn-soft:     rgba(251, 191, 36, 0.14);
-    --danger:        #F87171;
-    --danger-soft:   rgba(248, 113, 113, 0.14);
+    /* Accent is a warm light grey rather than a hue, so emphasis comes from
+       contrast and elevation instead of colour. */
+    --accent:        #d9d5cd;
+    --accent-deep:   #b0aba2;
+    --accent-soft:   rgba(236, 235, 231, 0.07);
+    --accent-line:   rgba(236, 235, 231, 0.16);
+
+    /* Status: the same earth tones as the portal's danger, desaturated. */
+    --success:       #97ab91;
+    --success-soft:  rgba(151, 171, 145, 0.13);
+    --warn:          #bfa273;
+    --warn-soft:     rgba(191, 162, 115, 0.13);
+    --danger:        #bd8a80;
+    --danger-soft:   rgba(189, 138, 128, 0.13);
 
     /* Geometry */
     --r-sm: 8px;
@@ -44,7 +57,6 @@
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
     --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.36);
     --shadow-lg: 0 24px 64px rgba(0, 0, 0, 0.55);
-    --glow: 0 0 0 1px var(--accent-line), 0 8px 30px rgba(56, 189, 248, 0.18);
 
     /* Type */
     --font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -152,10 +164,7 @@ h4 { font-size: 15px; }
 .app-shell {
     position: relative;
     min-height: 100vh;
-    background:
-        radial-gradient(1100px 620px at 12% -8%, rgba(56, 189, 248, 0.10), transparent 60%),
-        radial-gradient(900px 520px at 96% 4%, rgba(167, 139, 250, 0.09), transparent 62%),
-        linear-gradient(168deg, var(--bg-grad-a), var(--bg-grad-b) 55%, var(--bg));
+    background: var(--bg);
 }
 
 .page {
@@ -219,7 +228,7 @@ h4 { font-size: 15px; }
     background-clip: content-box;
 }
 
-::-webkit-scrollbar-thumb:hover { background: #2C3C63; background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background: var(--surface-4); background-clip: content-box; }
 
 /* --------------------------------------------------------------------------
    Motion

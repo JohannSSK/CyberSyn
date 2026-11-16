@@ -15,6 +15,10 @@
     var Loading = window.Loading;
     var $ = Dom.$;
 
+    // Team-wide numbers are for administrators. Members are sent back to
+    // their chat rather than shown a dashboard that would never fill.
+    if (!window.Shell.guardAdmin()) return;
+
     var KIND_META = {
         blocked: { icon: "warning", label: "Blocked" },
         override: { icon: "key", label: "Override approved" },
@@ -35,7 +39,9 @@
         check3: "Check 3 · Prompt injection"
     };
 
-    var BAR_COLOURS = ["violet", "danger", "warn", "success", ""];
+    // Neutral palette: the variants step in lightness, not hue,
+    // so several reasons stay distinguishable without four colours.
+    var BAR_COLOURS = ["", "warn", "danger", "success", ""];
 
     function meta(kind) {
         return KIND_META[kind] || { icon: "spark", label: kind };
@@ -239,12 +245,6 @@
     /* ------------------------------------------------------------------
        Wiring
        ------------------------------------------------------------------ */
-
-    // The statistics page is for administrators; a member without an admin
-    // token is told so plainly rather than shown an empty dashboard.
-    if (!Api.Session.getAdminToken()) {
-        Loading.toast("Statistics need an administrator sign-in.", "warn");
-    }
 
     Dom.on($("#btn-refresh"), "click", function () { load($("#btn-refresh")); });
 

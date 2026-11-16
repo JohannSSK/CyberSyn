@@ -28,9 +28,7 @@
         refresh: $("#btn-refresh-models"),
         key: $("#setting-api-key"),
         keyState: $("#key-state"),
-        saveConnection: $("#btn-save-connection"),
-        disableAll: $("#btn-disable-all"),
-        enableAll: $("#btn-enable-all")
+        saveConnection: $("#btn-save-connection")
     };
 
     function markDirty() {
@@ -86,15 +84,12 @@
         });
     }
 
+    // An empty field is not an error: the server falls back to the key already
+    // saved for this member, so the list can be refreshed after the first save.
     function refreshModels() {
         var key = nodes.key.value.trim();
-        if (!key) {
-            Loading.toast("Paste your API key first, then refresh.", "warn");
-            nodes.key.focus();
-            return;
-        }
         Loading.withButton(nodes.refresh, function () {
-            return Api.post("/api/admin/employee/models", { API_KEY: key });
+            return Api.post("/api/admin/employee/models", key ? { API_KEY: key } : {});
         }).then(function (data) {
             if (!data.models || !data.models.length) {
                 Loading.toast(data.message || "That key returned no usable models.", "warn");
@@ -111,13 +106,6 @@
         });
     }
 
-    function setAll(value) {
-        nodes.check1.checked = value;
-        nodes.check2.checked = value;
-        nodes.check3.checked = value;
-        markDirty();
-    }
-
     /* ------------------------------------------------------------------
        Wiring
        ------------------------------------------------------------------ */
@@ -129,8 +117,6 @@
     Dom.on(nodes.saveChecks, "click", saveChecks);
     Dom.on(nodes.saveConnection, "click", saveConnection);
     Dom.on(nodes.refresh, "click", refreshModels);
-    Dom.on(nodes.disableAll, "click", function () { setAll(false); });
-    Dom.on(nodes.enableAll, "click", function () { setAll(true); });
     Dom.on(nodes.model, "change", markDirty);
 
     load().catch(function (err) { Loading.toast(err.message, "error"); });

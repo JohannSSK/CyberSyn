@@ -1,0 +1,140 @@
+/* ==========================================================================
+   help.css — the reference page.
+
+   The help screen is mostly copy, so this file is about that copy being
+   readable: a wider measure than the other pages, a contents list that
+   sticks while you scroll, and licence tables that stay legible when a cell
+   carries a whole paragraph.
+   ========================================================================== */
+
+/* More room for text than the standard page allows. */
+.help { max-width: 960px; }
+
+/* ---- contents ---- */
+
+.help-toc { padding: 16px 18px; }
+
+.help-toc ol {
+    margin: 0;
+    padding-left: 18px;
+    columns: 2;
+    column-gap: 28px;
+}
+
+.help-toc li { margin-bottom: 6px; font-size: 13.5px; break-inside: avoid; }
+
+.help-toc a { color: var(--text-dim); text-decoration: none; }
+.help-toc a:hover { color: var(--text); text-decoration: underline; }
+
+/* ---- prose ---- */
+
+.help-lead {
+    margin: 0 0 14px;
+    font-size: 14px;
+    color: var(--text-dim);
+}
+
+.help-sub {
+    margin: 22px 0 10px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.help p { font-size: 14px; line-height: 1.65; margin: 0 0 12px; }
+.help p:last-child { margin-bottom: 0; }
+
+.help-steps {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    counter-reset: step;
+}
+
+.help-steps li {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 9px 0;
+    font-size: 14px;
+    line-height: 1.6;
+    border-bottom: 1px solid var(--border-soft);
+}
+
+.help-steps li:last-child { border-bottom: none; }
+
+.help-checks { display: flex; flex-direction: column; gap: 18px; }
+
+.help-checks article { padding-bottom: 4px; }
+
+.help-checks h4 {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 8px;
+    font-size: 14.5px;
+}
+
+.help code {
+    padding: 1px 5px;
+    border-radius: 5px;
+    background: var(--surface-3);
+    font-family: var(--font-mono);
+    font-size: 0.88em;
+}
+
+kbd {
+    display: inline-block;
+    padding: 1px 6px;
+    border: 1px solid var(--border);
+    border-bottom-width: 2px;
+    border-radius: 5px;
+    background: var(--surface-2);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+}
+
+/* ---- licence tables ---- */
+
+.licence-table {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border-soft);
+    border-radius: var(--r-md);
+    overflow: hidden;
+}
+
+.licence-row {
+    display: grid;
+    grid-template-columns: minmax(150px, 1.1fr) minmax(130px, 0.9fr) 2fr;
+    gap: 16px;
+    padding: 11px 14px;
+    font-size: 13px;
+    border-bottom: 1px solid var(--border-soft);
+}
+
+.licence-row:last-child { border-bottom: none; }
+
+.licence-head {
+    background: var(--surface-3);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.licence-row span:nth-child(2) { color: var(--text-dim); font-weight: 500; }
+.licence-row span:nth-child(3) { color: var(--text-muted); font-size: 12.5px; }
+
+/* The one component with a non-commercial term gets a marked row. */
+.licence-warn { background: var(--warn-soft); }
+.licence-warn span:nth-child(2) { color: var(--warn); font-weight: 600; }
+
+@media (max-width: 760px) {
+    .help-toc ol { columns: 1; }
+    .licence-row { grid-template-columns: 1fr; gap: 4px; }
+    .licence-head { display: none; }
+}

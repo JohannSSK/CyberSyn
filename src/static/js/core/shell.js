@@ -69,10 +69,46 @@
         return true;
     }
 
+    /* Pages that show other people's activity: statistics and the team
+       roster. The API refuses a non-administrator either way, but the page
+       itself should never render for one, so members are sent back to their
+       chat instead of being shown an empty dashboard.
+
+       The gate is client-side because sessions are bearer tokens held in
+       localStorage, not cookies — the server cannot see them on a page
+       request. Authoritative enforcement stays at the API. */
+    var ADMIN_ONLY = ["/stats", "/team"];
+
+    function isAdminOnly(path) {
+        return ADMIN_ONLY.indexOf((path || "").replace(/\/+$/, "") || "/") !== -1;
+    }
+
+    function guardAdmin() {
+        if (!guard()) return false;
+        if (isAdminOnly(location.pathname) && !Session.getAdminToken()) {
+            global.Loading.toast("That page needs an administrator sign-in.", "warn");
+            setTimeout(function () { location.replace("/workspace"); }, 700);
+            return false;
+        }
+        return true;
+    }
+
+    /* Hide the same entries from the sidebar for members: a link that can
+       only bounce you back is worse than no link. */
+    function markAdminNav() {
+        var isAdmin = !!Session.getAdminToken();
+        global.Dom.$$("[data-nav]").forEach(function (link) {
+            if (isAdminOnly(link.getAttribute("data-nav"))) {
+                link.classList.toggle("hidden", !isAdmin);
+            }
+        });
+    }
+
     document.addEventListener("DOMContentLoaded", function () {
         paintIcons(document);
         markActive();
         paintMember();
+        markAdminNav();
 
         global.Dom.$$("[data-action='sign-out']").forEach(function (btn) {
             global.Dom.on(btn, "click", signOut);
@@ -96,6 +132,8 @@
     global.Shell = {
         signOut: signOut,
         guard: guard,
+        guardAdmin: guardAdmin,
+        isAdminOnly: isAdminOnly,
         paintMember: paintMember,
         paintIcons: paintIcons
     };

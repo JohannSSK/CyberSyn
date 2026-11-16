@@ -23,7 +23,7 @@
 }
 
 .range-bar button:hover { color: var(--text); }
-.range-bar button.is-active { color: #04121F; background: var(--accent); }
+.range-bar button.is-active { color: var(--text-strong); background: var(--surface-3); }
 
 /* ---- member cards ---- */
 
@@ -39,7 +39,7 @@
     gap: 14px;
     padding: 18px;
     border-radius: var(--r-lg);
-    background: linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.012));
+    background: var(--surface-2);
     border: 1px solid var(--border-soft);
     animation: rise-in var(--med) var(--ease) both;
 }
@@ -51,6 +51,14 @@
 .member-id { min-width: 0; flex: 1; }
 .member-id strong { display: block; font-size: 15px; }
 .member-id small { font-size: 11.5px; color: var(--text-muted); }
+
+/* --pct is set per card from JS. Registering it gives it a type, which is
+   what lets the ring animate instead of jumping. */
+@property --pct {
+    syntax: "<number>";
+    inherits: false;
+    initial-value: 0;
+}
 
 /* Donut: a conic-gradient ring driven by --pct */
 .donut {
@@ -108,14 +116,14 @@
 .bar-fill {
     height: 100%;
     border-radius: var(--r-pill);
-    background: linear-gradient(90deg, var(--accent-deep), var(--accent));
+    background: var(--accent-deep);
     transition: width var(--slow) var(--ease);
 }
 
-.bar-fill.warn { background: linear-gradient(90deg, #D99A0B, var(--warn)); }
-.bar-fill.danger { background: linear-gradient(90deg, #C93F3F, var(--danger)); }
-.bar-fill.violet { background: linear-gradient(90deg, #7C5CE0, var(--violet)); }
-.bar-fill.success { background: linear-gradient(90deg, #1F9C6E, var(--success)); }
+.bar-fill.warn { background: var(--warn); }
+.bar-fill.danger { background: var(--danger); }
+.bar-fill.violet { background: var(--success); }
+.bar-fill.success { background: var(--success); }
 
 /* ---- trend chart ---- */
 
@@ -140,14 +148,14 @@
 .trend-bar {
     width: 100%;
     border-radius: 3px 3px 0 0;
-    background: linear-gradient(180deg, var(--accent), var(--accent-deep));
+    background: var(--accent-deep);
     min-height: 2px;
     transition: height var(--slow) var(--ease);
 }
 
-.trend-bar.override { background: linear-gradient(180deg, var(--warn), #D99A0B); }
+.trend-bar.override { background: var(--surface-4); }
 
-.trend-col:hover .trend-bar { filter: brightness(1.25); }
+.trend-col:hover .trend-bar { background: var(--accent); }
 
 .trend-axis {
     display: flex;
@@ -190,10 +198,10 @@
 }
 
 .tl-mark .icon { width: 10px; height: 10px; }
-.tl-item.kind-blocked .tl-mark { color: var(--danger); border-color: rgba(248,113,113,0.4); }
-.tl-item.kind-override .tl-mark { color: var(--warn); border-color: rgba(251,191,36,0.4); }
-.tl-item.kind-prompt .tl-mark { color: var(--accent); border-color: var(--accent-line); }
-.tl-item.kind-login .tl-mark { color: var(--success); border-color: rgba(52,211,153,0.4); }
+.tl-item.kind-blocked .tl-mark { color: var(--danger); border-color: var(--border); }
+.tl-item.kind-override .tl-mark { color: var(--warn); border-color: var(--border); }
+.tl-item.kind-prompt .tl-mark { color: var(--accent); border-color: var(--border); }
+.tl-item.kind-login .tl-mark { color: var(--success); border-color: var(--border); }
 
 .tl-body { min-width: 0; }
 .tl-body strong { font-weight: 600; }

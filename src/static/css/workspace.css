@@ -1,5 +1,6 @@
 /* ==========================================================================
-   workspace.css — the chat screen: sidebar, message stream, composer.
+   workspace.css — the chat screen: layout, message stream, composer.
+   The sidebar is shared by every page; its styles are in sidebar.css.
    ========================================================================== */
 
 .workspace {
@@ -8,157 +9,6 @@
     height: 100vh;
     overflow: hidden;
 }
-
-/* --------------------------------------------------------------------------
-   Sidebar
-   -------------------------------------------------------------------------- */
-
-.sidebar {
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    background: linear-gradient(180deg, rgba(11, 18, 36, 0.9), rgba(9, 14, 28, 0.96));
-    border-right: 1px solid var(--border-soft);
-}
-
-.sidebar-brand {
-    display: flex;
-    align-items: center;
-    gap: 11px;
-    height: var(--topbar-h);
-    padding: 0 18px;
-    border-bottom: 1px solid var(--border-soft);
-    flex: none;
-}
-
-.sidebar-brand .icon { width: 24px; height: 24px; }
-
-.sidebar-brand span {
-    font-size: 16px;
-    font-weight: 700;
-    letter-spacing: -0.01em;
-}
-
-.sidebar-nav { padding: 14px 12px 6px; flex: none; }
-
-.nav-item {
-    display: flex;
-    align-items: center;
-    gap: 11px;
-    width: 100%;
-    padding: 9px 11px;
-    margin-bottom: 3px;
-    border-radius: var(--r-md);
-    font-size: 13.5px;
-    font-weight: 500;
-    color: var(--text-dim);
-    background: transparent;
-    border: 1px solid transparent;
-    transition: all var(--fast) var(--ease);
-    text-align: left;
-}
-
-.nav-item:hover { color: var(--text); background: var(--surface-2); }
-
-.nav-item.is-active {
-    color: var(--text);
-    background: var(--accent-soft);
-    border-color: var(--accent-line);
-}
-
-/* Sidebar icons are PNGs, so they carry the accent colour of their own and
-   ignore `color`. Dimming is what distinguishes resting from active. */
-.nav-item .icon { width: 17px; height: 17px; flex: none; opacity: 0.55; transition: opacity var(--ease); }
-.nav-item:hover .icon { opacity: 0.8; }
-.nav-item.is-active .icon { color: var(--accent); opacity: 1; }
-.nav-item .count { margin-left: auto; font-size: 11px; color: var(--text-muted); }
-
-.sidebar-section-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 16px 12px 8px;
-    flex: none;
-}
-
-.sidebar-section-head .eyebrow { font-size: 10.5px; }
-
-.chat-list {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-    padding: 0 12px 12px;
-}
-
-.chat-item {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    width: 100%;
-    padding: 9px 11px;
-    margin-bottom: 3px;
-    border-radius: var(--r-md);
-    border: 1px solid transparent;
-    background: transparent;
-    color: var(--text-dim);
-    font-size: 13px;
-    text-align: left;
-    transition: all var(--fast) var(--ease);
-}
-
-.chat-item:hover { background: var(--surface-2); color: var(--text); }
-
-.chat-item.is-active {
-    background: var(--accent-soft);
-    border-color: var(--accent-line);
-    color: var(--text);
-}
-
-.chat-item .icon { width: 15px; height: 15px; flex: none; opacity: 0.65; }
-
-.chat-item-title {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.chat-item .chat-item-meta { font-size: 10.5px; color: var(--text-muted); flex: none; }
-
-.sidebar-foot {
-    padding: 12px;
-    border-top: 1px solid var(--border-soft);
-    flex: none;
-}
-
-.sidebar-user {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 9px 10px;
-    margin-bottom: 8px;
-    border-radius: var(--r-md);
-    background: var(--surface);
-    border: 1px solid var(--border-soft);
-}
-
-.avatar {
-    display: grid;
-    place-items: center;
-    width: 32px;
-    height: 32px;
-    flex: none;
-    border-radius: 50%;
-    background: linear-gradient(140deg, var(--accent), var(--violet));
-    color: #06121F;
-    font-size: 13px;
-    font-weight: 700;
-}
-
-.sidebar-user .who { min-width: 0; }
-.sidebar-user .who strong { display: block; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sidebar-user .who small { font-size: 11px; color: var(--text-muted); }
 
 /* --------------------------------------------------------------------------
    Main column
@@ -179,7 +29,7 @@
     padding: 0 20px;
     flex: none;
     border-bottom: 1px solid var(--border-soft);
-    background: rgba(9, 14, 28, 0.72);
+    background: var(--bg);
     backdrop-filter: blur(10px);
 }
 
@@ -332,8 +182,8 @@
     align-self: flex-end;
     max-width: 78%;
     border-bottom-right-radius: 6px;
-    background: linear-gradient(140deg, rgba(56,189,248,0.17), rgba(56,189,248,0.09));
-    border: 1px solid var(--accent-line);
+    background: var(--surface-3);
+    border: 1px solid transparent;
 }
 
 .bubble-ai {
@@ -495,7 +345,7 @@ mark {
     flex: none;
     padding: 14px 24px 20px;
     border-top: 1px solid var(--border-soft);
-    background: rgba(9, 14, 28, 0.72);
+    background: var(--bg);
     backdrop-filter: blur(10px);
 }
 
@@ -541,13 +391,13 @@ mark {
     height: 38px;
     flex: none;
     border-radius: var(--r-md);
-    background: linear-gradient(180deg, #58CBFA, var(--accent));
-    color: #04121F;
-    transition: transform var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
+    background: var(--accent);
+    color: #1c1917;
+    transition: background var(--fast) var(--ease);
 }
 
-.composer-send:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(56,189,248,0.3); }
-.composer-send:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-shadow: none; }
+.composer-send:hover:not(:disabled) { background: var(--accent-deep); }
+.composer-send:disabled { opacity: 0.45; cursor: not-allowed; }
 .composer-send .icon { width: 18px; height: 18px; }
 
 .composer-foot {
@@ -570,16 +420,6 @@ mark {
 
 @media (max-width: 900px) {
     .workspace { grid-template-columns: minmax(0, 1fr); }
-    .sidebar {
-        position: fixed;
-        z-index: 500;
-        top: 0; left: 0; bottom: 0;
-        width: var(--sidebar-w);
-        transform: translateX(-100%);
-        transition: transform var(--med) var(--ease);
-        box-shadow: var(--shadow-lg);
-    }
-    .sidebar.is-open { transform: none; }
     .topbar-title span { max-width: 160px; }
     .search-box { flex-basis: 150px; }
 }
