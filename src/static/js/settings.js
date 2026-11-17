@@ -1,9 +1,9 @@
 /* ==========================================================================
-   settings.js — policy toggles and the AI connection.
+   settings.js — local safety check toggles and the AI connection.
 
-   The API key is write-only: it is stored encrypted server-side and the
-   browser only ever receives a mask back. Typing a key and saving it never
-   reveals the one already saved.
+   The API key is write-only: it is stored encrypted on the server and the
+   browser only ever receives a mask back. Changing checks or connection
+   details requires a fresh administrator password confirmation every time.
    ========================================================================== */
 
 (function () {
@@ -14,16 +14,28 @@
     var Api = window.Api;
     var Dom = window.Dom;
     var Loading = window.Loading;
+    var Shell = window.Shell;
     var $ = Dom.$;
 
-    var checks = { check1: true, check2: true, check3: true };
+    function t(text) {
+        return window.I18n && typeof window.I18n.t === "function"
+            ? window.I18n.t(text)
+            : text;
+    }
 
-    var Shell = window.Shell;
+    function isGreek() {
+        return !!(window.I18n && window.I18n.current() === "el");
+    }
+
+    var checks = { check1: true, check2: true, check3: true };
+    var savedMask = "";
+    var dirty = false;
 
     var nodes = {
         check1: $("#setting-check1"),
         check2: $("#setting-check2"),
         check3: $("#setting-check3"),
+        allOff: $("#all-checks-off-note"),
         saveChecks: $("#btn-save-checks"),
         checksState: $("#checks-state"),
         model: $("#setting-model"),
@@ -37,12 +49,33 @@
         baseField: $("#field-base")
     };
 
-    // The last key we asked about, so a debounced keystroke does not refetch
-    // the same thing, and the saved key is only probed once per page load.
     var probedKey = null;
+    var BASE_NEEDED = {};
+
+    function updateAllOff() {
+        if (!nodes.allOff) return;
+        var anyOn = nodes.check1.checked || nodes.check2.checked || nodes.check3.checked;
+        nodes.allOff.classList.toggle("hidden", anyOn);
+    }
 
     function markDirty() {
-        nodes.checksState.textContent = "Unsaved changes";
+        dirty = true;
+        nodes.checksState.textContent = t("Unsaved changes");
+        updateAllOff();
+    }
+
+    function paintKeyState() {
+        if (savedMask) {
+            nodes.keyState.textContent = isGreek()
+                ? "Αποθηκευμένο κλειδί: " + savedMask + " — επικολλήστε νέο για αντικατάσταση."
+                : "Saved key: " + savedMask + " — paste a new one to replace it.";
+            nodes.key.placeholder = isGreek()
+                ? "Αντικατάσταση κλειδιού " + savedMask
+                : "Replace saved key " + savedMask;
+        } else {
+            nodes.keyState.textContent = t("No key saved yet.");
+            nodes.key.placeholder = t("Paste your API key…");
+        }
     }
 
     function apply(data) {
@@ -50,9 +83,9 @@
             checks[key] = data[key] !== false;
             nodes[key].checked = checks[key];
         });
+        updateAllOff();
         if (data.MODEL_NAME && !nodes.model.querySelector(
                 'option[value="' + data.MODEL_NAME.replace(/"/g, "") + '"]')) {
-            // Keep the saved model visible even before the list is fetched.
             var option = document.createElement("option");
             option.value = data.MODEL_NAME;
             option.textContent = data.MODEL_NAME;
@@ -62,11 +95,9 @@
         if (data.PROVIDER) nodes.provider.value = data.PROVIDER;
         nodes.base.value = data.API_BASE || "";
         showBaseField(nodes.provider.value);
-        var mask = data.API_KEY_MASK;
-        nodes.keyState.textContent = mask
-            ? "Saved key: " + mask + " — paste a new one to replace it."
-            : "No key saved yet.";
-        nodes.key.placeholder = mask ? "Replace saved key " + mask : "Paste your API key…";
+        savedMask = data.API_KEY_MASK || "";
+        paintKeyState();
+        dirty = false;
         nodes.checksState.textContent = "";
     }
 
@@ -77,14 +108,12 @@
         });
     }
 
-    /* Turning a check off weakens the gate for everyone sending through this
-       account, so it is confirmed with the administrator password every time
-       — never remembered from an earlier approval. */
-    function approveChange(what) {
+    /* Changing checks or connection settings is confirmed with a fresh
+       administrator password every time and logged in the audit trail. */
+    function approveChange(titleKey, bodyKey) {
         return Shell.withAdmin({
-            title: "Change " + what,
-            what: "Changing " + what +
-                  " needs the administrator password. It is recorded in the audit trail.",
+            title: titleKey,
+            what: bodyKey,
             confirmLabel: "Approve",
             cancelLabel: "Cancel",
             fresh: true
@@ -95,7 +124,10 @@
     }
 
     function saveChecks() {
-        approveChange("the safety checks").then(function (token) {
+        approveChange(
+            "Safety checks",
+            "Changing the local safety checks requires the administrator password and is recorded in the audit log."
+        ).then(function (token) {
             return Loading.withButton(nodes.saveChecks, function () {
                 return Api.post("/api/admin/employee/settings", {
                     check1: nodes.check1.checked,
@@ -120,11 +152,14 @@
         var key = nodes.key.value.trim();
         if (key) payload.API_KEY = key;
         if (!Object.keys(payload).length) {
-            Loading.toast("Nothing to save yet.", "warn");
+            Loading.toast("Choose a model or paste an API key before saving.", "info");
             return;
         }
 
-        approveChange("the AI connection").then(function (token) {
+        approveChange(
+            "AI connection",
+            "Changing the provider, model or API key requires the administrator password and is recorded in the audit log."
+        ).then(function (token) {
             payload.admin_token = token;
             return Loading.withButton(nodes.saveConnection, function () {
                 return Api.post("/api/admin/employee/settings", payload);
@@ -132,7 +167,6 @@
                 nodes.key.value = "";
                 apply(data);
                 Loading.toast("Connection saved.", "success");
-                // The stored key just changed, so the list has to be re-asked for.
                 probedKey = null;
                 refreshModels();
             }).catch(function (err) {
@@ -142,20 +176,13 @@
     }
 
     /* ------------------------------------------------------------------
-       Provider choice
-
-       "Detect" is the default and needs no thought: the key is offered to
-       each provider in turn and the one that answers is used. Naming one
-       explicitly is there for the cases detection cannot tell apart —
-       several providers hand out `sk-`-shaped keys.
+       Provider choice & model discovery
        ------------------------------------------------------------------ */
 
     function showBaseField(provider) {
         var needs = !!BASE_NEEDED[provider];
         nodes.baseField.classList.toggle("hidden", !needs);
     }
-
-    var BASE_NEEDED = {};
 
     function loadProviders() {
         return Api.post("/api/admin/employee/providers", {}).then(function (data) {
@@ -164,23 +191,13 @@
             });
             var current = nodes.provider.value;
             nodes.provider.innerHTML = (data.providers || []).map(function (item) {
+                var label = item.key === "auto" ? t("Detect automatically") : item.label;
                 return '<option value="' + Dom.esc(item.key) + '">' +
-                    Dom.esc(item.label) + "</option>";
+                    Dom.esc(label) + "</option>";
             }).join("");
             nodes.provider.value = current;
-        }).catch(function () {
-            // The page still works: "detect" is enough on its own.
-        });
+        }).catch(function () { });
     }
-
-    /* ------------------------------------------------------------------
-       Model discovery
-
-       Listing the models a key can reach is the whole point of pasting one,
-       so it happens on its own: as soon as a plausible key is in the field,
-       after a save, and once on load for the key already stored. The Refresh
-       button stays for when a provider changes underneath you.
-       ------------------------------------------------------------------ */
 
     function setModelState(text, kind) {
         nodes.modelState.textContent = text;
@@ -190,20 +207,18 @@
 
     function showModels(models, providerLabel) {
         var current = nodes.model.value;
-        // Names arrive namespaced ("groq/llama-3.3-70b"), which is both what
-        // gets sent to the model and a reminder of where it is going.
         nodes.model.innerHTML = models.map(function (name) {
             return '<option value="' + Dom.esc(name) + '">' + Dom.esc(name) + "</option>";
         }).join("");
-        // Keep the member's choice if the new list still has it.
         if (models.indexOf(current) !== -1) nodes.model.value = current;
-        setModelState(
-            Dom.plural(models.length, "model") + " on " +
-            (providerLabel || "that provider") + ".", "is-ok");
+        var where = providerLabel || (isGreek() ? "αυτόν τον πάροχο" : "that provider");
+        var summary = isGreek()
+            ? (models.length === 1 ? "1 μοντέλο" : Dom.formatNumber(models.length) + " μοντέλα") +
+              " στον πάροχο " + where + "."
+            : Dom.plural(models.length, "model") + " available on " + where + ".";
+        setModelState(summary, "is-ok");
     }
 
-    // An empty field is not an error: the server falls back to the key already
-    // saved for this member, which is what makes the on-load probe work.
     function refreshModels(options) {
         var opts = options || {};
         var key = nodes.key.value.trim();
@@ -216,16 +231,17 @@
         }
         if (nodes.base.value.trim()) body.API_BASE = nodes.base.value.trim();
         var request = Api.post("/api/admin/employee/models", body);
+        setModelState(t("Checking which models this key can reach…"));
         if (opts.button) {
-            setModelState("Asking the provider which models this key can reach…");
             request = Loading.withButton(nodes.refresh, function () { return request; });
-        } else {
-            setModelState("Asking the provider which models this key can reach…");
         }
 
         return request.then(function (data) {
             if (!data.models || !data.models.length) {
-                setModelState(data.message || "That key returned no usable models.", "is-error");
+                setModelState(
+                    t(data.message || "That key returned no usable models. Check the provider and key."),
+                    "is-error"
+                );
                 return null;
             }
             showModels(data.models, data.provider_label);
@@ -240,7 +256,6 @@
         });
     }
 
-    // Keys are long; wait until typing settles rather than firing per keystroke.
     var autoProbe = Dom.debounce(function () { refreshModels(); }, 900);
 
     /* ------------------------------------------------------------------
@@ -253,26 +268,31 @@
 
     Dom.on(nodes.saveChecks, "click", saveChecks);
     Dom.on(nodes.saveConnection, "click", saveConnection);
-    Dom.on(nodes.refresh, "click", function () { refreshModels({ button: true, force: true }); });
+    Dom.on(nodes.refresh, "click", function () {
+        refreshModels({ button: true, force: true });
+    });
     Dom.on(nodes.model, "change", markDirty);
     Dom.on(nodes.provider, "change", function () {
         showBaseField(nodes.provider.value);
         markDirty();
-        // Naming a provider can only narrow the list, so it is worth asking.
         probedKey = null;
         refreshModels({ force: true });
     });
 
-    // Probe as the key is typed, but only once it looks like a real key —
-    // a couple of characters would only produce a provider rejection.
     Dom.on(nodes.key, "input", function () {
         if (nodes.key.value.trim().length >= 8) autoProbe();
+    });
+
+    Dom.on(document, "cybersyn:lang", function () {
+        paintKeyState();
+        if (dirty) nodes.checksState.textContent = t("Unsaved changes");
+        var autoOpt = nodes.provider.querySelector('option[value="auto"]');
+        if (autoOpt) autoOpt.textContent = t("Detect automatically");
     });
 
     loadProviders()
         .then(load)
         .then(function (data) {
-            // A key is already stored: list what it reaches, without a click.
             if (data && data.API_KEY_MASK) refreshModels();
         })
         .catch(function (err) { Loading.toast(err.message, "error"); });
