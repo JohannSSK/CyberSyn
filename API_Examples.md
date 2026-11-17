@@ -168,7 +168,7 @@ Existing admins are not affected by these rules.
 ---
 
 ## 3. `POST /api/admin/employee`
-Adds or removes a team member in `EMPLOYEES`. Team member removal is on the `/remove/employee` page, which needs an admin session and the team member's username and password.
+Adds or removes a team member in `EMPLOYEES`. Adding or removing a member decides who may chat on the workspace's stored provider key, so the server requires the administrator's session token for this workspace — a pair of guessable integers is not enough. Note that a newly added member inherits the workspace-default settings, **including the stored provider API key**. Team member removal is on the `/remove/employee` page, which needs an admin session and the team member's username and password.
 
 ### Example 3A: Add Team Member (Success)
 **Sends:**
@@ -177,7 +177,8 @@ Adds or removes a team member in `EMPLOYEES`. Team member removal is on the `/re
   "method": "add",
   "username": "nikos_dev",
   "password": "emp_pass_456",
-  "Parent_id": 1
+  "Parent_id": 1,
+  "token": "<administrator session token>"
 }
 ```
 **Receives:**
@@ -195,7 +196,8 @@ Adds or removes a team member in `EMPLOYEES`. Team member removal is on the `/re
   "method": "add",
   "username": "nikos_dev",
   "password": "emp_pass_456",
-  "Parent_id": 1
+  "Parent_id": 1,
+  "token": "<administrator session token>"
 }
 ```
 **Receives:**
@@ -213,7 +215,8 @@ Adds or removes a team member in `EMPLOYEES`. Team member removal is on the `/re
   "method": "remove",
   "username": "nikos_dev",
   "password": "emp_pass_456",
-  "Parent_id": 1
+  "Parent_id": 1,
+  "token": "<administrator session token>"
 }
 ```
 **Receives:**
@@ -224,8 +227,27 @@ Adds or removes a team member in `EMPLOYEES`. Team member removal is on the `/re
 }
 ```
 
+### Example 3D: Add or Remove Without an Administrator Session (Error)
+**Sends:**
+```json
+{
+  "method": "add",
+  "username": "nikos_dev",
+  "password": "emp_pass_456",
+  "Parent_id": 1
+}
+```
+**Receives (401):**
+```json
+{
+  "error": true,
+  "error_message": "Adding or removing a team member needs a valid administrator session for this workspace."
+}
+```
+
 **Notes**
-- The server checks the team member's password on removal. The "Are you sure?" confirmation is only in the UI.
+- `token` must be the administrator's session token for the same `Parent_id` — an administrator of another workspace is refused with `401`.
+- The server checks the team member's password on removal as well. The "Are you sure?" confirmation is only in the UI; both checks apply.
 - Chat history for a removed team member is not deleted yet (see section 12).
 
 ---

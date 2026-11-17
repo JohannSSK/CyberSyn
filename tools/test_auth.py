@@ -38,14 +38,18 @@ DB = cybersyn.DB_FILE
 
 
 def seed():
-    """Create one administrator and one team member."""
+    """Create one administrator and one team member.
+
+    The administrator keeps id 1 no matter which other fixtures have run —
+    the tests below refer to its workspace by that id.
+    """
     import sqlite3
 
     from passwords import hash_password
 
     con = sqlite3.connect(DB)
     con.execute(
-        "INSERT INTO ADMINS (username, password) VALUES (?, ?)",
+        "INSERT INTO ADMINS (id, username, password) VALUES (1, ?, ?)",
         ("boss", hash_password("admin-pw")),
     )
     con.execute(
@@ -372,6 +376,77 @@ class RouteTests(unittest.TestCase):
         # A blocked prompt counts as a block; an approved override does not.
         self.assertEqual(member["blocked"], 1)
         self.assertEqual(member["overrides"], 1)
+
+
+class MemberManagementTests(unittest.TestCase):
+    """Adding or removing a member decides who may chat on a workspace's
+    stored provider key, so POST /api/admin/employee needs that workspace's
+    administrator — the two guessable integers on their own were enough."""
+
+    @classmethod
+    def setUpClass(cls):
+        import sqlite3
+
+        from passwords import hash_password
+
+        con = sqlite3.connect(DB)
+        # High, explicit ids: whatever else has run, this fixture neither
+        # consumes nor depends on the low ids the other classes assume.
+        cur = con.execute("INSERT INTO ADMINS (id, username, password) VALUES (900, ?, ?)",
+                          ("mm_boss", hash_password("mm-pw")))
+        cls.mm_parent = cur.lastrowid
+        cur = con.execute("INSERT INTO ADMINS (id, username, password) VALUES (901, ?, ?)",
+                          ("mm_foreign", hash_password("mm-pw")))
+        cls.foreign_parent = cur.lastrowid
+        con.commit()
+        con.close()
+
+        cls.client = cybersyn.app.test_client()
+        cls.admin = cls.client.post(
+            "/api/admin/login",
+            json={"username": "mm_boss", "password": "mm-pw"},
+        ).get_json()["session_token"]
+        cls.foreign = cls.client.post(
+            "/api/admin/login",
+            json={"username": "mm_foreign", "password": "mm-pw"},
+        ).get_json()["session_token"]
+
+    def test_adding_a_member_without_an_admin_session_is_refused(self):
+        r = self.client.post("/api/admin/employee",
+                             json={"method": "add", "Parent_id": self.mm_parent,
+                                   "username": "intruder", "password": "pw-12345a"})
+        self.assertEqual(r.status_code, 401)
+
+    def test_adding_a_member_with_the_admin_session_is_allowed(self):
+        r = self.client.post("/api/admin/employee",
+                             json={"method": "add", "Parent_id": self.mm_parent,
+                                   "username": "legit", "password": "pw-12345a",
+                                   "token": self.admin})
+        self.assertEqual(r.status_code, 201)
+
+    def test_an_admin_of_another_workspace_is_refused(self):
+        r = self.client.post("/api/admin/employee",
+                             json={"method": "add", "Parent_id": self.mm_parent,
+                                   "username": "intruder2", "password": "pw-12345a",
+                                   "token": self.foreign})
+        self.assertEqual(r.status_code, 401)
+
+    def test_removing_a_member_without_an_admin_session_is_refused(self):
+        r = self.client.post("/api/admin/employee",
+                             json={"method": "remove", "Parent_id": self.mm_parent,
+                                   "username": "legit", "password": "pw-12345a"})
+        self.assertEqual(r.status_code, 401)
+
+    def test_removing_a_member_with_the_admin_session_is_allowed(self):
+        self.client.post("/api/admin/employee",
+                         json={"method": "add", "Parent_id": self.mm_parent,
+                               "username": "throwaway", "password": "pw-12345a",
+                               "token": self.admin})
+        r = self.client.post("/api/admin/employee",
+                             json={"method": "remove", "Parent_id": self.mm_parent,
+                                   "username": "throwaway", "password": "pw-12345a",
+                                   "token": self.admin})
+        self.assertEqual(r.status_code, 200)
 
 
 if __name__ == "__main__":

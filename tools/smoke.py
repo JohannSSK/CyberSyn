@@ -106,10 +106,10 @@ def main():
     name = "smoke_user"
     call("/api/admin/employee",
          {"method": "remove", "Parent_id": parent_id, "username": name,
-          "password": "Passw0rd!"})
+          "password": "Passw0rd!", "token": admin_token})
     status, _ = call("/api/admin/employee",
                      {"method": "add", "Parent_id": parent_id, "username": name,
-                      "password": "Passw0rd!"})
+                      "password": "Passw0rd!", "token": admin_token})
     check("team member added", status in (200, 201), status)
 
     status, login = call("/api/admin/employee/login",

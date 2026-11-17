@@ -242,6 +242,9 @@ async function memberPages() {
         page.posted[0] && page.posted[0].body.Parent_id === 7,
         page.posted[0] && page.posted[0].body.Parent_id);
     check("it asks to add", page.posted[0] && page.posted[0].body.method === "add");
+    check("it carries the administrator's token",
+        page.posted[0] && page.posted[0].body.token === "admin-token",
+        page.posted[0] && page.posted[0].body.token);
 
     const del = makePage("delete_member.html", {
         url: "/delete-member", admin: { username: "boss", parentId: 7 },
@@ -254,6 +257,9 @@ async function memberPages() {
     await del.click("#btn-delete-member");
     check("removing posts once", del.posted.length === 1, del.posted.length);
     check("it asks to remove", del.posted[0] && del.posted[0].body.method === "remove");
+    check("it carries the administrator's token",
+        del.posted[0] && del.posted[0].body.token === "admin-token",
+        del.posted[0] && del.posted[0].body.token);
     check("it names the member",
         del.posted[0] && del.posted[0].body.username === "mia");
     check("it acts on the administrator's workspace",
