@@ -1,6 +1,7 @@
 {# Shared navigation. Included by every signed-in page so the sidebar is
    defined once rather than copied into each template. #}
-<aside class="sidebar" data-sidebar>
+{# `id` is what the toggle's aria-controls points at, on every page. #}
+<aside class="sidebar" id="site-sidebar" data-sidebar>
     <div class="sidebar-brand">
         <span data-icon="shield"></span>
         <span>CyberSyn</span>

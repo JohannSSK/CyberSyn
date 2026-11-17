@@ -356,6 +356,67 @@
         return Object.prototype.hasOwnProperty.call(ADMIN_ONLY, key);
     }
 
+    /* ------------------------------------------------------------------
+       The sidebar
+
+       Below the breakpoint the navigation is a drawer that slides over the
+       page; above it, a column that can be put away. One button drives both,
+       so it always does something instead of sitting there dead: the state
+       is a single question — is the navigation showing? — answered one way
+       when there is no room for a column and the other way when there is.
+
+       The breakpoint lives in sidebar.css. It is repeated here because the
+       two halves have to agree; nothing else may change one without the
+       other.
+       ------------------------------------------------------------------ */
+
+    var NARROW_QUERY = "(max-width: 900px)";
+
+    var sidebar = null;   // the <aside data-sidebar>
+    var shell = null;     // .workspace or .layout — the grid that holds it
+    var scrim = null;     // the dimming layer behind an open drawer
+    var narrowNow = null; // last known side of the breakpoint
+
+    function narrow() {
+        return !!(global.matchMedia && global.matchMedia(NARROW_QUERY).matches);
+    }
+
+    /** Is the navigation on screen? Asked rather than remembered, so a
+        resize or a second toggle cannot leave the two halves disagreeing. */
+    function sidebarShown() {
+        if (!sidebar) return false;
+        return narrow()
+            ? sidebar.classList.contains("is-open")
+            : !(shell && shell.classList.contains("is-sidebar-collapsed"));
+    }
+
+    function showSidebar(open) {
+        if (!sidebar) return;
+
+        var asDrawer = narrow();
+        sidebar.classList.toggle("is-open", asDrawer && open);
+        if (shell) shell.classList.toggle("is-sidebar-collapsed", !asDrawer && !open);
+
+        if (scrim) scrim.classList.toggle("is-open", asDrawer && open);
+
+        global.Dom.$$("[data-action='toggle-sidebar']").forEach(function (btn) {
+            btn.setAttribute("aria-expanded", open ? "true" : "false");
+        });
+    }
+
+    function toggleSidebar() { showSidebar(!sidebarShown()); }
+
+    /** The dimming layer. Built here rather than in the template so a page
+        without a sidebar — every sign-in screen — never carries one. */
+    function buildScrim() {
+        var node = global.Dom.el("div", "sidebar-scrim");
+        node.setAttribute("data-sidebar-scrim", "");
+        node.setAttribute("aria-hidden", "true");
+        global.document.body.appendChild(node);
+        global.Dom.on(node, "click", function () { showSidebar(false); });
+        return node;
+    }
+
     document.addEventListener("DOMContentLoaded", function () {
         paintIcons(document);
         markActive();
@@ -371,12 +432,40 @@
             global.Dom.on(btn, "click", signOut);
         });
 
-        // Sidebar toggle on narrow screens.
-        var sidebar = global.Dom.$("[data-sidebar]");
+        sidebar = global.Dom.$("[data-sidebar]");
+        if (!sidebar) return;
+
+        shell = sidebar.closest ? sidebar.closest(".workspace, .layout")
+                                : sidebar.parentNode;
+
         global.Dom.$$("[data-action='toggle-sidebar']").forEach(function (btn) {
-            global.Dom.on(btn, "click", function () {
-                if (sidebar) sidebar.classList.toggle("is-open");
-            });
+            global.Dom.on(btn, "click", toggleSidebar);
+        });
+
+        // Wide screens start with the column open, narrow ones with the
+        // drawer shut. Saying so here keeps aria-expanded honest from the
+        // first click rather than from some default in the markup.
+        narrowNow = narrow();
+        showSidebar(!narrowNow);
+
+        if (narrowNow) scrim = scrim || buildScrim();
+
+        // Escape closes the drawer. Above the breakpoint there is nothing to
+        // dismiss — the column stays where it was put.
+        global.Dom.on(document, "keydown", function (event) {
+            if (event.key !== "Escape") return;
+            if (narrow() && sidebarShown()) showSidebar(false);
+        });
+
+        // Crossing the breakpoint invalidates the state: an open drawer is
+        // not a column, and a put-away column is not a drawer. Settle on
+        // what belongs to the new width.
+        global.Dom.on(global, "resize", function () {
+            var now = narrow();
+            if (now === narrowNow) return;
+            narrowNow = now;
+            if (now) scrim = scrim || buildScrim();
+            showSidebar(!now);
         });
     });
 

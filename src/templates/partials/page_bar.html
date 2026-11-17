@@ -1,0 +1,13 @@
+{# The bar above a standard page.
+
+   It carries the one control a page cannot give itself: the button that
+   reaches the navigation. Below the breakpoint the sidebar is a drawer, so
+   without this it could not be opened at all; above it, the same button puts
+   the column away and brings it back. #}
+<div class="page-bar">
+    <button type="button" class="icon-btn" data-action="toggle-sidebar"
+            aria-label="Toggle navigation" aria-expanded="true"
+            aria-controls="site-sidebar">
+        <span data-icon="menu"></span>
+    </button>
+</div>

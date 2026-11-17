@@ -117,21 +117,28 @@
 
 .form-msg.ok { color: var(--success); }
 
-@media (max-width: 900px) {
-    .layout { grid-template-columns: minmax(0, 1fr); }
-    .page-head { padding: 22px 18px 18px; }
-    .page-body { padding: 18px 18px 60px; }
-}
+/* --------------------------------------------------------------------------
+   The bar above a page
 
-/* A mobile bar to open the drawer; hidden on desktop. */
-.mobile-bar {
-    display: none;
+   Deliberately the same height as the chat topbar: whichever screen you are
+   on, the navigation button sits in the same place and the content starts at
+   the same line. It holds that one button and nothing else — the page below
+   carries its own title.
+   -------------------------------------------------------------------------- */
+
+.page-bar {
+    display: flex;
     align-items: center;
     gap: 12px;
-    padding: 12px 16px;
+    flex: none;
+    height: var(--topbar-h);
+    padding: 0 18px;
     border-bottom: 1px solid var(--border-soft);
 }
 
 @media (max-width: 900px) {
-    .mobile-bar { display: flex; }
+    .layout { grid-template-columns: minmax(0, 1fr); }
+    .page-head { padding: 22px 18px 18px; }
+    .page-body { padding: 18px 18px 60px; }
+    .page-bar { padding: 0 16px; }
 }
