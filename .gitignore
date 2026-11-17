@@ -19,3 +19,7 @@ src/backend/secret.key
 
 # Generated submission bundles (see tools/ to rebuild)
 *.patch
+
+# Presentation build scratch (deck itself is tracked)
+presentation/_preview/
+.venv-deck/
