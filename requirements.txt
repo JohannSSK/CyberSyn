@@ -8,3 +8,11 @@ flask
 litellm
 werkzeug
 cryptography
+
+# Photo screening (src/image_scan.py): face detection + OCR + redaction.
+# numpy is pinned below 2 because facenet-pytorch declares numpy<2.
+numpy<2
+opencv-python-headless
+facenet-pytorch
+rapidocr_onnxruntime
+easyocr

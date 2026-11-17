@@ -53,6 +53,33 @@
         "Team": "Ομάδα",
         "Statistics": "Στατιστικά",
         "Chat": "Συνομιλία",
+        "Photo scan": "Έλεγχος φωτογραφιών",
+        "Data protection": "Προστασία δεδομένων",
+        "Upload a photo. CyberSyn finds the personal data in it — faces, tax numbers, phones, IBANs, document fields — and hands you back a copy with every finding covered.": "Ανεβάστε μια φωτογραφία. Το CyberSyn εντοπίζει τα προσωπικά δεδομένα σε αυτήν — πρόσωπα, ΑΦΜ, τηλέφωνα, IBAN, πεδία εγγράφων — και σας επιστρέφει ένα αντίγραφο με κάθε εύρημα καλυμμένο.",
+        "Drop a photo here": "Σύρετε μια φωτογραφία εδώ",
+        "or click to browse — JPEG, PNG or WebP, up to 12 MB": "ή κάντε κλικ για επιλογή — JPEG, PNG ή WebP, έως 12 MB",
+        "Scanned in memory on this server. The photo is never stored.": "Σάρωση στη μνήμη αυτού του διακομιστή. Η φωτογραφία δεν αποθηκεύεται ποτέ.",
+        "Cover with": "Κάλυψη με",
+        "Blur": "Θόλωμα",
+        "Black box": "Μαύρο πλαίσιο",
+        "Download redacted copy": "Λήψη καλυμμένου αντιγράφου",
+        "Scan another photo": "Νέα σάρωση",
+        "Faces": "Πρόσωπα",
+        "Numbers": "Αριθμοί",
+        "Documents": "Έγγραφα",
+        "Portraits and group photos are biometric data under GDPR — they are always covered.": "Τα πορτρέτα και οι ομαδικές φωτογραφίες είναι βιομετρικά δεδομένα κατά τον GDPR — καλύπτονται πάντα.",
+        "ΑΦΜ, ΑΜΚΑ, phone numbers, IBANs, payment cards, ID numbers and plates — in Greek or English text.": "ΑΦΜ, ΑΜΚΑ, τηλέφωνα, IBAN, κάρτες πληρωμής, αριθμοί ταυτότητας και πινακίδες — σε ελληνικό ή αγγλικό κείμενο.",
+        "Next to labels like «ΕΠΩΝΥΜΟ», «ΟΝΟΜΑ», «ΔΙΕΥΘΥΝΣΙΣ», the value is covered even when no pattern matches it.": "Δίπλα σε ετικέτες όπως «ΕΠΩΝΥΜΟ», «ΟΝΟΜΑ», «ΔΙΕΥΘΥΝΣΙΣ», η τιμή καλύπτεται ακόμη κι αν δεν ταιριάζει σε κάποιο μοτίβο.",
+        "Nothing to cover in this photo.": "Τίποτα προς κάλυψη σε αυτή τη φωτογραφία.",
+        "Clean — no personal data found.": "Καθαρή — δεν βρέθηκαν προσωπικά δεδομένα.",
+        "Faces, numbers and document fields were all checked.": "Ελέγχθηκαν πρόσωπα, αριθμοί και πεδία εγγράφων.",
+        "The original never left this page. Download the redacted copy below.": "Το πρωτότυπο δεν έφυγε ποτέ από αυτή τη σελίδα. Κατεβάστε το καλυμμένο αντίγραφο παρακάτω.",
+        "Detecting faces…": "Εντοπισμός προσώπων…",
+        "Reading text (OCR)…": "Ανάγνωση κειμένου (OCR)…",
+        "Matching personal data…": "Αντιστοίχιση προσωπικών δεδομένων…",
+        "Covering findings…": "Κάλυψη ευρημάτων…",
+        "Redacted copy downloaded.": "Το καλυμμένο αντίγραφο λήφθηκε.",
+        "The image is too large (12 MB max).": "Η εικόνα είναι πολύ μεγάλη (έως 12 MB).",
         "Help & info": "Βοήθεια και πληροφορίες",
         "Apply": "Εφαρμογή",
         "Save": "Αποθήκευση",
@@ -195,6 +222,11 @@
 
     /* Strings that embed a number or a name cannot be exact-matched. */
     var PATTERNS = [
+        [/^Photo blocked — ([0-9]+) personal data items? found\.$/, function (m, n) {
+            return n === "1"
+                ? "Η φωτογραφία αποκλείστηκε — βρέθηκε 1 προσωπικό δεδομένο."
+                : "Η φωτογραφία αποκλείστηκε — βρέθηκαν " + n + " προσωπικά δεδομένα.";
+        }],
         [/^([0-9]+) of 3 checks (?:on|active)$/, function (m, n) { return n + " από 3 έλεγχοι ενεργοί"; }],
         [/^Signed in as (.+)$/, function (m, name) { return "Συνδεδεμένος ως " + name; }],
         [/^([0-9]+) members?$/, function (m, n) { return n === "1" ? "1 μέλος" : n + " μέλη"; }],

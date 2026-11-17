@@ -36,6 +36,7 @@
     "CHATS_RENAME": "/api/admin/employee/chats/rename",
     "CHATS_SEARCH": "/api/admin/employee/chats/search",
     "MESSAGE_EDIT": "/api/admin/employee/chats/message/edit",
-    "MESSAGE_DELETE": "/api/admin/employee/chats/message/delete"
+    "MESSAGE_DELETE": "/api/admin/employee/chats/message/delete",
+    "PHOTO_SCAN": "/api/admin/employee/photo/scan"
   }
 }

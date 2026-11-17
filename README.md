@@ -55,6 +55,10 @@ Design principles:
 - Prompt-injection detection that reads code comments too — multi-line comment blocks are merged so an
   attack split across lines is still caught.
 - Per-team toggles per check, so a team can disable a stage that does not apply to its work.
+- **Photo scan** (`/photo-scan`): upload a picture and CyberSyn finds the personal data in it —
+  faces (MTCNN), ΑΦΜ, ΑΜΚΑ, phones, IBANs (ISO-13616 checksum-verified), payment cards (Luhn),
+  ID numbers, plates and labelled document fields («ΕΠΩΝΥΜΟ», «ΟΝΟΜΑ», «ΔΙΕΥΘΥΝΣΙΣ»…) — then hands
+  back a redacted copy. Photos are screened in memory and never written to disk.
 
 **Governance & visibility**
 

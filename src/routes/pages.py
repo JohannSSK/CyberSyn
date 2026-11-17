@@ -90,3 +90,10 @@ def team():
 def help_page():
     return render_template("help.html", **_timeouts())
 
+
+@pages.get("/photo-scan")
+def photo_scan_page():
+    """Photo screening: upload a picture, find the personal data in it,
+    download a redacted copy."""
+    return render_template("photo_scan.html", **_timeouts())
+

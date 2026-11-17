@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block title %}Photo scan — CyberSyn{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/page.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/photo_scan.css') }}">
+{% endblock %}
+
+{% block body %}
+<div class="app-shell">
+    <div class="layout">
+        {% include "partials/sidebar.html" %}
+
+        <main class="layout-main">
+            {% include "partials/page_bar.html" %}
+            <header class="page-head">
+                <div class="row-between wrap">
+                    <div>
+                        <span class="eyebrow">Data protection</span>
+                        <h1>Photo scan</h1>
+                        <p class="dim">Upload a photo. CyberSyn finds the personal data in it — faces,
+                            tax numbers, phones, IBANs, document fields — and hands you back a copy
+                            with every finding covered.</p>
+                    </div>
+                </div>
+            </header>
+
+            <div class="page-body">
+
+                {# Upload: the only step when nothing is loaded. #}
+                <div class="dropzone" id="dropzone" tabindex="0" role="button"
+                     aria-label="Upload a photo to scan">
+                    <span class="dropzone-icon" data-icon="image"></span>
+                    <strong>Drop a photo here</strong>
+                    <span class="dim">or click to browse — JPEG, PNG or WebP, up to 12 MB</span>
+                    <span class="privacy-note">
+                        <span data-icon="lock"></span>
+                        Scanned in memory on this server. The photo is never stored.
+                    </span>
+                    <input type="file" id="file-input" accept="image/jpeg,image/png,image/webp,image/bmp" hidden>
+                </div>
+
+                {# Results: preview with finding boxes on the left, report on the right. #}
+                <div class="scan-results hidden" id="scan-results">
+                    <div class="scan-preview card-flat">
+                        <div class="preview-stage" id="preview-stage">
+                            <img id="preview-img" alt="Scanned photo">
+                            <div class="preview-overlay" id="preview-overlay"></div>
+                            <div class="preview-scanning hidden" id="preview-scanning">
+                                <div class="scan-line"></div>
+                                <span id="scan-stage-text">Detecting faces…</span>
+                            </div>
+                        </div>
+                        <div class="preview-meta dim" id="preview-meta"></div>
+                    </div>
+
+                    <div class="scan-report">
+                        <div class="verdict hidden" id="verdict"></div>
+
+                        <div class="warnings hidden" id="scan-warnings"></div>
+
+                        <div class="findings" id="findings"></div>
+
+                        <div class="redact-controls" id="redact-controls">
+                            <span class="control-label">Cover with</span>
+                            <div class="segmented" id="mode-picker">
+                                <button type="button" data-mode="blur" class="is-active">Blur</button>
+                                <button type="button" data-mode="black">Black box</button>
+                            </div>
+                        </div>
+
+                        <div class="scan-actions">
+                            <button type="button" class="btn btn-primary hidden" id="btn-download">
+                                <span data-icon="download"></span><span>Download redacted copy</span>
+                            </button>
+                            <button type="button" class="btn btn-outline" id="btn-again">
+                                <span data-icon="plus"></span><span>Scan another photo</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="photo-hints">
+                    <div class="hint-card">
+                        <span data-icon="profile"></span>
+                        <strong>Faces</strong>
+                        <span class="dim">Portraits and group photos are biometric data under GDPR —
+                            they are always covered.</span>
+                    </div>
+                    <div class="hint-card">
+                        <span data-icon="key"></span>
+                        <strong>Numbers</strong>
+                        <span class="dim">ΑΦΜ, ΑΜΚΑ, phone numbers, IBANs, payment cards, ID numbers
+                            and plates — in Greek or English text.</span>
+                    </div>
+                    <div class="hint-card">
+                        <span data-icon="shield"></span>
+                        <strong>Documents</strong>
+                        <span class="dim">Next to labels like «ΕΠΩΝΥΜΟ», «ΟΝΟΜΑ», «ΔΙΕΥΘΥΝΣΙΣ»,
+                            the value is covered even when no pattern matches it.</span>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/photo_scan.js') }}"></script>
+{% endblock %}
