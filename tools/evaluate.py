@@ -84,6 +84,11 @@ CASES = [
         "expect": {"check1": True, "check2": False, "check3": False},
     },
     {
+        "name": "pii: mobile phone with spaces",
+        "text": "6 9 6 8 5 2 6 4 7 3",
+        "expect": {"check1": True, "check2": False, "check3": False},
+    },
+    {
         "name": "pii: email address",
         "text": "Send the summary to ioannis.papadopoulos@example.com please.",
         "expect": {"check1": True, "check2": False, "check3": False},
