@@ -37,8 +37,9 @@
 
                 <div class="topbar-spacer"></div>
 
-                <div class="topbar-status" id="checks-status">
-                    <span class="dot" style="color: var(--success)"></span>
+                <div class="topbar-status is-all-on" id="checks-status"
+                     role="status" title="3 of 3 checks active">
+                    <span class="dot" aria-hidden="true"></span>
                     <span class="topbar-status-text" id="checks-summary">3 of 3 checks active</span>
                 </div>
 
@@ -52,21 +53,36 @@
                 <div class="stream-inner" id="chat-messages"></div>
             </div>
 
+            {# Shown only on a member's first visit, while they have zero saved
+               chats. Picking a starter fills the composer without sending. #}
+            <template id="first-run-template">
+                <section class="first-run fade-in" aria-labelledby="first-run-heading">
+                    <h1 class="first-run-title" id="first-run-heading">What are we working on today?</h1>
+                    <p class="first-run-lead">Every message is checked on this computer through three local checks before it reaches the AI.</p>
+                    <div class="starter-list" role="group" aria-label="Starter prompts">
+                        <button type="button" class="starter-chip" data-starter>Summarise this contract in three bullet points</button>
+                        <button type="button" class="starter-chip" data-starter>Review this function for bugs</button>
+                        <button type="button" class="starter-chip" data-starter>Draft a client update email</button>
+                    </div>
+                    <p class="first-run-caption">Pick a starter to fill the message box — nothing leaves until you send it.</p>
+                </section>
+            </template>
+
             <footer class="composer">
                 <div class="composer-inner">
                     <form id="form-send" class="composer-box">
                         <textarea id="prompt-input" rows="1"
-                                  placeholder="Ask anything…  (Enter to send, Shift+Enter for a new line)"
+                                  placeholder="Write a message… (Enter to send, Shift+Enter for a new line)"
                                   aria-label="Message"></textarea>
                         <button type="submit" class="composer-send" id="btn-send"
-                                title="Send" aria-label="Send message">
-                            <span data-icon="send"></span>
+                                title="Send message" aria-label="Send message">
+                            <span data-icon="send" data-icon-svg></span>
                         </button>
                     </form>
                     <div class="composer-foot">
                         <span data-icon="shield"></span>
-                        <span>Checked on this machine before anything reaches the AI provider.</span>
-                        <span class="composer-hint">Enter ⏎</span>
+                        <span>Checked on this computer before anything reaches the AI.</span>
+                        <span class="composer-hint">Enter · Shift+Enter</span>
                     </div>
                 </div>
             </footer>
