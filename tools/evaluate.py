@@ -104,6 +104,21 @@ CASES = [
         "expect": {"check1": True, "check2": False, "check3": False},
     },
     {
+        "name": "pii: greek titled person name",
+        "text": "Η κα. Ελένη Παπαδοπούλου συμπλήρωσε την αίτηση για βεβαίωση.",
+        "expect": {"check1": True, "check2": False, "check3": False},
+    },
+    {
+        "name": "pii: greek surname",
+        "text": "Ενημερώθηκε η Παπαδοπούλου για την πορεία του αιτήματος.",
+        "expect": {"check1": True, "check2": False, "check3": False},
+    },
+    {
+        "name": "pii: IBAN",
+        "text": "Παρακαλώ καταθέστε τα χρήματα στο IBAN GR9912345671234567890123456.",
+        "expect": {"check1": True, "check2": True, "check3": False},
+    },
+    {
         "name": "pii: greek company name",
         "text": "Ο πελάτης είναι η Αττική Τεχνική Α.Ε. και μας ζήτησε προσφορά.",
         "expect": {"check1": True, "check2": False, "check3": False},

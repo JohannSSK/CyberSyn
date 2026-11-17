@@ -55,8 +55,9 @@ HR_CUSTOMER_PATTERNS = re.compile(
     r"(\b(payroll|base salary|bonus structure|compensation package|stock options|"
     r"layoff list|termination letter|severance package|performance improvement plan|"
     r"employee ssn|background check|patient record|medical diagnosis|hipaa|gdpr dump|"
-    r"customer database|client list|crm export|lead list)\b|"
-    r"(μισθοδοσία|μισθός|απόλυση|αποζημίωση|πελατολόγιο|ιατρικός φάκελος|προσωπικά δεδομένα))",
+    r"customer database|client list|crm export|lead list|"
+    r"customer names?|client names?|employee names?|personal data|surname|full name|pii dump)\b|"
+    r"(μισθοδοσία|μισθός|απόλυση|αποζημίωση|πελατολόγιο|ιατρικός φάκελος|προσωπικά δεδομένα|ονοματεπώνυμο|επώνυμο|επίθετο))",
     re.IGNORECASE,
 )
 
@@ -65,8 +66,7 @@ CREDENTIAL_PATTERNS = re.compile(
     r"((postgres|postgresql|mysql|mongodb|redis)://[^\s]+|"
     r"-----BEGIN\s+(RSA|OPENSSH|DSA|EC|PRIVATE)\s+KEY-----|"
     r"\b(password|passwd|pwd|secret_key|client_secret|access_token|auth_token)\s*[:=]\s*['\"]?[^\s'\"]{4,}|"
-    r"\bGR\d{2}\s?\d{4}\s?\d{4}\s?\d{4}\s?\d{4}\s?\d{4}\s?\d{3}\b|"
-    r"\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b|"
+    r"\b[A-Za-z]{2}\d{2}(?:[\s-]?[A-Za-z0-9]){11,30}\b|"
     r"\b(?:\d{4}[-\s]?){3}\d{4}\b)",
     re.IGNORECASE,
 )
