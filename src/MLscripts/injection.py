@@ -27,13 +27,13 @@ INJECTION_PATTERNS = re.compile(
     r"if\s+you\s+are\s+an?\s+(ai|llm|language\s+model|assistant)|"
     r"(stop|abort|ignore)\s+the\s+(review|task|analysis|summary)|"
     r"(print|output|reveal|repeat|show)\s+(the\s+)?(full\s+)?(contents\s+of\s+)?(your|the|system|initial)\s+(instructions|prompt|rules)|"
-    r"dump\s+(all\s+)?(client|user|customer|database|iban|personal|pii|credentials|account|financial|records|names)|"
+    r"dump\s+(all\s+)?(client|user|customer|database|iban|id|identity|personal|pii|credentials|account|financial|records|names)|"
     r"(developer|jailbreak|god|dan)\s+mode|"
     r"bypass\s+(all\s+)?security|"
     r"forget\s+(all\s+)?(previous|your)\s+instructions|"
     r"(παράβλεψε|αγνόησε|ξεχάστε|ξέχνα)\s+(όλες\s+)?(τις\s+)?(προηγούμενες\s+)?(οδηγίες|εντολές|κανόνες)|"
     r"(εμφάνισε|δείξε|πες\s+μου|εκτύπωσε)\s+(όλες\s+)?(τις\s+)?(οδηγίες|εντολές|αρχικές\s+οδηγίες|οδηγίες\s+συστήματος)|"
-    r"(διαρροή|εξαγωγή|dump)\s+(όλων\s+των\s+)?(δεδομένων|χρηστών|πελατών|iban|προσωπικών|τραπεζικών)|"
+    r"(διαρροή|εξαγωγή|dump)\s+(όλων\s+των\s+)?(δεδομένων|χρηστών|πελατών|iban|ταυτοτήτων|αδτ|προσωπικών|τραπεζικών)|"
     r"(παράκαμψη|παράκαμψε)\s+(όλους\s+τους\s+)?(ελέγχους|ασφάλεια|κανόνες))",
     re.IGNORECASE,
 )

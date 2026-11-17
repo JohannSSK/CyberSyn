@@ -22,6 +22,7 @@ PATTERNS = {
         r"|6[\s.-]*9(?:[\s.-]*\d){8})"
         r"\b(?![ \t.-]*\d)"
     ),
+    "GREEK_ID": r"\b[ABEZHIKMNOPTYXΑΒΕΖΗΙΚΜΝΟΡΤΥΧ][\s-]?\d{8}\b",
     "IBAN": r"\b[A-Z]{2}\d{2}(?:[\s-]?[A-Za-z0-9]){11,30}\b",
     "EMAIL": r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b",
     "API_KEY": r"\b(sk-[a-zA-Z0-9]{10,}|AKIA[0-9A-Z]{16})\b",
@@ -69,6 +70,9 @@ BLOCKING_CAUSES = (
     "GREEK_AFM",
     "GREEK_AMKA",
     "GREEK_PHONE",
+    "GREEK_ID",
+    "GREEK_ID_CARD",
+    "ID_CARD",
     "IBAN",
     "GREEK_IBAN",
     "EMAIL",
