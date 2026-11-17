@@ -119,6 +119,11 @@ CASES = [
         "expect": {"check1": True, "check2": True, "check3": False},
     },
     {
+        "name": "pii: greek ID card",
+        "text": "Ο αριθμός ταυτότητας του αιτούντος είναι Α12345678.",
+        "expect": {"check1": True, "check2": False, "check3": False},
+    },
+    {
         "name": "pii: greek company name",
         "text": "Ο πελάτης είναι η Αττική Τεχνική Α.Ε. και μας ζήτησε προσφορά.",
         "expect": {"check1": True, "check2": False, "check3": False},
