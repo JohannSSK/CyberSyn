@@ -51,22 +51,23 @@
        Toasts
        ------------------------------------------------------------------ */
 
-    var ICONS = { success: "check", error: "warning", warn: "warning", info: "spark" };
+    var ICONS = { success: "check", error: "warning", warn: "warning", info: "shield" };
 
     function toast(message, type) {
         var container = document.getElementById("toast-container");
         if (!container) return;
         var kind = type || "info";
+        var text = global.I18n ? global.I18n.t(message) : message;
         var node = document.createElement("div");
         node.className = "toast toast-" + kind;
-        node.innerHTML = Icons.svg(ICONS[kind] || "spark", "icon") +
-            '<span>' + global.Dom.esc(message) + '</span>';
+        node.innerHTML = Icons.svg(ICONS[kind] || "shield", "icon") +
+            "<span>" + global.Dom.esc(text) + "</span>";
         container.appendChild(node);
 
         var life = kind === "error" ? 6000 : 3800;
         setTimeout(function () {
             node.classList.add("out");
-            setTimeout(function () { node.remove(); }, 260);
+            setTimeout(function () { node.remove(); }, 240);
         }, life);
     }
 

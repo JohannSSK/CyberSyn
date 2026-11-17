@@ -123,7 +123,7 @@
                     var message = result.data.error_message ||
                         result.data.message ||
                         result.data.reason ||
-                        ("Request failed (" + result.status + ")");
+                        ("The server could not finish that request (" + result.status + "). Try again.");
                     var err = new Error(message);
                     err.status = result.status;
                     err.body = result.data;
@@ -133,12 +133,16 @@
             })
             .catch(function (err) {
                 if (err.name === "AbortError") {
-                    var timeoutErr = new Error("The request took too long. Try again.");
+                    var timeoutErr = new Error(
+                        "That took longer than expected. Check your connection and try again."
+                    );
                     timeoutErr.status = 408;
                     throw timeoutErr;
                 }
                 if (err.status) throw err;
-                var netErr = new Error("Could not reach the server.");
+                var netErr = new Error(
+                    "Could not reach the gateway. Check that the server is running and try again."
+                );
                 netErr.status = 0;
                 throw netErr;
             })
