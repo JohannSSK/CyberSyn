@@ -208,9 +208,43 @@
         transform: translateX(-100%);
         transition: transform var(--med) var(--ease);
         box-shadow: var(--shadow-lg);
+        /* The drawer is a viewport-tall box whatever the page is doing, so it
+           has to be able to scroll itself: on a short window (a phone held
+           sideways) the footer used to sit past the bottom edge, out of
+           reach, with no way to scroll to it. */
+        overflow-y: auto;
+        overscroll-behavior: contain;
     }
 
     .sidebar.is-open { transform: none; }
+}
+
+/* --------------------------------------------------------------------------
+   Above the breakpoint the sidebar is a column, and the same button puts it
+   away. The class goes on the grid rather than on the sidebar so one rule
+   covers both layouts — .workspace and .layout — and the column closes up
+   instead of leaving a gap where the navigation used to be.
+
+   Underneath the drawer's 500, so the drawer is always above it, and well
+   below the modal (8000) and the toasts (9000).
+   -------------------------------------------------------------------------- */
+
+.sidebar-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 499;
+    display: none;
+    background: rgba(4, 8, 18, 0.6);
+    animation: fade-in var(--fast) var(--ease) both;
+}
+
+.sidebar-scrim.is-open { display: block; }
+
+@media (min-width: 901px) {
+    .workspace.is-sidebar-collapsed,
+    .layout.is-sidebar-collapsed { grid-template-columns: minmax(0, 1fr); }
+
+    .is-sidebar-collapsed .sidebar { display: none; }
 }
 
 /* --------------------------------------------------------------------------

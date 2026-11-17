@@ -249,9 +249,15 @@
                 b.classList.toggle("is-active", b === button);
             });
             // The range filters the trend client-side; the totals stay whole.
+            // Each card is counted on its own: the columns were taken from
+            // every card at once, so with more than one member the index ran
+            // into the thousands and the last few days hid nothing.
             var days = parseInt(button.getAttribute("data-days"), 10);
-            Dom.$$(".member-card .trend-col").forEach(function (col, index, all) {
-                col.style.display = index < all.length - days ? "none" : "";
+            Dom.$$(".member-card").forEach(function (card) {
+                var cols = Dom.$$(".trend-col", card);
+                cols.forEach(function (col, index) {
+                    col.style.display = index < cols.length - days ? "none" : "";
+                });
             });
         });
     });

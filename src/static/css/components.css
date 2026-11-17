@@ -323,6 +323,10 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    /* A fixed-size control in a flex row is still a flex item, so it shrinks
+       unless told not to — which squeezes the icon out of its own button and,
+       in a tight row, leaves two buttons sharing the same few pixels. */
+    flex: none;
     width: 32px;
     height: 32px;
     border-radius: var(--r-sm);
@@ -371,7 +375,10 @@
     border: 1px solid var(--border);
     box-shadow: var(--shadow-md);
     font-size: 13.5px;
-    pointer-events: auto;
+    /* A toast is text and an icon, nothing to click, and it lands in the
+       top-right corner — straight over the chat topbar. Left interactive it
+       swallowed the press meant for the button showing underneath it. */
+    pointer-events: none;
     animation: toast-in var(--med) var(--ease) both;
 }
 

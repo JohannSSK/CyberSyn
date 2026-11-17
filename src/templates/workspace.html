@@ -17,7 +17,8 @@
         <main class="workspace-main">
             <header class="topbar">
                 <button type="button" class="icon-btn" data-action="toggle-sidebar"
-                        aria-label="Toggle sidebar"><span data-icon="menu"></span></button>
+                        aria-label="Toggle sidebar" aria-expanded="true"
+                        aria-controls="site-sidebar"><span data-icon="menu"></span></button>
 
                 <button type="button" class="topbar-title" id="btn-rename-chat"
                         title="Rename this chat">
@@ -38,7 +39,7 @@
 
                 <div class="topbar-status" id="checks-status">
                     <span class="dot" style="color: var(--success)"></span>
-                    <span id="checks-summary">3 of 3 checks active</span>
+                    <span class="topbar-status-text" id="checks-summary">3 of 3 checks active</span>
                 </div>
 
                 <button type="button" class="icon-btn danger" id="btn-delete-chat"

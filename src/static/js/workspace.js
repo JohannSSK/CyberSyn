@@ -38,6 +38,7 @@
         deleteChat: $("#btn-delete-chat"),
         rename: $("#btn-rename-chat"),
         search: $("#chat-search"),
+        searchBox: $(".search-box"),
         searchClear: $("#search-clear"),
         searchCount: $("#search-count"),
         checksSummary: $("#checks-summary"),
@@ -281,6 +282,9 @@
 
         nodes.searchCount.classList.toggle("hidden", !query);
         nodes.searchClear.classList.toggle("hidden", !query);
+        // The count floats over the field, so the field reserves room for it
+        // only while there is a count to show.
+        if (nodes.searchBox) nodes.searchBox.classList.toggle("has-count", !!query);
         if (query) {
             nodes.searchCount.textContent = Dom.plural(visible.length, "message");
         }

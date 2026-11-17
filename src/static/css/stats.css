@@ -29,7 +29,10 @@
 
 .member-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    /* min(), not a bare 380px: a track with a fixed floor cannot go below it,
+       so on a phone the cards carried on at full width and the row ran off
+       the side of the page. */
+    grid-template-columns: repeat(auto-fill, minmax(min(380px, 100%), 1fr));
     gap: 16px;
 }
 
