@@ -84,6 +84,11 @@ CASES = [
         "expect": {"check1": True, "check2": False, "check3": False},
     },
     {
+        "name": "pii: mobile phone with spaces",
+        "text": "6 9 6 8 5 2 6 4 7 3",
+        "expect": {"check1": True, "check2": False, "check3": False},
+    },
+    {
         "name": "pii: email address",
         "text": "Send the summary to ioannis.papadopoulos@example.com please.",
         "expect": {"check1": True, "check2": False, "check3": False},
@@ -96,6 +101,26 @@ CASES = [
     {
         "name": "pii: full person name",
         "text": "The contract was signed by Maria Papadopoulou last Friday.",
+        "expect": {"check1": True, "check2": False, "check3": False},
+    },
+    {
+        "name": "pii: greek titled person name",
+        "text": "Η κα. Ελένη Παπαδοπούλου συμπλήρωσε την αίτηση για βεβαίωση.",
+        "expect": {"check1": True, "check2": False, "check3": False},
+    },
+    {
+        "name": "pii: greek surname",
+        "text": "Ενημερώθηκε η Παπαδοπούλου για την πορεία του αιτήματος.",
+        "expect": {"check1": True, "check2": False, "check3": False},
+    },
+    {
+        "name": "pii: IBAN",
+        "text": "Παρακαλώ καταθέστε τα χρήματα στο IBAN GR9912345671234567890123456.",
+        "expect": {"check1": True, "check2": True, "check3": False},
+    },
+    {
+        "name": "pii: greek ID card",
+        "text": "Ο αριθμός ταυτότητας του αιτούντος είναι Α12345678.",
         "expect": {"check1": True, "check2": False, "check3": False},
     },
     {
