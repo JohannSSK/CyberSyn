@@ -61,12 +61,17 @@ esac
 
 # ---------------------------------------------------------------------------
 # 1. A Python 3 interpreter, under one of the names it is shipped as.
+#
+# Prefer 3.10–3.12: the photo-scan stack (facenet pins numpy<2, and numpy 1.x
+# ships wheels up to cp312) has no wheels for 3.13+. A newer interpreter
+# still runs the app — the photo route answers 503 — but say so loudly here,
+# not from a traceback at first upload.
 # ---------------------------------------------------------------------------
 
 say "==> 1. Looking for Python 3..."
 
 PYTHON=""
-for candidate in python3 python3.13 python3.12 python3.11 python3.10 python; do
+for candidate in python3.12 python3.11 python3.10 python3.13 python3 python; do
     if command -v "$candidate" >/dev/null 2>&1; then
         # `python` is Python 2 on older systems; skip it unless it is 3.x.
         if "$candidate" -c 'import sys; sys.exit(0 if sys.version_info[0] == 3 else 1)' \
@@ -90,14 +95,41 @@ if ! "$PYTHON" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)
    Install a newer Python 3 and run this script again."
 fi
 
+PY_VERSION="$("$PYTHON" -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
+PHOTO_OK=1
+if "$PYTHON" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 13) else 1)'; then
+    PHOTO_OK=0
+    say "    ⚠ $PYTHON is Python $PY_VERSION — too new for the photo-scan stack"
+    say "      (numpy<2 / facenet-pytorch have no wheels for 3.13+)."
+    say "      Chat will work, but /photo-scan will stay off."
+    say "      To get photo scanning, install Python 3.12 and rerun setup:"
+    say "        Debian/Ubuntu: sudo apt install python3.12 python3.12-venv"
+    say "        Fedora:        sudo dnf install python3.12"
+    say "        macOS:         brew install python@3.12"
+    say "      then: rm -rf .venv && ./setup.sh"
+fi
+
 say "    using $PYTHON ($("$PYTHON" -c 'import sys; print("%d.%d.%d" % sys.version_info[:3])'))"
 
 # ---------------------------------------------------------------------------
 # 2. The virtual environment.
+#
+# An existing .venv is reused — unless it was built with a Python too new
+# for the photo-scan stack while a compatible interpreter is available: then
+# reusing it would silently keep /photo-scan off, so it is rebuilt.
 # ---------------------------------------------------------------------------
 
 if [ -d .venv ] && [ -x .venv/bin/python ]; then
-    say "==> 2. Reusing the existing virtual environment (.venv)."
+    VENV_VER="$(.venv/bin/python -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
+    if [ "$PHOTO_OK" = "1" ] && .venv/bin/python -c \
+       'import sys; sys.exit(0 if sys.version_info >= (3, 13) else 1)'; then
+        say "==> 2. The existing .venv is Python $VENV_VER — too new for the"
+        say "       photo-scan stack. Rebuilding it with $PYTHON..."
+        rm -rf .venv
+        "$PYTHON" -m venv .venv || die "could not recreate the virtual environment."
+    else
+        say "==> 2. Reusing the existing virtual environment (.venv, Python $VENV_VER)."
+    fi
 else
     say "==> 2. Creating the virtual environment (.venv)..."
     if ! "$PYTHON" -m venv .venv 2>/tmp/cybersyn-venv-error; then
@@ -140,12 +172,44 @@ HINT
 fi
 
 # ---------------------------------------------------------------------------
-# 4. The model. Wanted, not required: without it the app still runs and
+# 5. Verify. A dependency that installed but cannot be imported (a wheel for
+#    the wrong platform, a missing system library) must be caught here —
+#    not from a ModuleNotFoundError the next time ./run.sh starts.
+# ---------------------------------------------------------------------------
+
+say "==> 5. Verifying the installation..."
+PROBE_MODULES="flask litellm cryptography"
+if [ "$PHOTO_OK" = "1" ]; then
+    PROBE_MODULES="$PROBE_MODULES numpy PIL cv2 facenet_pytorch rapidocr_onnxruntime easyocr"
+fi
+# Real imports, not find_spec: a wheel whose native libraries are missing
+# (the classic libGL-less cv2) exists on disk yet fails at import time.
+if ! MISSING="$("$VENV_PY" - "$PROBE_MODULES" <<'PY'
+import importlib, sys
+broken = []
+for m in sys.argv[1].split():
+    try:
+        importlib.import_module(m)
+    except Exception as exc:
+        broken.append(f"{m} ({type(exc).__name__})")
+print(" ".join(broken))
+PY
+)"; then
+    die "the dependency probe itself failed to run — the virtual environment looks broken."
+fi
+if [ -n "$MISSING" ]; then
+    die "these modules failed to import after install: $MISSING
+   Scroll up for the pip error, fix it, and run ./setup.sh again."
+fi
+say "    all required modules import."
+
+# ---------------------------------------------------------------------------
+# 6. The model. Wanted, not required: without it the app still runs and
 #    fetches the weights on first use, so a network failure here must not
 #    undo the install that just succeeded.
 # ---------------------------------------------------------------------------
 
-say "==> 5. Pre-downloading the zero-shot model..."
+say "==> 6. Pre-downloading the zero-shot model..."
 if "$VENV_PY" -c "from transformers import pipeline; pipeline('zero-shot-classification', model='valhalla/distilbart-mnli-12-1')" \
    >/dev/null 2>&1; then
     say "    model ready."

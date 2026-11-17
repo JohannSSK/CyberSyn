@@ -86,6 +86,51 @@ fi
 say "==> Using $("$PY" -c 'import sys; print("Python %d.%d" % sys.version_info[:2])') at $PY"
 
 # ---------------------------------------------------------------------------
+# Dependencies. A package that never installed used to surface as a
+# ModuleNotFoundError from deep inside app startup — repair it instead.
+# find_spec only locates modules, so the probe costs milliseconds, and it
+# skips the photo-scan stack on Python 3.13+, where requirements.txt
+# intentionally omits it (no numpy<2 wheels there).
+# ---------------------------------------------------------------------------
+
+deps_missing() {
+    "$1" - <<'PY'
+import importlib, importlib.util, sys
+core = ["flask", "litellm", "cryptography"]
+photo = [] if sys.version_info >= (3, 13) else [
+    "numpy", "PIL", "cv2", "facenet_pytorch", "rapidocr_onnxruntime", "easyocr"]
+missing = [m for m in core + photo if importlib.util.find_spec(m) is None]
+# find_spec proves presence, not importability — the native modules are the
+# fragile ones (a cv2 built against a libGL the system lacks imports to an
+# ImportError), so cv2 and numpy get a real import on top.
+if not missing and photo:
+    for m in ("numpy", "cv2"):
+        try:
+            importlib.import_module(m)
+        except Exception:
+            missing.append(m)
+if missing:
+    print(" ".join(missing))
+    sys.exit(1)
+PY
+}
+
+if ! MISSING="$(deps_missing "$PY")"; then
+    say "==> Missing dependencies: $MISSING"
+    say "==> Running ./setup.sh to install them..."
+    if ! "$ROOT/setup.sh"; then
+        die "setup.sh could not install the dependencies; see its output above."
+    fi
+    # setup.sh may have just created or rebuilt .venv — prefer it now.
+    if [ -x "$ROOT/.venv/bin/python" ]; then PY="$ROOT/.venv/bin/python"; fi
+    if ! MISSING="$(deps_missing "$PY")"; then
+        die "dependencies still missing after setup: $MISSING
+   Run ./setup.sh yourself and read the pip error it prints."
+    fi
+    say "==> Dependencies installed."
+fi
+
+# ---------------------------------------------------------------------------
 # Host and port: constants.json, with the environment taking precedence.
 # ---------------------------------------------------------------------------
 

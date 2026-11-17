@@ -14,8 +14,12 @@ cryptography
 # tops out at cp312). On newer Pythons they are skipped on purpose: the app
 # still boots and chat works — only /photo-scan stays off. For the photo
 # feature, build the venv with python3.12 (or 3.11/3.10).
+#
+# Order matters: rapidocr_onnxruntime pulls in GUI opencv-python, which
+# needs system libGL; opencv-python-headless is listed LAST so it wins the
+# shared cv2 namespace and the app works on headless servers too.
 numpy<2 ; python_version < "3.13"
-opencv-python-headless ; python_version < "3.13"
+easyocr ; python_version < "3.13"
 facenet-pytorch ; python_version < "3.13"
 rapidocr_onnxruntime ; python_version < "3.13"
-easyocr ; python_version < "3.13"
+opencv-python-headless ; python_version < "3.13"
