@@ -193,7 +193,8 @@
 
             return Api.post("/api/admin/employee",
                 { method: "add", Parent_id: context.parentId,
-                  username: name, password: password.value },
+                  username: name, password: password.value,
+                  token: context.token },
                 { member: false, onUnauthorised: false }
             ).then(function () {
                 Loading.toast(name + " can sign in now.", "success");
@@ -238,7 +239,8 @@
 
             return Api.post("/api/admin/employee",
                 { method: "remove", Parent_id: context.parentId,
-                  username: name, password: password.value },
+                  username: name, password: password.value,
+                  token: context.token },
                 { member: false, onUnauthorised: false }
             ).then(function () {
                 Loading.toast(name + " was removed.", "success");

@@ -175,11 +175,30 @@ def regenerate():
             raise ChatError("Only a message you sent can be regenerated.", 400)
 
         saved = get_settings(parent_id, employee_id)
+
+        # The stored prompt may have been edited since it was screened, so a
+        # re-send goes back through the same gate as a fresh message. This
+        # uses the member's saved policy — not per-request toggles — and it
+        # fails closed: without it, "edit, then regenerate" would ship an
+        # unscreened prompt to the provider.
+        saved_flags = {key: bool(saved[key]) for key in ("check1", "check2", "check3")}
+        info = screen(entry["prompt"], saved_flags)
+        if info is not None:
+            record_block(DB_FILE, parent_id, employee_id, info["stage"],
+                         info["main_cause"])
+            record_activity(DB_FILE, parent_id, employee_id, "blocked",
+                            info["main_cause"])
+            message = (
+                f"Blocked by {info['stage']} ({info['main_cause']}): "
+                f"'{info['snippet']}' on line {info['line']}"
+            )
+            return chat_response(False, True, message=message, block_info=info)
+
         api_key = decrypt_secret(saved["API_KEY"]).strip()
         if not api_key:
             raise ChatError("No API_KEY provided.", 400)
 
-        provider, base = saved_provider_base(saved)
+        provider, base = provider_and_base(saved)
         answer = complete(api_key, saved["MODEL_NAME"] or DEFAULT_MODEL,
                           entry["prompt"], api_base=base, provider=provider)
         messages = replace_answer(DB_FILE, parent_id, employee_id, chat_id,

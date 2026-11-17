@@ -39,8 +39,9 @@ Design principles:
    offending snippet, so the user learns the rule instead of fighting it.
 4. **Humans stay in control.** An administrator can approve a genuine exception; the override is recorded
    and attributed, not silently allowed.
-5. **Watch the watcher.** CyberSyn stores the minimum it needs, encrypts secrets at rest, and treats the
-   audit trail as sensitive data too.
+5. **Watch the watcher.** CyberSyn encrypts secrets at rest and treats the audit trail as sensitive data
+   too — though it is not minimal in one respect: the activity log keeps an 80-character prefix of each
+   prompt. See [Security & privacy design](#security--privacy-design).
 
 ## Key features
 
@@ -59,7 +60,8 @@ Design principles:
 **Governance & visibility**
 
 - Administrator dashboard (`/team`): prompts sent, answered and blocked per member, block rate, and a
-  ranking of block reasons and stages — the "which teams sent what this week" question, answered.
+  ranking of block reasons and stages — the "which teams sent what this week" question, answered. The
+  activity timeline shows up to 80 characters of each prompt — see [Limitations](#limitations--roadmap).
 - Block log persisted in SQLite and attributed to a member and a stage.
 - Admin-approved override: a blocked prompt can be released by entering the administrator password; the
   message is then flagged as bypassed in the transcript.
@@ -250,14 +252,14 @@ Non-secret defaults (host, port, database and script paths, route names) live in
 | Key in transit to the browser | `settings_payload()` always returns an empty `API_KEY` field |
 | Passwords | `werkzeug` salted hashes; legacy plaintext rows are transparently upgraded to hashes on next successful login |
 | Sessions | Random tokens for both administrators and team members; only the SHA-256 hash is stored, with a 7-day expiry checked on every use |
-| Authenticated routes | Every route that touches a member's prompts, history or settings requires that member's session token. A pair of IDs is never enough, and a member cannot act as another member |
-| Chat privacy | An administrator's token manages policy but never reads a member's chats: history routes accept the member's own session only |
+| Authenticated routes | Every route that touches a member's prompts, history or settings requires that member's session token (account management additionally requires this workspace's administrator session). A pair of IDs is never enough, and a member cannot act as another member |
+| Chat privacy | An administrator's token manages policy but cannot open another member's chats: history routes accept the member's own session only. Note the limit of that promise — the dashboard activity timeline shows up to 80 characters of each prompt (and of each admin-approved override), so administrators are not blind to prompt prefixes |
 | Fail-closed | Scanner crash, timeout, or unparseable output → the request is refused and never forwarded |
 | Overrides | An override needs a valid **administrator session token**, verified server-side (not only in the browser), and is written to the audit log as `override / administrator approved` |
-| Data minimisation | Only what the audit trail needs is stored: stage, reason, member and timestamp — **not** the prompt text of an approved message |
+| Data minimisation | `BLOCK_LOG` stays minimal — stage, reason, member and timestamp. The `ACTIVITY_LOG` goes further than "none at all": every prompt (and every approved override) is logged with a detail field capped at 200 characters, which carries an 80-character prefix of the prompt. There is no prompt-free audit mode today; if a deployment requires one, truncate or strip that field rather than assume it is absent |
 | Local inspection | Prompts are analysed in-process on the host; they are never sent to a third-party classifier for inspection |
 | Container hardening | Multi-stage build, non-root user, no compiler or pip cache in the final image, baked model so scanning works offline |
-| Transparency | The in-app **Help & info** page states, in English and Greek, exactly what is stored and where |
+| Transparency | The in-app **Help & info** page states, in English and Greek, what is stored and where. One exception: it does not describe the 80-character prompt prefix this table documents above — the Help page is helpful, not exhaustive; this page is authoritative |
 
 > **Note on the repository:** an encryption key was previously committed in `src/backend/secret.key`. It is
 > now untracked and git-ignored, and the app generates a fresh per-deployment key. Anyone who cloned the
@@ -275,11 +277,12 @@ fail-closed refusal when a scanner is unavailable) are exercised against a runni
 python3 tools/test_auth.py
 ```
 
-21 tests, no network and no models needed (the scanners and the AI call are stubbed). They cover the
+36 tests, no network and no models needed (the scanners and the AI call are stubbed). They cover the
 token primitives — issue, expiry, revocation, rejection of forged tokens — and then hold the HTTP
 boundary to its contract: every member route refuses an unauthenticated caller with `401`, a member
-cannot act as another member, an override is refused without a real administrator session, and an
-administrator's token manages policy but cannot read a member's chats.
+cannot act as another member, an override is refused without a real administrator session, an
+administrator's token manages policy but cannot open a member's chats, and adding or removing a team
+member needs that workspace's administrator session — never a pair of guessable integers.
 
 These exist because the gap they close was invisible: the routes looked fine and returned sensible
 errors, they simply never checked who was calling. A test is what stops that from returning.
@@ -379,6 +382,12 @@ member's policy.
 - **Gateway coverage** today is the CyberSyn chat surface. Capturing traffic from arbitrary AI sites needs
   a browser extension or proxy (LiteLLM/mitmproxy) in front of those calls — the natural next step, and
   the reason the scanners are standalone stdin→JSON processes that any transport can call.
+- **Administrators are not blind to prompt prefixes.** History routes are restricted to the member's own
+  session, but the dashboard activity timeline renders up to 80 characters of each sent prompt (including
+  prompts released through an override) to anyone holding an administrator token for the workspace.
+  Chat content beyond that prefix is never shown, but do not present the admin view as zero-knowledge:
+  if your deployment requires it, truncate or disable the activity-timeline rendering rather than rely on
+  this description.
 - **Detection is English/Greek tuned**; more languages mean more patterns and NER models.
 - **Redaction instead of blocking** — "warn and forward a sanitised prompt" — is the most requested next
   policy action, and the per-match offsets needed for it are already returned by every scanner.

@@ -65,7 +65,8 @@ admin = r.get_json()
 admin_token, parent_id = admin["session_token"], int(admin["Parent_id"])
 
 r = con.post("/api/admin/employee", json={"method": "add", "Parent_id": parent_id,
-                                          "username": "mia", "password": "Passw0rd!"})
+                                          "username": "mia", "password": "Passw0rd!",
+                                          "token": admin_token})
 check("member created", r.status_code in (200, 201), r.get_json())
 
 r = con.post("/api/admin/employee/login", json={"Parent_id": parent_id,
@@ -113,7 +114,8 @@ check("settings can be read without approval", r.status_code == 200, r.get_json(
 
 # No key anywhere -> a clear 400, not a crash.
 con.post("/api/admin/employee", json={"method": "add", "Parent_id": parent_id,
-                                      "username": "nokey", "password": "Passw0rd!"})
+                                      "username": "nokey", "password": "Passw0rd!",
+                                      "token": admin_token})
 r2 = con.post("/api/admin/employee/login", json={"Parent_id": parent_id,
                                                  "username": "nokey", "password": "Passw0rd!"})
 tk = r2.get_json()["session_token"]

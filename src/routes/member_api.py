@@ -60,6 +60,18 @@ def employee_manage():
     parent_id = to_int(data.get("Parent_id"))
     if parent_id is None:
         return fail("'Parent_id' must be a positive integer.", 400)
+
+    # Adding or removing a member decides who may chat on this workspace's
+    # stored provider key, so it needs this workspace's administrator —
+    # never the two guessable integers on their own. (A new member inherits
+    # the workspace-default settings, including the stored API key.)
+    admin = admin_from_token(DB_FILE, data.get("token"))
+    if admin is None or int(admin["id"]) != parent_id:
+        return fail(
+            "Adding or removing a team member needs a valid administrator "
+            "session for this workspace.",
+            401,
+        )
     try:
         username, password = _credentials(data)
     except ApiError as exc:
