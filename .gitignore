@@ -22,4 +22,6 @@ src/backend/secret.key
 
 # Presentation build scratch (deck itself is tracked)
 presentation/_preview/
+presentation/slides_setup.json
+presentation/cs_s*.json
 .venv-deck/
