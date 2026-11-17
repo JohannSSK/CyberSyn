@@ -11,26 +11,26 @@
     <section id="portal-view" class="auth-shell">
         <aside class="auth-brand">
             <div class="auth-logo">
-                <span data-icon="shield"></span>
+                <img class="icon" src="/assets/icons/shield.svg" alt="" aria-hidden="true">
                 <span>CyberSyn</span>
             </div>
 
             <div class="auth-brand-body">
                 <h2>Use AI at work without exposing what matters.</h2>
-                <p>CyberSyn reviews every message on your own machine before it
-                   reaches an AI model, so sensitive information stays inside
-                   your organisation.</p>
+                <p>Every message you send is checked on your own computer before
+                   an AI model ever sees it, so client and company details stay
+                   with your team.</p>
                 <ul class="auth-points">
-                    <li><strong>Screened locally</strong>
-                        <span>Every check runs on this computer. Nothing is sent out for review.</span></li>
-                    <li><strong>Built for Greek data</strong>
-                        <span>Recognises AFM, AMKA, phone numbers and company names.</span></li>
-                    <li><strong>Administrator controlled</strong>
-                        <span>Admins manage team access and approve any exceptions.</span></li>
+                    <li><strong>Checked on this machine</strong>
+                        <span>All three checks run locally. Nothing leaves for review.</span></li>
+                    <li><strong>Aware of Greek records</strong>
+                        <span>Spots AFM, AMKA, IBANs, phone numbers, names and company details.</span></li>
+                    <li><strong>Guided by your administrator</strong>
+                        <span>Your administrator manages access, sets the checks and approves one-off exceptions.</span></li>
                 </ul>
             </div>
 
-            <div class="auth-brand-foot">AI Security Gateway · Running locally</div>
+            <div class="auth-brand-foot">Self-hosted AI security gateway · Local screening</div>
         </aside>
 
         <div class="auth-panel">
@@ -43,20 +43,20 @@
                 </div>
                 <div class="auth-eyebrow">Step 1 of 2</div>
                 <h1 class="auth-title">Administrator sign in</h1>
-                <p class="auth-lead">Sign in with your administrator account to manage your workspace.</p>
+                <p class="auth-lead">Sign in with your administrator account to unlock this workspace.</p>
 
                 <div class="auth-field">
                     <label for="admin-username">Username</label>
-                    <input type="text" id="admin-username" placeholder="Enter your username"
+                    <input type="text" id="admin-username" placeholder="Your administrator username"
                            autocomplete="username" autofocus>
                 </div>
                 <div class="auth-field">
                     <label for="admin-password">Password</label>
-                    <input type="password" id="admin-password" placeholder="Enter your password"
+                    <input type="password" id="admin-password" placeholder="Your password"
                            autocomplete="current-password">
                 </div>
 
-                <div id="admin-msg" class="auth-inline-msg"></div>
+                <div id="admin-msg" class="auth-inline-msg" role="alert"></div>
                 <button type="button" id="btn-admin-login" class="auth-btn-primary">Continue</button>
 
                 <div class="auth-secondary">
@@ -72,7 +72,7 @@
                 </div>
                 <div class="auth-eyebrow">Step 2 of 2</div>
                 <h1 class="auth-title">Team member sign in</h1>
-                <p class="auth-lead">Choose the team member account you want to work in.</p>
+                <p class="auth-lead">Sign in with your team member account to open your chats.</p>
 
                 <div id="admin-session-badge" class="auth-context hidden">
                     <div class="auth-context-text">
@@ -87,16 +87,16 @@
 
                 <div class="auth-field">
                     <label for="employee-username">Username</label>
-                    <input type="text" id="employee-username" placeholder="Enter team member username"
+                    <input type="text" id="employee-username" placeholder="Your member username"
                            autocomplete="off">
                 </div>
                 <div class="auth-field">
                     <label for="employee-password">Password</label>
-                    <input type="password" id="employee-password" placeholder="Enter team member password"
+                    <input type="password" id="employee-password" placeholder="Your password"
                            autocomplete="off">
                 </div>
 
-                <div id="employee-msg" class="auth-inline-msg"></div>
+                <div id="employee-msg" class="auth-inline-msg" role="alert"></div>
                 <button type="button" id="btn-employee-login" class="auth-btn-primary">Open workspace</button>
 
                 <div class="auth-secondary">
@@ -105,7 +105,7 @@
                 </div>
             </div>
 
-            <div class="auth-footnote">Protected by local Python scanners. Sign-in is required each time you open this page.</div>
+            <div class="auth-footnote">Every message is checked on this computer before it reaches the AI. Your words never leave first.</div>
         </div>
     </section>
 </div>

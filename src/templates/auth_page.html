@@ -1,9 +1,6 @@
-{# The shell every account page sits in.
-
-   Creating or deleting an account used to reuse the sign-in boxes, so the
-   same two fields meant "sign in", "create" or "delete" depending on which
-   link you had clicked. Each action now gets its own page with its own
-   fields, and this holds the parts they share. #}
+{# Shared shell for creating and removing administrator and member accounts.
+   Each action sits on its own page with dedicated fields so a form never
+   doubles as sign-in. #}
 {% extends "base.html" %}
 
 {% block styles %}
@@ -15,7 +12,7 @@
     <section class="auth-shell">
         <aside class="auth-brand">
             <div class="auth-logo">
-                <span data-icon="shield"></span>
+                <img class="icon" src="/assets/icons/shield.svg" alt="" aria-hidden="true">
                 <span>CyberSyn</span>
             </div>
 
@@ -24,7 +21,7 @@
                 <p>{{ brand_lead }}</p>
             </div>
 
-            <div class="auth-brand-foot">AI Security Gateway · Running locally</div>
+            <div class="auth-brand-foot">Self-hosted AI security gateway · Local screening</div>
         </aside>
 
         <div class="auth-panel">
