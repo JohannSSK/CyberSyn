@@ -1,67 +1,256 @@
 /* ==========================================================================
-   base.css — design tokens, reset, typography, layout primitives.
+   base.css — self-hosted fonts, design tokens, reset, typography, primitives.
    Every other stylesheet builds on these variables; none of them redefine
    a colour or a font that lives here.
    ========================================================================== */
 
+/* --------------------------------------------------------------------------
+   Self-hosted typefaces (SIL Open Font License 1.1 — see ../fonts/OFL.txt).
+   Bundled locally so opening a page never contacts a third-party font CDN.
+   -------------------------------------------------------------------------- */
+
+@font-face {
+    font-family: "Inter";
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url("../fonts/inter-latin-400-normal.woff2") format("woff2");
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+    font-family: "Inter";
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url("../fonts/inter-greek-400-normal.woff2") format("woff2");
+    unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+
+@font-face {
+    font-family: "Inter";
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url("../fonts/inter-latin-500-normal.woff2") format("woff2");
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+    font-family: "Inter";
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url("../fonts/inter-greek-500-normal.woff2") format("woff2");
+    unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+
+@font-face {
+    font-family: "Inter";
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url("../fonts/inter-latin-600-normal.woff2") format("woff2");
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+    font-family: "Inter";
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url("../fonts/inter-greek-600-normal.woff2") format("woff2");
+    unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+
+@font-face {
+    font-family: "Inter";
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url("../fonts/inter-latin-700-normal.woff2") format("woff2");
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+    font-family: "Inter";
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url("../fonts/inter-greek-700-normal.woff2") format("woff2");
+    unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+
+@font-face {
+    font-family: "Instrument Serif";
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url("../fonts/instrument-serif-latin-400-normal.woff2") format("woff2");
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+    font-family: "Instrument Serif";
+    font-style: italic;
+    font-weight: 400;
+    font-display: swap;
+    src: url("../fonts/instrument-serif-latin-400-italic.woff2") format("woff2");
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+    font-family: "JetBrains Mono";
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url("../fonts/jetbrains-mono-latin-400-normal.woff2") format("woff2");
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+    font-family: "JetBrains Mono";
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url("../fonts/jetbrains-mono-greek-400-normal.woff2") format("woff2");
+    unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+
+@font-face {
+    font-family: "JetBrains Mono";
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url("../fonts/jetbrains-mono-latin-500-normal.woff2") format("woff2");
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+    font-family: "JetBrains Mono";
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url("../fonts/jetbrains-mono-greek-500-normal.woff2") format("woff2");
+    unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+
 :root {
     /* ------------------------------------------------------------------
-       Palette. These are the sign-in portal's colours: warm, near-black
-       charcoal with no hue to speak of. The whole app uses them now, so a
-       page never changes register when you sign in.
-
-       --bg/#1c1917 and --surface-2/#2a2926 are the portal's own two
-       backgrounds; the rest are interpolated between them and the portal's
-       border and text tones. Nothing here is saturated: the brightest value
-       is off-white, and the status colours are desaturated earth tones.
+       Palette. Warm near-black charcoal across the whole app, paired with
+       one disciplined sage accent and desaturated earth-tone statuses.
+       Every colour used in any stylesheet is named here.
        ------------------------------------------------------------------ */
 
     /* Surfaces, darkest to lightest */
+    --code-bg:       #181614;
     --bg:            #1c1917;
+    --field-deep:    #1f1e1c;
     --surface:       #242220;
     --surface-2:     #2a2926;
     --surface-3:     #33322f;
     --surface-4:     #3b3936;
-    --border:        #3f3d39;
     --border-soft:   #2e2c29;
+    --border:        #3f3d39;
+    --border-strong: #46443f;
+    --ink:           #1c1917;
 
-    /* Text */
+    /* Text — --text-muted clears 4.5:1 across all five surface steps */
     --text:          #ecebe7;
     --text-strong:   #fafaf9;
     --text-dim:      #b3aea6;
-    --text-muted:    #85817a;
+    --text-muted:    #a8a298;
+    --neutral-bar:   #b0aba2;
 
-    /* Accent is a warm light grey rather than a hue, so emphasis comes from
-       contrast and elevation instead of colour. */
-    --accent:        #d9d5cd;
-    --accent-deep:   #b0aba2;
-    --accent-soft:   rgba(236, 235, 231, 0.07);
-    --accent-line:   rgba(236, 235, 231, 0.16);
+    /* Brand accent: dry Mediterranean sage. Spent only on primary CTAs,
+       the active navigation rail, the shield mark, focus rings, links,
+       badge-accent, one hero number per page, and the all-checks-on pill. */
+    --sage:          #95ac8e;
+    --sage-deep:     #7f9678;
+    --sage-soft:     rgba(149, 172, 142, 0.14);
+    --sage-line:     rgba(149, 172, 142, 0.30);
 
-    /* Status: the same earth tones as the portal's danger, desaturated. */
+    --accent:        var(--sage);
+    --accent-deep:   var(--sage-deep);
+    --accent-soft:   var(--sage-soft);
+    --accent-line:   var(--sage-line);
+
+    /* Status: desaturated earth tones, kept verbatim. */
     --success:       #97ab91;
     --success-soft:  rgba(151, 171, 145, 0.13);
+    --success-line:  rgba(151, 171, 145, 0.36);
     --warn:          #bfa273;
+    --warn-deep:     #ac9169;
     --warn-soft:     rgba(191, 162, 115, 0.13);
+    --warn-line:     rgba(191, 162, 115, 0.36);
     --danger:        #bd8a80;
+    --danger-deep:   #ab7c73;
     --danger-soft:   rgba(189, 138, 128, 0.13);
+    --danger-line:   rgba(189, 138, 128, 0.36);
 
-    /* Geometry */
+    /* Functional tints (flat warm charcoal — no cool greys, no blur) */
+    --scrim:             rgba(20, 18, 16, 0.76);
+    --code-inline-bg:    rgba(24, 22, 20, 0.55);
+    --spinner-track:     rgba(236, 235, 231, 0.28);
+    --spinner-track-ink: rgba(28, 25, 23, 0.26);
+    --mark-bg:           rgba(191, 162, 115, 0.30);
+
+    /* Deterministic per-member avatar tones (8 warm, desaturated pairs;
+       every foreground/background pair holds >= 7.7:1 contrast). */
+    --avatar-sage-bg:       #384236;
+    --avatar-sage-fg:       #d7e2d4;
+    --avatar-clay-bg:       #47372d;
+    --avatar-clay-fg:       #e8d6ca;
+    --avatar-sand-bg:       #463f31;
+    --avatar-sand-fg:       #e6decb;
+    --avatar-moss-bg:       #353f35;
+    --avatar-moss-fg:       #d4dfd3;
+    --avatar-terracotta-bg: #493530;
+    --avatar-terracotta-fg: #e9d3cd;
+    --avatar-umber-bg:      #413831;
+    --avatar-umber-fg:      #e2d8cf;
+    --avatar-olive-bg:      #3e402f;
+    --avatar-olive-fg:      #dfe1ce;
+    --avatar-rust-bg:       #48362e;
+    --avatar-rust-fg:       #e8d4cb;
+
+    /* Print sheet tokens (used only inside @media print) */
+    --print-bg:    #ffffff;
+    --print-soft:  #f3f2ef;
+    --print-ink:   #141312;
+    --print-muted: #4a4742;
+    --print-rule:  #cfccc5;
+
+    /* Geometry — strictly 8 / 12 / 16 / 22 + pill */
     --r-sm: 8px;
     --r-md: 12px;
     --r-lg: 16px;
     --r-xl: 22px;
     --r-pill: 999px;
 
-    /* Elevation */
+    /* Elevation — strictly three steps */
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
     --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.36);
     --shadow-lg: 0 24px 64px rgba(0, 0, 0, 0.55);
 
     /* Type */
     --font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-    --font-display: "Instrument Serif", "Inter", Georgia, serif;
+    --font-display: "Instrument Serif", Georgia, "Times New Roman", "Inter", serif;
     --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+    /* Modular type scale — 30 / 23 / 18 / 15 / 13 / 11px */
+    --text-2xl: 30px;
+    --text-xl:  23px;
+    --text-lg:  18px;
+    --text-md:  15px;
+    --text-sm:  13px;
+    --text-xs:  11px;
+
+    /* Optical icon scale — 13 / 16 / 20 / 24px */
+    --icon-xs: 13px;
+    --icon-sm: 16px;
+    --icon-md: 20px;
+    --icon-lg: 24px;
 
     /* Motion */
     --ease: cubic-bezier(0.22, 1, 0.36, 1);
@@ -71,6 +260,9 @@
 
     --sidebar-w: 268px;
     --topbar-h: 66px;
+
+    /* The default theme is always warm charcoal. */
+    color-scheme: dark;
 }
 
 /* --------------------------------------------------------------------------
@@ -83,11 +275,16 @@
 
 * { margin: 0; padding: 0; }
 
-html, body { height: 100%; }
+html {
+    height: 100%;
+    overflow-x: hidden;
+    -webkit-tap-highlight-color: transparent;
+}
 
 body {
+    height: 100%;
     font-family: var(--font);
-    font-size: 15px;
+    font-size: var(--text-md);
     line-height: 1.6;
     color: var(--text);
     background: var(--bg);
@@ -96,8 +293,9 @@ body {
     overflow-x: hidden;
 }
 
-/* The app is always dark: light-system themes must not wash it out. */
-:root { color-scheme: dark; }
+/* Greek carries longer words and denser ascenders/tonos marks; extra leading
+   keeps paragraphs calm and readable at every width. */
+html[lang="el"] body { line-height: 1.72; }
 
 img, svg { display: block; max-width: 100%; }
 
@@ -108,53 +306,83 @@ button, input, select, textarea {
     border: none;
 }
 
-button { cursor: pointer; }
+button, [role="button"], a, summary { cursor: pointer; }
 
-button:disabled { cursor: not-allowed; }
+button:disabled, input:disabled, select:disabled, textarea:disabled {
+    cursor: not-allowed;
+}
 
-a { color: var(--accent); text-decoration: none; }
+a {
+    color: var(--accent);
+    text-decoration: none;
+    transition: color var(--fast) var(--ease);
+}
 
-a:hover { text-decoration: underline; }
+a:hover,
+a:focus-visible { text-decoration: underline; }
 
 ul, ol { list-style: none; }
 
-::selection { background: var(--accent-soft); color: #fff; }
+::selection {
+    background: var(--accent-soft);
+    color: var(--text-strong);
+}
 
+/* One focus recipe across every interactive control in the application. */
 :focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
-    border-radius: 4px;
 }
 
 /* --------------------------------------------------------------------------
-   Typography
+   Typography — modular scale (30 / 23 / 18 / 15 / 13 / 11px)
    -------------------------------------------------------------------------- */
 
-h1, h2, h3, h4 { font-weight: 600; line-height: 1.25; letter-spacing: -0.01em; }
+h1, .display {
+    font-family: var(--font-display);
+    font-weight: 400;
+    line-height: 1.18;
+    letter-spacing: -0.01em;
+    color: var(--text-strong);
+    text-wrap: balance;
+}
 
-h1 { font-size: 30px; }
-h2 { font-size: 23px; }
-h3 { font-size: 18px; }
-h4 { font-size: 15px; }
+h1 { font-size: var(--text-2xl); }
 
-.display { font-family: var(--font-display); font-weight: 400; letter-spacing: -0.02em; }
+h2, h3, h4 {
+    font-family: var(--font);
+    font-weight: 600;
+    line-height: 1.28;
+    letter-spacing: -0.01em;
+    color: var(--text-strong);
+}
 
-.mono { font-family: var(--font-mono); font-variant-ligatures: none; }
+h2 { font-size: var(--text-xl); }
+h3 { font-size: var(--text-lg); }
+h4 { font-size: var(--text-md); }
+
+.mono {
+    font-family: var(--font-mono);
+    font-variant-ligatures: none;
+    font-variant-numeric: tabular-nums;
+}
+
+.tabular { font-variant-numeric: tabular-nums; }
 
 .muted { color: var(--text-muted); }
 
 .dim { color: var(--text-dim); }
 
-.small { font-size: 13px; }
+.small { font-size: var(--text-sm); }
 
-.tiny { font-size: 12px; }
+.tiny { font-size: var(--text-xs); }
 
 .eyebrow {
-    font-size: 11px;
+    font-size: var(--text-xs);
     font-weight: 600;
-    letter-spacing: 0.12em;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: var(--accent);
+    color: var(--text-muted);
 }
 
 /* --------------------------------------------------------------------------
@@ -165,28 +393,29 @@ h4 { font-size: 15px; }
     position: relative;
     min-height: 100vh;
     background: var(--bg);
+    overflow-x: clip;
 }
 
 .page {
     max-width: 1180px;
     margin: 0 auto;
-    padding: 34px 26px 72px;
+    padding: 32px 24px 72px;
 }
 
 .page-narrow {
     max-width: 780px;
     margin: 0 auto;
-    padding: 34px 26px 72px;
+    padding: 32px 24px 72px;
 }
 
-.stack      { display: flex; flex-direction: column; gap: 14px; }
-.stack-sm   { display: flex; flex-direction: column; gap: 8px; }
-.stack-lg   { display: flex; flex-direction: column; gap: 26px; }
-.row        { display: flex; align-items: center; gap: 10px; }
-.row-between{ display: flex; align-items: center; justify-content: space-between; gap: 14px; }
-.wrap       { flex-wrap: wrap; }
-.grow       { flex: 1; min-width: 0; }
-.center     { text-align: center; }
+.stack       { display: flex; flex-direction: column; gap: 16px; }
+.stack-sm    { display: flex; flex-direction: column; gap: 8px; }
+.stack-lg    { display: flex; flex-direction: column; gap: 24px; }
+.row         { display: flex; align-items: center; gap: 10px; }
+.row-between { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.wrap        { flex-wrap: wrap; }
+.grow        { flex: 1; min-width: 0; }
+.center      { text-align: center; }
 
 .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
@@ -198,17 +427,21 @@ h4 { font-size: 15px; }
 
 @media (max-width: 620px) {
     .grid-2, .grid-3, .grid-4 { grid-template-columns: minmax(0, 1fr); }
-    .page, .page-narrow { padding: 22px 16px 60px; }
+    .page, .page-narrow { padding: 24px 16px 60px; }
 }
 
 .hidden { display: none !important; }
 
 .sr-only {
     position: absolute;
-    width: 1px; height: 1px;
-    padding: 0; margin: -1px;
-    overflow: hidden; clip: rect(0 0 0 0);
-    white-space: nowrap; border: 0;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
 }
 
 /* --------------------------------------------------------------------------
@@ -228,19 +461,24 @@ h4 { font-size: 15px; }
     background-clip: content-box;
 }
 
-::-webkit-scrollbar-thumb:hover { background: var(--surface-4); background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover {
+    background: var(--surface-4);
+    background-clip: content-box;
+}
 
 /* --------------------------------------------------------------------------
-   Motion
+   Motion — all new transitions sit on 140 / 240 / 420ms; reduced motion
+   turns every animation and transition off cleanly.
    -------------------------------------------------------------------------- */
 
 @keyframes fade-in   { from { opacity: 0; } to { opacity: 1; } }
-@keyframes rise-in   { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
-@keyframes scale-in  { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: none; } }
+@keyframes rise-in   { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes scale-in  { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: none; } }
 @keyframes spin      { to { transform: rotate(360deg); } }
-@keyframes shimmer   { 100% { transform: translateX(100%); } }
-@keyframes pulse-dim { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
-@keyframes draw-ring { to { stroke-dashoffset: 0; } }
+@keyframes pill-ring {
+    0%   { box-shadow: 0 0 0 0 var(--accent-line); }
+    100% { box-shadow: 0 0 0 6px transparent; }
+}
 
 .rise-in { animation: rise-in var(--med) var(--ease) both; }
 .fade-in { animation: fade-in var(--med) var(--ease) both; }
@@ -250,5 +488,6 @@ h4 { font-size: 15px; }
         animation-duration: 0.01ms !important;
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
     }
 }

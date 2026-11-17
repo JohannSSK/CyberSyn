@@ -4,13 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="color-scheme" content="dark">
-    <meta name="description" content="CyberSyn — the gate every AI prompt passes through.">
+    <meta name="theme-color" content="#1c1917">
+    <meta name="description" content="CyberSyn — every AI message checked on your machine first.">
     <title>{% block title %}CyberSyn{% endblock %}</title>
 
+    <link rel="icon" href="/assets/icons/shield.svg" type="image/svg+xml">
     <link rel="icon" href="/assets/icons/shield.png" type="image/png">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
     <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}">
@@ -22,11 +21,11 @@
 <body data-screen-budget="{{ screen_budget | default(45, true) }}"
       data-ai-timeout="{{ ai_timeout | default(60, true) }}"
       data-request-timeout="{{ request_timeout | default(135, true) }}">
-    <div id="toast-container" class="toast-container"></div>
+    <div id="toast-container" class="toast-container" role="status" aria-live="polite"></div>
 
     {% block body %}{% endblock %}
 
-    <!-- Core, in dependency order: dom -> icons -> api -> loading -> markdown -->
+    <!-- Core, in dependency order: dom -> stages -> icons -> i18n -> api -> loading -> markdown -> shell -->
     <script src="{{ url_for('static', filename='js/core/dom.js') }}"></script>
     <script src="{{ url_for('static', filename='js/core/stages.js') }}"></script>
     <script src="{{ url_for('static', filename='js/core/icons.js') }}"></script>

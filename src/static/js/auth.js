@@ -1,14 +1,9 @@
 /* ==========================================================================
    auth.js — the two-step sign-in portal.
 
-   Step 1: the administrator signs in. Step 2: a team member signs in, which
-   is what actually opens a workspace. The administrator token is kept
-   separately from the member token, because the two grant different powers.
-
-   This page only signs people in. Creating or deleting an account happens on
-   its own page (/create-admin, /delete-admin, /create-member,
-   /delete-member); reusing these boxes for those meant the same two fields
-   stood for four different actions.
+   Step 1: the administrator signs in. Step 2: a team member signs in to open
+   their workspace. Administrator and member tokens live separately because
+   each grants a different scope of access.
    ========================================================================== */
 
 (function () {
@@ -18,12 +13,18 @@
     var Loading = window.Loading;
     var $ = window.Dom.$;
 
+    function t(text) {
+        return window.I18n && typeof window.I18n.t === "function"
+            ? window.I18n.t(text)
+            : text;
+    }
+
     var admin = {
         step: $("#admin-step"),
         username: $("#admin-username"),
         password: $("#admin-password"),
         msg: $("#admin-msg"),
-        login: $("#btn-admin-login"),
+        login: $("#btn-admin-login")
     };
 
     var employee = {
@@ -39,7 +40,7 @@
     var parentId = null;
 
     function showError(node, message) {
-        node.textContent = message || "";
+        node.textContent = message ? t(message) : "";
     }
 
     /* ------------------------------------------------------------------
@@ -51,9 +52,14 @@
         var username = admin.username.value.trim();
         var password = admin.password.value;
 
-        if (!username || !password) {
-            showError(admin.msg, "Enter your username and password.");
+        if (!username) {
+            showError(admin.msg, "Type your administrator username to continue.");
             admin.username.focus();
+            return;
+        }
+        if (!password) {
+            showError(admin.msg, "Type your password to continue.");
+            admin.password.focus();
             return;
         }
 
@@ -68,7 +74,7 @@
                 username: data.username || username
             });
             admin.password.value = "";
-            revealMemberStep(username);
+            revealMemberStep(data.username || username);
         }).catch(function (err) {
             showError(admin.msg, err.message);
             Loading.toast(err.message, "error");
@@ -84,6 +90,11 @@
     }
 
     function backToAdmin() {
+        var token = Session.getAdminToken();
+        if (token) {
+            window.Api.post("/api/admin/logout", { token: token },
+                { member: false, onUnauthorised: false }).catch(function () {});
+        }
         Session.clearAdmin();
         Session.clearMember();
         parentId = null;
@@ -103,8 +114,14 @@
         var username = employee.username.value.trim();
         var password = employee.password.value;
 
-        if (!username || !password) {
-            showError(employee.msg, "Enter the team member's username and password.");
+        if (!username) {
+            showError(employee.msg, "Type the team member's username first.");
+            employee.username.focus();
+            return;
+        }
+        if (!password) {
+            showError(employee.msg, "Type the team member's password to open the workspace.");
+            employee.password.focus();
             return;
         }
 
@@ -119,7 +136,7 @@
                 username: data.username || username
             });
             employee.password.value = "";
-            Loading.toast("Welcome back, " + (data.username || username) + ".", "success");
+            Loading.toast("Signed in as " + (data.username || username) + ".", "success");
             location.href = "/workspace";
         }).catch(function (err) {
             showError(employee.msg, err.message);
@@ -157,7 +174,7 @@
                 if (!data.success) { Session.clearAdmin(); return; }
                 parentId = parseInt(data.Parent_id, 10);
                 Session.setAdmin(token, { parentId: parentId, username: data.username });
-                revealMemberStep(data.username || "administrator");
+                revealMemberStep(data.username || "Admin");
             })
             .catch(function () { Session.clearAdmin(); });
     })();

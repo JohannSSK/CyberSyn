@@ -1,9 +1,9 @@
 /* ==========================================================================
    workspace.js — the chat screen.
 
-   Owns: the conversation list, the message stream, sending a prompt through
-   the three checks, admin override, and per-message edit / delete /
-   regenerate / copy, plus in-chat search.
+   Owns: the conversation list, first-run starter prompts, live three-stage
+   screening tracker, teaching-moment blocked cards, one-off administrator
+   override, post-block grace note, per-message actions and in-chat search.
    ========================================================================== */
 
 (function () {
@@ -15,15 +15,37 @@
     var Dom = window.Dom;
     var Icons = window.Icons;
     var Loading = window.Loading;
+    var Shell = window.Shell;
+    var Stages = window.Stages;
     var $ = Dom.$;
+
+    function t(text) {
+        return window.I18n && typeof window.I18n.t === "function"
+            ? window.I18n.t(text)
+            : text;
+    }
+
+    function reducedMotion() {
+        return !!(window.matchMedia &&
+            window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    }
+
+    var DRAFT_CHAT_KEY = "__draft__";
 
     var state = {
         chats: [],
+        chatsLoaded: false,
         chatId: null,
         messages: [],
         settings: { check1: true, check2: true, check3: true },
+        checksCount: null,
         query: "",
-        busy: false
+        busy: false,
+        // Per-chat session memory for D4 grace note and override receipts.
+        blockedChats: {},
+        gracedChats: {},
+        gracedMessages: {},
+        overriddenMessages: {}
     };
 
     var nodes = {
@@ -42,18 +64,24 @@
         searchClear: $("#search-clear"),
         searchCount: $("#search-count"),
         checksSummary: $("#checks-summary"),
-        checksStatus: $("#checks-status")
+        checksStatus: $("#checks-status"),
+        firstRunTpl: $("#first-run-template")
     };
+
+    function currentChatKey() {
+        return state.chatId ? String(state.chatId) : DRAFT_CHAT_KEY;
+    }
 
     /* ------------------------------------------------------------------
        Helpers
        ------------------------------------------------------------------ */
 
     function iconButton(name, title, action, danger) {
+        var label = t(title);
         var btn = Dom.el("button", "icon-btn" + (danger ? " danger" : ""));
         btn.type = "button";
-        btn.title = title;
-        btn.setAttribute("aria-label", title);
+        btn.title = label;
+        btn.setAttribute("aria-label", label);
         btn.innerHTML = Icons.html(name);
         Dom.on(btn, "click", action);
         return btn;
@@ -64,59 +92,157 @@
         nodes.input.style.height = Math.min(nodes.input.scrollHeight, 180) + "px";
     }
 
-    /* ------------------------------------------------------------------
-       Waiting indicator
+    function fillComposer(text) {
+        nodes.input.value = text;
+        autoGrow();
+        nodes.input.focus();
+        nodes.input.setSelectionRange(text.length, text.length);
+    }
 
-       The server runs every check and then the model call inside one request,
-       so there is no real progress to report. What is honest is to say which
-       stage is being worked through and cycle through the ones that are
-       actually switched on, rather than freezing on one word or claiming
-       completion it cannot know about.
+    function scrollToEnd(smooth) {
+        var useSmooth = smooth && !reducedMotion();
+        requestAnimationFrame(function () {
+            nodes.viewport.scrollTo({
+                top: nodes.viewport.scrollHeight,
+                behavior: useSmooth ? "smooth" : "auto"
+            });
+        });
+    }
+
+    /* ------------------------------------------------------------------
+       Three-stage tracker — shared by the in-flight card and the blocked
+       receipt so order, labels and state come from one source (Stages).
        ------------------------------------------------------------------ */
 
-    var Stages = window.Stages;
+    function buildTracker(outcome) {
+        var order = ["check1", "check2", "check3"];
+        var tracker = Dom.el("div", "stage-tracker");
+        tracker.setAttribute("role", "list");
+        tracker.setAttribute("aria-label", t("Local safety checks"));
+
+        var blockedIndex = outcome && outcome.blockedStage
+            ? order.indexOf(outcome.blockedStage)
+            : -1;
+
+        order.forEach(function (id, index) {
+            var enabled = state.settings[id] !== false;
+            var step = Dom.el("span", "stage-step");
+            step.setAttribute("role", "listitem");
+            step.dataset.stage = id;
+
+            if (!enabled) {
+                step.classList.add("is-off");
+            } else if (outcome && outcome.passedAll) {
+                step.classList.add("is-passed");
+            } else if (blockedIndex !== -1) {
+                if (index < blockedIndex) step.classList.add("is-passed");
+                else if (index === blockedIndex) step.classList.add("is-blocked");
+            }
+
+            step.innerHTML =
+                '<span class="stage-dot" aria-hidden="true"></span>' +
+                '<span class="stage-name">' + Dom.esc(Stages.shortName(id)) + "</span>";
+            tracker.appendChild(step);
+        });
+
+        return tracker;
+    }
+
+    /* ------------------------------------------------------------------
+       Live in-flight indicator (D2)
+
+       Shows the real three stages in configured order (personal data ->
+       context -> injection). Driven off the request lifecycle: steps across
+       enabled checks while the request is open, snaps to resolved the moment
+       the server answers, and sits still when reduced motion is requested.
+       ------------------------------------------------------------------ */
 
     var pending = null;
-
 
     function showPending(promptText, bypass) {
         hidePending();
 
-        var order = ["check1", "check2", "check3"].filter(function (id) {
+        var enabled = ["check1", "check2", "check3"].filter(function (id) {
             return state.settings[id] !== false;
         });
-        var script = order.map(function (id) { return Stages.checking(id); });
-        script.unshift("Thinking");
-        script.push(bypass ? "Sending with approval" : "Waiting for the model");
 
         var wrap = Dom.el("div", "msg");
         var head = Dom.el("div", "msg-head");
-        head.innerHTML = Icons.html("profile") + '<span class="who">You</span>';
+        head.innerHTML = Icons.html("profile") +
+            '<span class="who">' + Dom.esc(t("You")) + "</span>";
         wrap.appendChild(head);
         wrap.appendChild(Dom.el("div", "bubble bubble-user", promptText));
 
         var note = Dom.el("div", "msg-pending");
-        note.innerHTML =
-            '<span class="pending-dots" aria-hidden="true">' +
-            "<i></i><i></i><i></i></span>" +
-            '<span class="pending-text"></span>';
-        wrap.appendChild(note);
+        note.setAttribute("role", "status");
+        note.setAttribute("aria-live", "polite");
 
+        var tracker = null;
+        if (!bypass && enabled.length) {
+            tracker = buildTracker(null);
+            note.appendChild(tracker);
+        }
+
+        var label = Dom.el("span", "pending-text");
+        note.appendChild(label);
+        wrap.appendChild(note);
         nodes.stream.appendChild(wrap);
         scrollToEnd(true);
 
-        var label = note.querySelector(".pending-text");
-        var index = 0;
-        var tick = setInterval(function () {
-            label.textContent = script[index % script.length] + "…";
-            index += 1;
-        }, 900);
-        label.textContent = script[0] + "…";
+        var tick = null;
+
+        function paintStep(activeIndex) {
+            if (!tracker) return;
+            enabled.forEach(function (id, idx) {
+                var node = tracker.querySelector('[data-stage="' + id + '"]');
+                if (!node) return;
+                node.classList.toggle("is-passed", idx < activeIndex);
+                node.classList.toggle("is-current", idx === activeIndex);
+            });
+        }
+
+        if (bypass) {
+            label.textContent = t("Sending once with administrator approval…");
+        } else if (!enabled.length) {
+            label.textContent = t("Waiting for the AI reply…");
+        } else if (reducedMotion()) {
+            // Reduced motion: static state, no sweep across the dots.
+            enabled.forEach(function (id) {
+                var node = tracker.querySelector('[data-stage="' + id + '"]');
+                if (node) node.classList.add("is-current");
+            });
+            label.textContent = t("Checking locally before sending…");
+        } else {
+            var cursor = 0;
+            paintStep(0);
+            label.textContent = Stages.checking(enabled[0]) + "…";
+            tick = setInterval(function () {
+                cursor += 1;
+                if (cursor < enabled.length) {
+                    paintStep(cursor);
+                    label.textContent = Stages.checking(enabled[cursor]) + "…";
+                } else {
+                    paintStep(enabled.length);
+                    label.textContent = t("All checks run — waiting for the AI reply…");
+                    clearInterval(tick);
+                    tick = null;
+                }
+            }, 420);
+        }
 
         pending = {
             wrap: wrap,
+            resolve: function (blockedStage) {
+                if (tick) { clearInterval(tick); tick = null; }
+                if (!tracker) return;
+                var replacement = buildTracker(
+                    blockedStage ? { blockedStage: blockedStage } : { passedAll: true }
+                );
+                tracker.replaceWith(replacement);
+                tracker = replacement;
+            },
             stop: function () {
-                clearInterval(tick);
+                if (tick) { clearInterval(tick); tick = null; }
                 if (wrap.parentNode) wrap.remove();
             }
         };
@@ -128,27 +254,32 @@
         pending = null;
     }
 
-    function scrollToEnd(smooth) {
-        requestAnimationFrame(function () {
-            nodes.viewport.scrollTo({
-                top: nodes.viewport.scrollHeight,
-                behavior: smooth ? "smooth" : "auto"
-            });
-        });
-    }
+    /* ------------------------------------------------------------------
+       Checks status pill (B6 + D7 off -> on ring pulse)
+       ------------------------------------------------------------------ */
 
     function updateChecksBadge() {
         var on = ["check1", "check2", "check3"].filter(function (k) {
             return state.settings[k];
         }).length;
-        nodes.checksSummary.textContent = on + " of 3 checks active";
+        var summary = t(on + " of 3 checks active");
+        nodes.checksSummary.textContent = summary;
+        nodes.checksStatus.title = summary;
+        nodes.checksStatus.setAttribute("aria-label", summary);
         nodes.checksStatus.classList.toggle("off", on === 0);
-        if (on === 0) {
-            nodes.checksStatus.querySelector(".dot").style.color = "var(--warn)";
-        } else {
-            nodes.checksStatus.querySelector(".dot").style.color = "var(--success)";
+        nodes.checksStatus.classList.toggle("is-all-on", on === 3);
+
+        if (state.checksCount === 0 && on > 0 && !reducedMotion()) {
+            nodes.checksStatus.classList.remove("is-pulsing");
+            void nodes.checksStatus.offsetWidth;
+            nodes.checksStatus.classList.add("is-pulsing");
         }
+        state.checksCount = on;
     }
+
+    Dom.on(nodes.checksStatus, "animationend", function () {
+        nodes.checksStatus.classList.remove("is-pulsing");
+    });
 
     /* ------------------------------------------------------------------
        Conversation list
@@ -157,16 +288,21 @@
     function renderChatList() {
         nodes.list.innerHTML = "";
         if (!state.chats.length) {
-            nodes.list.appendChild(Dom.el("p", "tiny muted", "No conversations yet."));
+            nodes.list.appendChild(Dom.el(
+                "p",
+                "chat-list-empty",
+                t("No conversations yet — your chats appear here once you send a message.")
+            ));
             return;
         }
         state.chats.forEach(function (chat) {
             var item = Dom.el("button", "chat-item");
             item.type = "button";
+            item.title = chat.title || t("New chat");
             if (chat.id === state.chatId) item.classList.add("is-active");
             item.innerHTML = Icons.html("chat") +
                 '<span class="chat-item-title">' + Dom.esc(chat.title) + "</span>" +
-                '<span class="chat-item-meta">' + Dom.timeAgo(chat.updated_at) + "</span>";
+                '<span class="chat-item-meta">' + Dom.esc(Dom.timeAgo(chat.updated_at)) + "</span>";
             Dom.on(item, "click", function () { openChat(chat.id); });
             nodes.list.appendChild(item);
         });
@@ -175,12 +311,13 @@
     function loadChats() {
         return Api.post("/api/admin/employee/chats", {}).then(function (data) {
             state.chats = data.chats || [];
+            state.chatsLoaded = true;
             renderChatList();
         });
     }
 
     /* ------------------------------------------------------------------
-       Message rendering
+       Message rendering & empty states (D1, D4, D5)
        ------------------------------------------------------------------ */
 
     function renderMessage(message) {
@@ -189,13 +326,11 @@
 
         var head = Dom.el("div", "msg-head");
         head.innerHTML = Icons.html("profile") +
-            '<span class="who">You</span>' +
-            '<span>·</span><span>' + Dom.stamp(message.created_at) + "</span>" +
-            (message.edited ? "<span>· edited</span>" : "");
+            '<span class="who">' + Dom.esc(t("You")) + "</span>" +
+            "<span>·</span><span>" + Dom.esc(Dom.stamp(message.created_at)) + "</span>" +
+            (message.edited ? "<span>· " + Dom.esc(t("edited")) + "</span>" : "");
         wrap.appendChild(head);
 
-        // Your message. The prompt is set as text, never as HTML, so search
-        // highlighting has no markup to break.
         var mine = Dom.el("div", "bubble bubble-user");
         var mineText = Dom.el("p");
         mineText.textContent = message.prompt || "";
@@ -203,7 +338,6 @@
         Dom.highlightText(mineText, state.query);
         wrap.appendChild(mine);
 
-        // The model's answer (absent when the prompt was blocked)
         var hasAnswer = message.answer && String(message.answer).trim() !== "" &&
             String(message.answer) !== "NULL";
         if (hasAnswer) {
@@ -213,12 +347,29 @@
             wrap.appendChild(reply);
         }
 
-        // Actions: edit and delete apply to your prompt, regenerate to the answer
+        // Approved override amber receipt (Section 6)
+        if (message.id && state.overriddenMessages[message.id]) {
+            wrap.appendChild(Dom.el(
+                "p",
+                "msg-receipt msg-receipt-override",
+                t("Sent once with administrator approval — this was logged.")
+            ));
+        } else if (message.id && state.gracedMessages[message.id]) {
+            // Once-per-chat grace note after rewriting a blocked prompt (D4)
+            wrap.appendChild(Dom.el(
+                "p",
+                "msg-receipt msg-receipt-grace",
+                t("Nicely rewritten — that went through cleanly.")
+            ));
+        }
+
         var actions = Dom.el("div", "msg-actions");
         actions.appendChild(iconButton("copy", "Copy the answer", function () {
             Dom.copyText(message.answer || "")
-                .then(function () { Loading.toast("Copied to clipboard.", "success"); })
-                .catch(function () { Loading.toast("Could not copy.", "error"); });
+                .then(function () { Loading.toast("Answer copied.", "success"); })
+                .catch(function () {
+                    Loading.toast("Clipboard access was blocked — select the text to copy it.", "error");
+                });
         }));
         actions.appendChild(iconButton("edit", "Edit this message", function () {
             beginEdit(wrap, message);
@@ -236,9 +387,6 @@
         return wrap;
     }
 
-    /* A message matches when either side of the exchange contains the query.
-       Rendering decides visibility, rather than hiding nodes afterwards, so a
-       re-render can never drop the filter. */
     function matchesQuery(message) {
         if (!state.query) return true;
         var needle = state.query.toLowerCase();
@@ -246,10 +394,25 @@
             String(message.answer || "").toLowerCase().indexOf(needle) !== -1;
     }
 
+    function renderFirstRun() {
+        if (!nodes.firstRunTpl || !nodes.firstRunTpl.content) return false;
+        var fragment = nodes.firstRunTpl.content.cloneNode(true);
+        Dom.$$("[data-starter]", fragment).forEach(function (chip) {
+            Dom.on(chip, "click", function () {
+                fillComposer(chip.textContent.trim());
+            });
+        });
+        nodes.stream.appendChild(fragment);
+        if (window.I18n && typeof window.I18n.apply === "function") {
+            window.I18n.apply();
+        }
+        return true;
+    }
+
     function emptyStream(title, body, icon) {
         nodes.stream.innerHTML =
             '<div class="empty">' + Icons.html(icon, "icon") +
-            "<h3>" + Dom.esc(title) + "</h3><p>" + Dom.esc(body) + "</p></div>";
+            "<h2>" + Dom.esc(title) + "</h2><p>" + Dom.esc(body) + "</p></div>";
     }
 
     function renderMessages() {
@@ -259,16 +422,25 @@
 
         if (!visible.length) {
             if (query) {
-                emptyStream(
-                    "No messages match",
-                    'Nothing in this chat contains "' + query + '".',
-                    "search"
-                );
+                var missBody = (window.I18n && window.I18n.current() === "el")
+                    ? "Κανένα μήνυμα σε αυτή τη συνομιλία δεν περιέχει «" + query +
+                      "». Δοκιμάστε άλλη λέξη ή πατήστε Esc."
+                    : 'No message in this chat mentions "' + query +
+                      '". Try another word or press Esc to show all messages.';
+                emptyStream(t("No messages match"), missBody, "search");
+            } else if (state.chatsLoaded && state.chats.length === 0) {
+                // D1: shown only when the member has zero conversations at all.
+                if (!renderFirstRun()) {
+                    emptyStream(
+                        t("What are we working on today?"),
+                        t("Every message is checked on this computer through three local checks before it reaches the AI."),
+                        "chat"
+                    );
+                }
             } else {
                 emptyStream(
-                    "Start the conversation",
-                    "Write a message below. It is screened on this machine by three " +
-                    "checks before anything is sent to an AI provider.",
+                    t("Start the conversation"),
+                    t("Write a message below. Every line is checked on this computer before it reaches the AI."),
                     "chat"
                 );
             }
@@ -276,17 +448,14 @@
             visible.forEach(function (message) {
                 nodes.stream.appendChild(renderMessage(message));
             });
-            // Only jump to the newest message when everything is on screen.
             if (!query) scrollToEnd(false);
         }
 
         nodes.searchCount.classList.toggle("hidden", !query);
         nodes.searchClear.classList.toggle("hidden", !query);
-        // The count floats over the field, so the field reserves room for it
-        // only while there is a count to show.
         if (nodes.searchBox) nodes.searchBox.classList.toggle("has-count", !!query);
         if (query) {
-            nodes.searchCount.textContent = Dom.plural(visible.length, "message");
+            nodes.searchCount.textContent = t(Dom.plural(visible.length, "message"));
         }
     }
 
@@ -295,18 +464,21 @@
        ------------------------------------------------------------------ */
 
     function beginEdit(wrap, message) {
+        if (wrap.querySelector(".msg-edit")) return;
         wrap.classList.add("is-editing");
         var editor = Dom.el("div", "msg-edit");
         editor.innerHTML =
-            '<textarea class="msg-edit-input"></textarea>' +
+            '<textarea class="msg-edit-input" aria-label="' +
+            Dom.esc(t("Edit this message")) + '"></textarea>' +
             '<div class="msg-edit-actions">' +
-            '  <button type="button" class="btn btn-sm btn-ghost msg-edit-cancel">Cancel</button>' +
-            '  <button type="button" class="btn btn-sm btn-primary msg-edit-save">Save</button>' +
+            '  <button type="button" class="btn btn-sm btn-ghost msg-edit-cancel">' +
+            Dom.esc(t("Cancel")) + "</button>" +
+            '  <button type="button" class="btn btn-sm btn-primary msg-edit-save">' +
+            Dom.esc(t("Save")) + "</button>" +
             "</div>";
 
         var textarea = editor.querySelector("textarea");
         textarea.value = message.prompt;
-        editor.querySelector("textarea").focus();
 
         var cancel = editor.querySelector(".msg-edit-cancel");
         var save = editor.querySelector(".msg-edit-save");
@@ -318,7 +490,11 @@
 
         Dom.on(save, "click", function () {
             var next = textarea.value.trim();
-            if (!next) { Loading.toast("The message cannot be empty.", "warn"); return; }
+            if (!next) {
+                Loading.toast("That message was empty — type a line first.", "warn");
+                textarea.focus();
+                return;
+            }
             if (next === message.prompt) {
                 wrap.classList.remove("is-editing");
                 editor.remove();
@@ -345,19 +521,29 @@
     }
 
     function removeMessage(message, button) {
-        if (!confirm("Delete this message? It is removed from the chat history.")) return;
-        Loading.withButton(button, function () {
-            return Api.post("/api/admin/employee/chats/message/delete", {
-                chat_id: state.chatId,
-                message_id: message.id
+        Shell.confirm({
+            eyebrow: "Remove message",
+            title: "Delete this message?",
+            lost: "Removed: this message and its reply leave the conversation.",
+            kept: "Kept: workspace block and activity logs stay intact.",
+            confirmLabel: "Delete message",
+            cancelLabel: "Keep message",
+            danger: true
+        }).then(function (accepted) {
+            if (!accepted) return null;
+            return Loading.withButton(button, function () {
+                return Api.post("/api/admin/employee/chats/message/delete", {
+                    chat_id: state.chatId,
+                    message_id: message.id
+                });
+            }).then(function (data) {
+                state.messages = data.messages || [];
+                renderMessages();
+                loadChats();
+                Loading.toast("Message deleted.", "success");
+            }).catch(function (err) {
+                Loading.toast(err.message, "error");
             });
-        }).then(function (data) {
-            state.messages = data.messages || [];
-            renderMessages();
-            loadChats();
-            Loading.toast("Message deleted.", "success");
-        }).catch(function (err) {
-            Loading.toast(err.message, "error");
         });
     }
 
@@ -368,87 +554,154 @@
                 message_id: message.id
             }, { timeout: requestBudget() });
         }).then(function (data) {
+            if (data.blocked) {
+                renderBlocked(data.block_info || {}, message.prompt || "");
+                return;
+            }
             state.messages = data.messages || [];
             renderMessages();
-            Loading.toast("Answer regenerated.", "success");
+            Loading.toast("New answer ready.", "success");
         }).catch(function (err) {
             Loading.toast(err.message, "error");
         });
     }
 
     /* ------------------------------------------------------------------
-       Blocked message card + admin override
+       Blocked message card + "Why?" trace expander + one-off override (D3)
        ------------------------------------------------------------------ */
 
     function renderBlocked(blockInfo, promptText) {
+        // Clear any empty-state notice if this was the chat's first attempt.
+        var emptyNode = nodes.stream.querySelector(".first-run, .empty");
+        if (emptyNode) emptyNode.remove();
+
         var wrap = Dom.el("div", "msg");
 
         var head = Dom.el("div", "msg-head");
-        head.innerHTML = Icons.html("profile") + '<span class="who">You</span>';
+        head.innerHTML = Icons.html("profile") +
+            '<span class="who">' + Dom.esc(t("You")) + "</span>";
         wrap.appendChild(head);
         wrap.appendChild(Dom.el("div", "bubble bubble-user", promptText));
 
         var card = Dom.el("div", "bubble bubble-blocked");
-        card.innerHTML =
-            '<div class="blocked-head">' + Icons.html("warning") +
-            "<span>Not sent — stopped by " + Dom.esc(Stages.name(blockInfo.stage)) + "</span></div>" +
-            '<p class="blocked-what">Nothing left this machine. The message was screened ' +
-            "on this computer, matched a rule, and was refused before it reached any " +
-            "AI provider.</p>" +
-            '<p class="blocked-why">' + Dom.esc(Stages.reason(blockInfo)) + "</p>";
 
-        // Everything the scanner flagged, not just the first thing.
-        var summary = Dom.el("div", "blocked-matches");
-        var found = Array.isArray(blockInfo.matches) ? blockInfo.matches : [];
-        if (!found.length) {
-            found = [{
+        // Resolved three-stage receipt: shows where screening stopped.
+        var receipt = buildTracker({ blockedStage: blockInfo.stage || "check1" });
+        receipt.classList.add("blocked-tracker");
+        card.appendChild(receipt);
+
+        var header = Dom.el("div", "blocked-head");
+        header.innerHTML = Icons.svg("warning", "icon") +
+            '<h3 class="blocked-verdict">' +
+            Dom.esc(Stages.verdict(blockInfo.stage)) + "</h3>";
+        card.appendChild(header);
+
+        card.appendChild(Dom.el(
+            "p",
+            "blocked-what",
+            t("Nothing left this computer. Your message stayed here and was not sent to the AI.")
+        ));
+        card.appendChild(Dom.el("p", "blocked-why", Stages.reason(blockInfo)));
+
+        // Every item the check flagged, with its category, line and snippet.
+        var found = Array.isArray(blockInfo.matches) && blockInfo.matches.length
+            ? blockInfo.matches
+            : [{
                 main_cause: blockInfo.main_cause,
                 line: blockInfo.line,
+                start_offset: blockInfo.start_offset,
+                end_offset: blockInfo.end_offset,
                 snippet: blockInfo.snippet
             }];
-        }
+
+        var summary = Dom.el("div", "blocked-matches");
         summary.innerHTML = found.map(function (match) {
+            var lineText = match.line
+                ? "<span>" + Dom.esc(t("line " + match.line)) + "</span>"
+                : "";
+            var snippetText = match.snippet
+                ? "<code>" + Dom.esc(match.snippet) + "</code>"
+                : "";
             return '<div class="blocked-match">' +
                 '<span class="badge badge-danger">' +
-                Dom.esc(match.main_cause || "match") + "</span>" +
-                "<span>line " + Dom.esc(match.line) + "</span>" +
-                "<code>" + Dom.esc(match.snippet || "") + "</code>" +
+                Dom.esc(match.main_cause || t("match")) + "</span>" +
+                lineText +
+                snippetText +
                 "</div>";
         }).join("");
         card.appendChild(summary);
 
-        /* Bypass: a button, not a password box sitting in every blocked card.
-           Pressing it asks who is approving, and the server is what enforces
-           it — the browser only collects the approval. */
+        // "Why?" expander with labelled mono trace rows (stage, cause, line, offsets).
+        var expander = Dom.el("details", "blocked-expander");
+        var expSummary = Dom.el("summary", "blocked-summary", t("Why was this stopped?"));
+        var details = Dom.el("div", "blocked-details");
+        found.forEach(function (match) {
+            details.appendChild(Dom.el(
+                "div",
+                "blocked-detail-row",
+                Stages.detailLine(blockInfo.stage, {
+                    main_cause: match.main_cause || blockInfo.main_cause,
+                    line: match.line || blockInfo.line,
+                    start_offset: typeof match.start_offset === "number"
+                        ? match.start_offset
+                        : blockInfo.start_offset,
+                    end_offset: typeof match.end_offset === "number"
+                        ? match.end_offset
+                        : blockInfo.end_offset
+                })
+            ));
+        });
+        expander.appendChild(expSummary);
+        expander.appendChild(details);
+        card.appendChild(expander);
+
+        // Constructive next step: edit & rephrase, or request one-off admin approval.
         var panel = Dom.el("div", "override-panel");
         panel.innerHTML =
-            '<button type="button" class="btn btn-sm override-ask">Send anyway</button>' +
-            '<p class="override-note">Needs an administrator password, and is ' +
-            "recorded in the audit trail.</p>";
+            '<p class="blocked-next">' +
+            Dom.esc(t("Ask an administrator to approve this once, or rephrase without the flagged details.")) +
+            "</p>" +
+            '<div class="blocked-cta-row">' +
+            '  <button type="button" class="btn btn-sm rephrase-btn">' +
+            Dom.esc(t("Edit in message box")) + "</button>" +
+            '  <button type="button" class="btn btn-sm btn-outline override-ask">' +
+            Dom.esc(t("Approve once")) + "</button>" +
+            "</div>" +
+            '<p class="override-note">' +
+            Dom.esc(t("One-off approvals need the administrator password and are recorded in the audit log.")) +
+            "</p>";
 
+        var ctaRow = panel.querySelector(".blocked-cta-row");
+        var rephrase = panel.querySelector(".rephrase-btn");
         var ask = panel.querySelector(".override-ask");
 
+        Dom.on(rephrase, "click", function () {
+            fillComposer(promptText);
+        });
+
         Dom.on(ask, "click", function () {
+            var passId = "override-password-" + Date.now();
             var form = Dom.el("div", "override-form");
             form.innerHTML =
-                '<label class="override-label" for="override-password">' +
-                "Administrator password</label>" +
-                '<input type="password" id="override-password" class="input" ' +
-                'placeholder="Administrator password" autocomplete="off">' +
+                '<label class="override-label" for="' + passId + '">' +
+                Dom.esc(t("Administrator password")) + "</label>" +
+                '<input type="password" id="' + passId + '" class="input" ' +
+                'placeholder="' + Dom.esc(t("Administrator password")) + '" autocomplete="off">' +
                 '<div class="override-actions">' +
                 '<button type="button" class="btn btn-sm btn-primary override-send">' +
-                "Approve &amp; send</button>" +
+                Dom.esc(t("Approve & send")) + "</button>" +
                 '<button type="button" class="btn btn-sm btn-ghost override-cancel">' +
-                "Cancel</button>" +
+                Dom.esc(t("Cancel")) + "</button>" +
                 "</div>";
-            panel.replaceChild(form, ask);
+            panel.replaceChild(form, ctaRow);
 
             var input = form.querySelector("input");
             var approve = form.querySelector(".override-send");
             input.focus();
 
             Dom.on(form.querySelector(".override-cancel"), "click", function () {
-                panel.replaceChild(ask, form);
+                panel.replaceChild(ctaRow, form);
+                ask.focus();
             });
 
             function submit() {
@@ -459,7 +712,6 @@
                     return;
                 }
                 Loading.withButton(approve, function () {
-                    // Exchange the password for an admin session token, then send.
                     return Api.post("/api/admin/login", {
                         username: (Api.Session.getAdmin() || {}).username,
                         password: password
@@ -473,13 +725,22 @@
                     wrap.remove();
                     send(promptText, true, token);
                 }).catch(function (err) {
-                    Loading.toast(err.message || "That password was not accepted.", "error");
+                    Loading.toast(
+                        err.message || "That password did not match. Check it and try again.",
+                        "error"
+                    );
                     input.select();
                 });
             }
 
             Dom.on(approve, "click", submit);
             Dom.on(input, "keydown", function (e) {
+                if (e.key === "Escape") {
+                    e.preventDefault();
+                    panel.replaceChild(ctaRow, form);
+                    ask.focus();
+                    return;
+                }
                 if (e.key === "Enter") { e.preventDefault(); submit(); }
             });
         });
@@ -494,13 +755,6 @@
        Sending
        ------------------------------------------------------------------ */
 
-    /** How long to wait for a reply before giving up.
-
-        The server answers within its screening budget plus the model call,
-        both published on <body> by the route so the two cannot drift apart.
-        A hardcoded number here would silently become too short the moment
-        either of those changed.
-    */
     function requestBudget() {
         var body = document.body || {};
         var seconds = parseInt(body.getAttribute("data-request-timeout"), 10);
@@ -512,6 +766,10 @@
         if (state.busy) return;
         state.busy = true;
         nodes.send.disabled = true;
+
+        var preSendKey = currentChatKey();
+        var emptyNode = nodes.stream.querySelector(".first-run, .empty");
+        if (emptyNode) emptyNode.remove();
 
         var waiting = showPending(text, bypass);
 
@@ -527,14 +785,34 @@
 
         Api.post("/api/admin/employee/chat", payload, { timeout: requestBudget() })
             .then(function (data) {
-                hidePending();
                 if (data.blocked) {
-                    // The card says everything; nothing should pop up.
+                    waiting.resolve((data.block_info || {}).stage || "check1");
+                    hidePending();
+                    state.blockedChats[preSendKey] = true;
                     renderBlocked(data.block_info || {}, text);
-                    return;
+                    return null;
                 }
-                state.chatId = data.chat_id || state.chatId;
+
+                waiting.resolve(null);
+                hidePending();
+
+                var nextChatId = data.chat_id || state.chatId;
+                var nextKey = nextChatId ? String(nextChatId) : preSendKey;
+                // Carry a draft chat's prior block forward once the chat gets its id.
+                if (preSendKey === DRAFT_CHAT_KEY && state.blockedChats[DRAFT_CHAT_KEY]) {
+                    state.blockedChats[nextKey] = true;
+                    delete state.blockedChats[DRAFT_CHAT_KEY];
+                }
+                state.chatId = nextChatId;
+
                 if (data.message_id) {
+                    if (bypass) {
+                        state.overriddenMessages[data.message_id] = true;
+                    } else if (state.blockedChats[nextKey] && !state.gracedChats[nextKey]) {
+                        // D4: fires once per chat, only after a prior block in it.
+                        state.gracedChats[nextKey] = true;
+                        state.gracedMessages[data.message_id] = true;
+                    }
                     state.messages.push({
                         id: data.message_id,
                         prompt: text,
@@ -542,15 +820,21 @@
                         created_at: new Date().toISOString(),
                         edited: false
                     });
-                    renderMessages();
-                } else {
-                    return openChat(state.chatId);
+                    return loadChats().then(function () {
+                        var current = state.chats.filter(function (c) {
+                            return c.id === state.chatId;
+                        })[0];
+                        if (current && current.title) nodes.title.textContent = current.title;
+                        renderMessages();
+                    });
                 }
-                loadChats();
+
+                return openChat(state.chatId).then(loadChats);
             })
             .catch(function (err) {
                 waiting.stop();
                 pending = null;
+                if (!nodes.stream.children.length) renderMessages();
                 Loading.toast(err.message, "error");
             })
             .finally(function () {
@@ -562,11 +846,15 @@
 
     function onSend(event) {
         event.preventDefault();
+        if (state.busy) return;
         var text = nodes.input.value.trim();
-        if (!text || state.busy) return;
+        if (!text) {
+            Loading.toast("That message was empty — type a line first.", "info");
+            nodes.input.focus();
+            return;
+        }
         nodes.input.value = "";
         autoGrow();
-        // A filter would hide the very message being sent.
         clearSearch();
         send(text, false, null);
     }
@@ -580,8 +868,8 @@
             .then(function (data) {
                 state.chatId = chatId;
                 state.messages = (data.chat && data.chat.messages) || [];
-                var chat = (data.chat || {});
-                nodes.title.textContent = chat.title || "New chat";
+                var chat = data.chat || {};
+                nodes.title.textContent = chat.title || t("New chat");
                 state.chats.forEach(function (c) {
                     if (c.id === chatId) c.title = chat.title || c.title;
                 });
@@ -594,47 +882,72 @@
     function newChat() {
         state.chatId = null;
         state.messages = [];
-        nodes.title.textContent = "New chat";
+        delete state.blockedChats[DRAFT_CHAT_KEY];
+        nodes.title.textContent = t("New chat");
         renderChatList();
         renderMessages();
         nodes.input.focus();
     }
 
     function deleteChat(button) {
-        if (!state.chatId) { Loading.toast("This chat has not been saved yet.", "info"); return; }
-        if (!confirm("Delete this chat? Its messages are removed. Team statistics are kept.")) return;
-        Loading.withButton(button, function () {
-            return Api.post("/api/admin/employee/chats/delete", { chat_id: state.chatId });
-        }).then(function () {
-            Loading.toast("Chat deleted.", "success");
-            return loadChats();
-        }).then(function () {
-            newChat();
-        }).catch(function (err) { Loading.toast(err.message, "error"); });
+        if (!state.chatId) {
+            Loading.toast("Nothing to delete yet — this chat has no saved messages.", "info");
+            return;
+        }
+        Shell.confirm({
+            eyebrow: "Remove conversation",
+            title: "Delete this chat?",
+            lost: "Removed: every message in this conversation is deleted.",
+            kept: "Kept: workspace block and activity logs stay intact.",
+            confirmLabel: "Delete chat",
+            cancelLabel: "Keep chat",
+            danger: true
+        }).then(function (accepted) {
+            if (!accepted) return null;
+            return Loading.withButton(button, function () {
+                return Api.post("/api/admin/employee/chats/delete", { chat_id: state.chatId });
+            }).then(function () {
+                Loading.toast("Chat deleted.", "success");
+                return loadChats();
+            }).then(function () {
+                newChat();
+            }).catch(function (err) { Loading.toast(err.message, "error"); });
+        });
     }
 
     function renameChat() {
-        var current = nodes.title.textContent;
-        var next = prompt("Rename this chat", current === "New chat" ? "" : current);
-        if (next === null) return;
-        next = next.trim().slice(0, 80);
-        if (!next || next === current) return;
-        if (!state.chatId) { nodes.title.textContent = next; return; }
-        Api.post("/api/admin/employee/chats/rename", { chat_id: state.chatId, title: next })
-            .then(function () {
+        var current = nodes.title.textContent.trim();
+        var isDefault = current === "New chat" || current === t("New chat");
+        Shell.prompt({
+            eyebrow: "Conversation",
+            title: "Rename this chat",
+            label: "Chat title",
+            value: isDefault ? "" : current,
+            placeholder: "Short title for this conversation",
+            maxLength: 80,
+            confirmLabel: "Save title",
+            cancelLabel: "Cancel"
+        }).then(function (raw) {
+            if (raw === null) return null;
+            var next = raw.trim().slice(0, 80);
+            if (!next || next === current) return null;
+            if (!state.chatId) { nodes.title.textContent = next; return null; }
+            return Api.post("/api/admin/employee/chats/rename", {
+                chat_id: state.chatId,
+                title: next
+            }).then(function () {
                 nodes.title.textContent = next;
                 return loadChats();
-            })
-            .then(function () { Loading.toast("Chat renamed.", "success"); })
-            .catch(function (err) { Loading.toast(err.message, "error"); });
+            }).then(function () {
+                Loading.toast("Chat renamed.", "success");
+            }).catch(function (err) { Loading.toast(err.message, "error"); });
+        });
     }
 
     /* ------------------------------------------------------------------
        Search within the current chat
        ------------------------------------------------------------------ */
 
-    /* Read the box, store the query, re-render. Nothing else: the filtering
-       lives in renderMessages so the two can never disagree. */
     function applySearch() {
         state.query = nodes.search.value.trim();
         renderMessages();
@@ -662,14 +975,18 @@
     Dom.on(nodes.rename, "click", renameChat);
 
     Dom.on(nodes.search, "input", Dom.debounce(applySearch, 180));
-
     Dom.on(nodes.search, "keydown", function (e) {
         if (e.key === "Escape") clearSearch();
     });
-
     Dom.on(nodes.searchClear, "click", function () {
         clearSearch();
         nodes.search.focus();
+    });
+
+    Dom.on(document, "cybersyn:lang", function () {
+        updateChecksBadge();
+        renderChatList();
+        if (!state.busy) renderMessages();
     });
 
     /* ------------------------------------------------------------------
@@ -677,18 +994,18 @@
        ------------------------------------------------------------------ */
 
     (function start() {
-        // Settings drive the checks badge; they are owned by the settings page.
         Api.post("/api/admin/employee/settings", {}).then(function (data) {
             state.settings.check1 = data.check1 !== false;
             state.settings.check2 = data.check2 !== false;
             state.settings.check3 = data.check3 !== false;
             updateChecksBadge();
-        }).catch(function () { /* badge keeps its default */ });
+        }).catch(function () { updateChecksBadge(); });
 
         loadChats()
             .then(function () {
                 if (state.chats.length) return openChat(state.chats[0].id);
                 renderMessages();
+                return null;
             })
             .catch(function (err) { Loading.toast(err.message, "error"); });
 

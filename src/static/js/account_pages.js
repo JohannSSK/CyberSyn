@@ -1,14 +1,9 @@
 /* ==========================================================================
    account_pages.js — create and delete an account, one page per action.
 
-   These four actions used to share the sign-in boxes: the same two fields
-   meant "sign in", "create" or "delete" depending on which link you had
-   last clicked, and the only feedback was a line of text that also served
-   as the login error. Each action now has its own page, its own fields and
-   its own button, so what a field is for never depends on remembered state.
-
-   One script serves all four because they differ only in which endpoint
-   they call and what they ask for; it wires whichever page it is loaded on.
+   Each action sits on its own screen with dedicated fields and buttons.
+   Destructive actions open a calm confirmation modal naming what is deleted
+   and what stays in the audit log before sending the request.
    ========================================================================== */
 
 (function () {
@@ -20,13 +15,29 @@
     var Session = Api.Session;
     var $ = Dom.$;
 
+    function t(text) {
+        return window.I18n && typeof window.I18n.t === "function"
+            ? window.I18n.t(text)
+            : text;
+    }
+
     function message(id, text) {
         var node = $(id);
-        if (node) node.textContent = text || "";
+        if (node) node.textContent = text ? t(text) : "";
     }
 
     function home() {
         window.location.href = "/";
+    }
+
+    /* Every browser page loads shell.js first and gets the styled .modal.
+       Unit tests that evaluate account_pages.js in isolation without shell.js
+       drive window.confirm directly, so their harness keeps working too. */
+    function confirmRemoval(options) {
+        if (window.Shell && typeof window.Shell.confirm === "function") {
+            return window.Shell.confirm(options);
+        }
+        return Promise.resolve(!!window.confirm(options.title));
     }
 
     /** Wire a submit button plus Enter-to-submit on its fields. */
@@ -46,16 +57,16 @@
         });
     }
 
-    /** True when the two password fields agree; explains itself when not. */
-    function passwordsMatch(one, two, msgId, label) {
-        if (one.value !== two.value) {
-            message(msgId, "Those passwords do not match.");
-            two.focus();
+    /** True when the two password fields agree; explains what to fix if not. */
+    function passwordsMatch(one, two, msgId) {
+        if (!one.value) {
+            message(msgId, "Choose a password first.");
+            one.focus();
             return false;
         }
-        if (!one.value) {
-            message(msgId, "Enter " + label + " password.");
-            one.focus();
+        if (one.value !== two.value) {
+            message(msgId, "Those passwords do not match. Type the same password in both boxes.");
+            two.focus();
             return false;
         }
         return true;
@@ -65,21 +76,20 @@
        Administrator
        ------------------------------------------------------------------ */
 
-    /* Creating an administrator is the one page with no session at all, so
-       it also carries the password rules the server enforces. */
     (function createAdmin() {
         var button = $("#btn-create-admin");
         if (!button) return;
 
         var username = $("#new-admin-username");
         var password = $("#new-admin-password");
-        var confirm = $("#new-admin-confirm");
+        var confirmField = $("#new-admin-confirm");
         var msg = "#create-admin-msg";
 
-        $("#admin-password-rule").textContent =
-            "At least 8 characters, including a letter and a number.";
+        $("#admin-password-rule").textContent = t(
+            "At least 8 characters, with at least one letter and one number."
+        );
 
-        onSubmit(button, [username, password, confirm], function () {
+        onSubmit(button, [username, password, confirmField], function () {
             message(msg, "");
             var name = username.value.trim();
             if (!name) {
@@ -87,13 +97,13 @@
                 username.focus();
                 return Promise.resolve();
             }
-            if (!passwordsMatch(password, confirm, msg, "a")) return Promise.resolve();
+            if (!passwordsMatch(password, confirmField, msg)) return Promise.resolve();
 
             return Api.post("/api/admin",
                 { method: "add", username: name, password: password.value },
                 { member: false, onUnauthorised: false }
             ).then(function () {
-                Loading.toast("Administrator created. Sign in with it now.", "success");
+                Loading.toast("Administrator account created. You can sign in now.", "success");
                 home();
             }).catch(function (err) {
                 message(msg, err.message);
@@ -109,45 +119,54 @@
         var password = $("#del-admin-password");
         var msg = "#delete-admin-msg";
 
-        onSubmit(button, [username, password], function () {
+        Dom.on(button, "click", function () {
             message(msg, "");
             var name = username.value.trim();
             if (!name) {
-                message(msg, "Enter the username to delete.");
+                message(msg, "Type the administrator username you want to delete.");
                 username.focus();
-                return Promise.resolve();
+                return;
             }
             if (!password.value) {
-                message(msg, "Enter that account's password.");
+                message(msg, "Type that account's password to confirm.");
                 password.focus();
-                return Promise.resolve();
-            }
-            // The consequence is spelled out on the page; this asks once more
-            // because there is no undo and the name is what is at stake.
-            if (!window.confirm("Delete the administrator '" + name +
-                    "'?\n\nTheir team members, settings and chats are deleted " +
-                    "with them. This cannot be undone.")) {
-                return Promise.resolve();
+                return;
             }
 
-            return Api.post("/api/admin",
-                { method: "remove", username: name, password: password.value },
-                { member: false, onUnauthorised: false }
-            ).then(function () {
-                // The account is gone, so any remembered session for it is
-                // not just stale but pointing at nothing.
-                Session.clearAll();
-                Loading.toast("Administrator deleted.", "success");
-                home();
-            }).catch(function (err) {
-                message(msg, err.message);
+            confirmRemoval({
+                eyebrow: "Remove account",
+                title: "Delete administrator " + name + "?",
+                lost: "Removed: this administrator account, its member accounts, saved settings and active sessions.",
+                kept: "Kept: block and activity log rows stay in the local database.",
+                confirmLabel: "Delete account",
+                cancelLabel: "Keep account",
+                danger: true
+            }).then(function (accepted) {
+                if (!accepted) return null;
+                return Loading.withButton(button, function () {
+                    return Api.post("/api/admin",
+                        { method: "remove", username: name, password: password.value },
+                        { member: false, onUnauthorised: false });
+                }).then(function () {
+                    Session.clearAll();
+                    Loading.toast("Administrator account deleted.", "success");
+                    home();
+                }).catch(function (err) {
+                    message(msg, err.message);
+                });
+            });
+        });
+
+        [username, password].forEach(function (field) {
+            if (!field) return;
+            Dom.on(field, "keydown", function (event) {
+                if (event.key === "Enter") { event.preventDefault(); button.click(); }
             });
         });
     })();
 
     /* ------------------------------------------------------------------
-       Team members — these act on the signed-in administrator's workspace,
-       so they need that session to still be live.
+       Team members — scoped to the signed-in administrator's workspace
        ------------------------------------------------------------------ */
 
     function adminContext() {
@@ -161,7 +180,6 @@
     function requireAdmin() {
         var context = adminContext();
         if (context) return context;
-        // Adding a member is meaningless without knowing whose workspace.
         Loading.toast("Sign in as an administrator first.", "warn");
         setTimeout(home, 800);
         return null;
@@ -173,7 +191,7 @@
 
         var username = $("#new-member-username");
         var password = $("#new-member-password");
-        var confirm = $("#new-member-confirm");
+        var confirmField = $("#new-member-confirm");
         var msg = "#create-member-msg";
 
         var context = requireAdmin();
@@ -181,7 +199,7 @@
         var label = $("#active-admin-label");
         if (label && context.username) label.textContent = context.username;
 
-        onSubmit(button, [username, password, confirm], function () {
+        onSubmit(button, [username, password, confirmField], function () {
             message(msg, "");
             var name = username.value.trim();
             if (!name) {
@@ -189,7 +207,7 @@
                 username.focus();
                 return Promise.resolve();
             }
-            if (!passwordsMatch(password, confirm, msg, "a")) return Promise.resolve();
+            if (!passwordsMatch(password, confirmField, msg)) return Promise.resolve();
 
             return Api.post("/api/admin/employee",
                 { method: "add", Parent_id: context.parentId,
@@ -197,7 +215,7 @@
                   token: context.token },
                 { member: false, onUnauthorised: false }
             ).then(function () {
-                Loading.toast(name + " can sign in now.", "success");
+                Loading.toast(name + " added — they can sign in now.", "success");
                 home();
             }).catch(function (err) {
                 message(msg, err.message);
@@ -218,35 +236,49 @@
         var label = $("#active-admin-label");
         if (label && context.username) label.textContent = context.username;
 
-        onSubmit(button, [username, password], function () {
+        Dom.on(button, "click", function () {
             message(msg, "");
             var name = username.value.trim();
             if (!name) {
-                message(msg, "Enter the member to remove.");
+                message(msg, "Type the member username you want to remove.");
                 username.focus();
-                return Promise.resolve();
+                return;
             }
             if (!password.value) {
-                message(msg, "Enter that member's password.");
+                message(msg, "Type that member's password to confirm.");
                 password.focus();
-                return Promise.resolve();
-            }
-            if (!window.confirm("Remove '" + name +
-                    "'?\n\nTheir chats and settings are deleted. " +
-                    "Statistics are kept.")) {
-                return Promise.resolve();
+                return;
             }
 
-            return Api.post("/api/admin/employee",
-                { method: "remove", Parent_id: context.parentId,
-                  username: name, password: password.value,
-                  token: context.token },
-                { member: false, onUnauthorised: false }
-            ).then(function () {
-                Loading.toast(name + " was removed.", "success");
-                home();
-            }).catch(function (err) {
-                message(msg, err.message);
+            confirmRemoval({
+                eyebrow: "Remove member",
+                title: "Remove " + name + " from this workspace?",
+                lost: "Removed: their member account, saved settings and access to their chats.",
+                kept: "Kept: block and activity log rows stay in team statistics.",
+                confirmLabel: "Remove member",
+                cancelLabel: "Keep member",
+                danger: true
+            }).then(function (accepted) {
+                if (!accepted) return null;
+                return Loading.withButton(button, function () {
+                    return Api.post("/api/admin/employee",
+                        { method: "remove", Parent_id: context.parentId,
+                          username: name, password: password.value,
+                          token: context.token },
+                        { member: false, onUnauthorised: false });
+                }).then(function () {
+                    Loading.toast(name + " removed from this workspace.", "success");
+                    home();
+                }).catch(function (err) {
+                    message(msg, err.message);
+                });
+            });
+        });
+
+        [username, password].forEach(function (field) {
+            if (!field) return;
+            Dom.on(field, "keydown", function (event) {
+                if (event.key === "Enter") { event.preventDefault(); button.click(); }
             });
         });
     })();
