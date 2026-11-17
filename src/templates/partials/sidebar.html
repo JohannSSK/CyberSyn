@@ -3,11 +3,11 @@
 {# `id` is what the toggle's aria-controls points at, on every page. #}
 <aside class="sidebar" id="site-sidebar" data-sidebar>
     <div class="sidebar-brand">
-        <span data-icon="shield"></span>
+        <img class="icon sidebar-mark" src="/assets/icons/shield.svg" alt="" aria-hidden="true">
         <span>CyberSyn</span>
     </div>
 
-    <nav class="sidebar-nav">
+    <nav class="sidebar-nav" aria-label="Workspace navigation">
         <a href="/workspace" class="nav-item" data-nav="/workspace">
             <span data-icon="chat"></span><span>Chat</span>
         </a>
@@ -37,10 +37,11 @@
 
     <div class="sidebar-foot">
         <div class="sidebar-user">
-            <span class="avatar" data-member-avatar>M</span>
+            <span class="avatar" data-member-avatar aria-hidden="true">M</span>
             <span class="who">
                 <strong data-member-name>Member</strong>
                 <small data-workspace></small>
+                <small class="sidebar-managed">Administrator-managed workspace</small>
             </span>
         </div>
         <div data-lang-switch></div>

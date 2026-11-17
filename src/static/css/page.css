@@ -1,7 +1,6 @@
 /* ==========================================================================
-   page.css — the standard signed-in page: sidebar + scrolling content column.
-   Used by settings, profile, statistics and team. The chat screen has its
-   own layout in workspace.css.
+   page.css — shared layout for settings, profile, statistics, team and help.
+   Chat keeps its own full-viewport layout in workspace.css.
    ========================================================================== */
 
 .layout {
@@ -17,67 +16,115 @@
 }
 
 .page-head {
-    padding: 30px 32px 22px;
+    padding: 28px 32px 22px;
     border-bottom: 1px solid var(--border-soft);
 }
 
-.page-head h1 { margin: 6px 0 6px; }
+.page-head h1 { margin: 6px 0; }
 
-.page-head .dim { font-size: 14px; }
+.page-head .dim {
+    font-size: var(--text-md);
+    line-height: 1.55;
+    max-width: 640px;
+}
+
+.page-head-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
 
 .page-body {
     flex: 1;
     display: flex;
     flex-direction: column;
     gap: 18px;
+    width: 100%;
     max-width: 900px;
     padding: 24px 32px 64px;
 }
 
+.page-body-wide { max-width: 1120px; }
+
 /* --------------------------------------------------------------------------
-   Stat tiles
+   Stat tiles — tabular numerals, single-row headline band on wide viewports
    -------------------------------------------------------------------------- */
 
 .tiles {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(152px, 1fr));
     gap: 14px;
 }
 
+@media (min-width: 1200px) {
+    .tiles-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+    .tiles-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
 .tile {
-    padding: 17px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 16px 18px;
     border-radius: var(--r-lg);
     background: var(--surface-2);
     border: 1px solid var(--border-soft);
+    min-width: 0;
+}
+
+.tile-compact {
+    padding: 12px 14px;
+    background: var(--surface);
+    border-radius: var(--r-md);
 }
 
 .tile-label {
     display: flex;
     align-items: center;
-    gap: 7px;
-    font-size: 11.5px;
+    gap: 8px;
+    font-size: var(--text-xs);
     font-weight: 600;
     letter-spacing: 0.05em;
     text-transform: uppercase;
     color: var(--text-muted);
+    line-height: 1.35;
 }
 
-.tile-label .icon { width: 14px; height: 14px; }
+.tile-label .icon {
+    width: var(--icon-xs);
+    height: var(--icon-xs);
+    flex: none;
+    opacity: 0.75;
+}
 
 .tile-value {
-    margin-top: 8px;
-    font-size: 27px;
+    font-size: var(--text-2xl);
     font-weight: 700;
     letter-spacing: -0.02em;
     line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-strong);
 }
 
-.tile-foot { margin-top: 4px; font-size: 12px; color: var(--text-muted); }
+.tile-value-sm { font-size: var(--text-xl); }
 
-.tile-accent .tile-value { color: var(--accent); }
+.tile-foot,
+.tile-delta {
+    font-size: var(--text-xs);
+    line-height: 1.4;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-muted);
+}
+
+.tile-delta:empty { display: none; }
+.tile-delta.is-good { color: var(--success); }
+.tile-delta.is-bad  { color: var(--danger); }
+
+.tile-accent  .tile-value { color: var(--accent); }
 .tile-success .tile-value { color: var(--success); }
-.tile-warn .tile-value { color: var(--warn); }
-.tile-danger .tile-value { color: var(--danger); }
+.tile-warn    .tile-value { color: var(--warn); }
+.tile-danger  .tile-value { color: var(--danger); }
 
 /* --------------------------------------------------------------------------
    Definition rows
@@ -87,18 +134,32 @@
 
 .row-item {
     display: flex;
-    align-items: center;
+    align-items: baseline;
     justify-content: space-between;
     gap: 16px;
-    padding: 13px 0;
+    padding: 12px 0;
     border-bottom: 1px solid var(--border-soft);
 }
 
 .row-item:last-child { border-bottom: none; }
 
-.row-item .row-label { font-size: 13.5px; color: var(--text-muted); }
+.row-item .row-label {
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+    flex: 0 0 auto;
+    max-width: 48%;
+}
 
-.row-item .row-value { font-size: 14px; font-weight: 500; text-align: right; }
+.row-item .row-value {
+    font-size: var(--text-md);
+    font-weight: 500;
+    color: var(--text);
+    text-align: right;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.row-item .row-value.mono { font-size: var(--text-sm); }
 
 /* --------------------------------------------------------------------------
    Inline forms
@@ -107,23 +168,25 @@
 .inline-form {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 12px;
     align-items: flex-end;
 }
 
-.inline-form .field { flex: 1 1 190px; }
+.inline-form .field { flex: 1 1 200px; }
 
-.form-msg { min-height: 1em; font-size: 12.5px; color: var(--danger); }
+.form-msg {
+    min-height: 1em;
+    margin-top: 8px;
+    font-size: var(--text-sm);
+    color: var(--danger);
+}
 
+.form-msg:empty { margin-top: 0; }
 .form-msg.ok { color: var(--success); }
 
 /* --------------------------------------------------------------------------
-   The bar above a page
-
-   Deliberately the same height as the chat topbar: whichever screen you are
-   on, the navigation button sits in the same place and the content starts at
-   the same line. It holds that one button and nothing else — the page below
-   carries its own title.
+   Shared page bar — matches the chat topbar height so the menu toggle sits
+   in the exact same spot on every screen.
    -------------------------------------------------------------------------- */
 
 .page-bar {
@@ -140,5 +203,50 @@
     .layout { grid-template-columns: minmax(0, 1fr); }
     .page-head { padding: 22px 18px 18px; }
     .page-body { padding: 18px 18px 60px; }
-    .page-bar { padding: 0 16px; }
+    .page-bar { padding: 0 14px; }
+}
+
+@media (max-width: 620px) {
+    .row-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+    }
+
+    .row-item .row-label { max-width: 100%; }
+    .row-item .row-value { text-align: left; }
+}
+
+.settings-intro        { margin-bottom: 6px; }
+.settings-callout      { margin-top: 14px; }
+.profile-row           { padding: 3px 0; }
+.profile-signout-title { font-size: var(--text-md); font-weight: 600; color: var(--text-strong); }
+
+.profile-head {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.profile-id { min-width: 0; flex: 1; }
+
+.profile-id strong {
+    display: block;
+    font-size: var(--text-lg);
+    font-weight: 600;
+    color: var(--text-strong);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.profile-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+    margin-top: 3px;
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
 }
