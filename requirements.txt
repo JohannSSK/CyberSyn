@@ -10,9 +10,12 @@ werkzeug
 cryptography
 
 # Photo screening (src/image_scan.py): face detection + OCR + redaction.
-# numpy is pinned below 2 because facenet-pytorch declares numpy<2.
-numpy<2
-opencv-python-headless
-facenet-pytorch
-rapidocr_onnxruntime
-easyocr
+# These wheels need Python 3.10–3.12 (facenet pins numpy<2, and numpy 1.x
+# tops out at cp312). On newer Pythons they are skipped on purpose: the app
+# still boots and chat works — only /photo-scan stays off. For the photo
+# feature, build the venv with python3.12 (or 3.11/3.10).
+numpy<2 ; python_version < "3.13"
+opencv-python-headless ; python_version < "3.13"
+facenet-pytorch ; python_version < "3.13"
+rapidocr_onnxruntime ; python_version < "3.13"
+easyocr ; python_version < "3.13"

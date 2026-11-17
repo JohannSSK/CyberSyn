@@ -12,8 +12,6 @@ Privacy shape, matching the rest of the product:
   is the only image that leaves the scanner.
 """
 
-import base64
-
 from flask import Blueprint
 
 from auth import require_member
@@ -21,13 +19,26 @@ from block_log import record_activity, record_block
 from config import DB_FILE, ROUTES
 from web import get_json_dict, chat_response, ok
 
-import image_scan
-
 photo_api = Blueprint("photo_api", __name__)
 
 # ~12 MB of base64 is ~9 MB of photograph — beyond that, OCR slows down for
 # no detection gain and the request body itself becomes the attack.
 MAX_BODY_CHARS = 12 * 1024 * 1024 * 4 // 3 + 1024
+
+
+def _scanner():
+    """Import the scanner on demand.
+
+    The imaging stack (opencv, torch, the OCR engines) is heavier than the
+    rest of the app and missing on some installs — like the text scanners,
+    the feature degrades instead of taking the whole server down with it.
+    The route still refuses the scan (fail closed); it just explains why.
+    """
+    try:
+        import image_scan
+        return image_scan, None
+    except Exception as exc:
+        return None, f"{type(exc).__name__}: {exc}"
 
 
 @photo_api.post(ROUTES["PHOTO_SCAN"])
@@ -48,6 +59,13 @@ def photo_scan():
     if len(image) > MAX_BODY_CHARS:
         return chat_response(True, message="The image is too large (12 MB max).",
                              status=413)
+
+    image_scan, unavailable = _scanner()
+    if image_scan is None:
+        return chat_response(
+            True, status=503,
+            message="Photo scanning is not installed on this server "
+                    f"({unavailable}). See requirements.txt.")
 
     mode = str(data.get("mode", "blur")).lower()
     if mode not in ("blur", "black"):
