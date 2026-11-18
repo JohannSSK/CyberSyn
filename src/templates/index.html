@@ -8,88 +8,174 @@
 
 {% block body %}
 <div class="app-shell">
-    <section id="portal-view" class="auth-shell">
-        <div class="auth-panel">
+    {# Three thirds: the left one introduces the app, the right two carry the
+       two independent sign-in forms. No step eyebrows, no progress bar. #}
+    <section id="portal-view" class="auth-shell auth-split">
+
+        <aside class="auth-aside">
+            <div class="auth-aside-body">
+                <div class="auth-brand-lockup">
+                    <span class="auth-brand-badge">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M12 2.4L19.6 5.65V11.5c0 4.95-3.32 9.04-7.6 10.22C7.72 20.54 4.4 16.45 4.4 11.5V5.65L12 2.4zm3.53 7.07a.85.85 0 00-1.2 0L11 12.8 9.67 11.47a.85.85 0 10-1.2 1.2l1.93 1.93a.85.85 0 001.2 0l3.93-3.93a.85.85 0 000-1.2z"/></svg>
+                    </span>
+                    <span class="auth-brand-name">CyberSyn</span>
+                </div>
+
+                <p class="auth-aside-tagline">The gate every AI prompt passes through.</p>
+                <p class="auth-aside-copy">Your workspace policy is applied locally before the AI receives a message.</p>
+
+                <ul class="auth-highlights">
+                    <li class="auth-highlight">
+                        <span data-icon="shield"></span>
+                        <span class="auth-highlight-text">
+                            <strong>Checked before it leaves</strong>
+                            <span>Personal data, confidential context and prompt injection are screened on this computer.</span>
+                        </span>
+                    </li>
+                    <li class="auth-highlight">
+                        <span data-icon="search"></span>
+                        <span class="auth-highlight-text">
+                            <strong>Shadow AI, mapped</strong>
+                            <span>See which AI tools reach your workspace and set a policy for each one.</span>
+                        </span>
+                    </li>
+                    <li class="auth-highlight">
+                        <span data-icon="team"></span>
+                        <span class="auth-highlight-text">
+                            <strong>Every seat, one audit trail</strong>
+                            <span>Members, provider keys and activity sit together for the administrator.</span>
+                        </span>
+                    </li>
+                </ul>
+            </div>
+
+            <p class="auth-aside-foot">
+                <span data-icon="lock"></span>
+                <span>Runs on this computer — never a third-party screening service.</span>
+            </p>
+        </aside>
+
+        <div class="auth-main">
             <div data-lang-switch class="auth-lang"></div>
 
-            <div class="auth-brand-mark">
-                <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M12 2.4L19.6 5.65V11.5c0 4.95-3.32 9.04-7.6 10.22C7.72 20.54 4.4 16.45 4.4 11.5V5.65L12 2.4zm3.53 7.07a.85.85 0 00-1.2 0L11 12.8 9.67 11.47a.85.85 0 10-1.2 1.2l1.93 1.93a.85.85 0 001.2 0l3.93-3.93a.85.85 0 000-1.2z"/></svg>
-                <span>CyberSyn</span>
-            </div>
+            <div class="auth-panel">
+                <div class="auth-tabs" role="tablist" aria-label="Sign-in type">
+                    <button type="button" role="tab" id="tab-member" data-auth-tab="member"
+                            aria-controls="employee-card" aria-selected="true"
+                            aria-keyshortcuts="1">
+                        <span class="auth-tab-label">Team member</span>
+                        <kbd class="kbd shortcut" aria-hidden="true" data-no-i18n>1</kbd>
+                    </button>
+                    <button type="button" role="tab" id="tab-admin" data-auth-tab="admin"
+                            aria-controls="admin-step" aria-selected="false" tabindex="-1"
+                            aria-keyshortcuts="2">
+                        <span class="auth-tab-label">Administrator</span>
+                        <kbd class="kbd shortcut" aria-hidden="true" data-no-i18n>2</kbd>
+                    </button>
+                </div>
 
-            <div class="auth-tabs" role="tablist" aria-label="Sign-in type">
-                <button type="button" role="tab" id="tab-member" data-auth-tab="member"
-                        aria-controls="employee-card" aria-selected="true">Team member</button>
-                <button type="button" role="tab" id="tab-admin" data-auth-tab="admin"
-                        aria-controls="admin-step" aria-selected="false" tabindex="-1">Administrator</button>
-            </div>
-
-            <div id="employee-card" class="auth-step" role="tabpanel" aria-labelledby="tab-member">
-                <h1 class="auth-title">Team member sign in</h1>
-                <form id="employee-login-form" method="post">
-                    <div class="auth-field">
-                        <label for="employee-username">Username</label>
-                        <input type="text" id="employee-username" placeholder="Your member username" maxlength="64"
-                               autocomplete="username" required>
-                    </div>
-                    <div class="auth-field">
-                        <label for="employee-password">Password</label>
-                        <input type="password" id="employee-password" placeholder="Your password" maxlength="256"
-                               autocomplete="current-password" required>
-                    </div>
-                    <div class="auth-field">
-                        <label for="employee-workspace">Workspace</label>
-                        <input type="text" id="employee-workspace" placeholder="Administrator username" maxlength="64"
-                               autocomplete="off" aria-describedby="workspace-hint">
-                        <p id="workspace-hint" class="hint">Optional when this gateway has one workspace; otherwise enter your administrator's username.</p>
-                    </div>
-                    <p id="member-ends-admin" class="hint" hidden>Signing in as a member ends the administrator session in this browser.</p>
-                    <div id="employee-msg" class="auth-inline-msg" role="alert"></div>
-                    <button type="submit" id="btn-employee-login" class="auth-btn-primary">Open workspace</button>
-                </form>
-            </div>
-
-            <div id="admin-step" class="auth-step" role="tabpanel" aria-labelledby="tab-admin" hidden>
-                <div id="admin-sign-in">
-                    <h1 class="auth-title">Administrator sign in</h1>
-                    <form id="admin-login-form" method="post">
+                <div id="employee-card" class="auth-step" role="tabpanel" aria-labelledby="tab-member">
+                    <h1 class="auth-title">Team member sign in</h1>
+                    <form id="employee-login-form" method="post">
                         <div class="auth-field">
-                            <label for="admin-username">Username</label>
-                            <input type="text" id="admin-username" placeholder="Your administrator username" maxlength="64"
+                            <label for="employee-username">Username</label>
+                            <input type="text" id="employee-username" placeholder="Your member username" maxlength="64"
                                    autocomplete="username" required>
                         </div>
                         <div class="auth-field">
-                            <label for="admin-password">Password</label>
-                            <input type="password" id="admin-password" placeholder="Your password" maxlength="256"
+                            <label for="employee-password">Password</label>
+                            <input type="password" id="employee-password" placeholder="Your password" maxlength="256"
                                    autocomplete="current-password" required>
                         </div>
-                        <div id="admin-msg" class="auth-inline-msg" role="alert"></div>
-                        <button type="submit" id="btn-admin-login" class="auth-btn-primary">Sign in</button>
+                        <div class="auth-field">
+                            <label for="employee-workspace">Workspace</label>
+                            <input type="text" id="employee-workspace" placeholder="Administrator username" maxlength="64"
+                                   autocomplete="off" aria-describedby="workspace-hint">
+                            <p id="workspace-hint" class="hint">Optional when this gateway has one workspace; otherwise enter your administrator's username.</p>
+                        </div>
+                        <p id="member-ends-admin" class="hint" hidden>Signing in as a member ends the administrator session in this browser.</p>
+                        <div id="employee-msg" class="auth-inline-msg" role="alert"></div>
+                        <button type="submit" id="btn-employee-login" class="auth-btn-primary">Open workspace</button>
                     </form>
-                    <div class="auth-secondary">
-                        <a href="/create-admin" class="auth-link">Create administrator account</a>
-                        <a href="/delete-admin" class="auth-link">Delete account</a>
-                    </div>
                 </div>
 
-                <div id="admin-session-badge" hidden>
-                    <h1 class="auth-title">Administrator workspace</h1>
-                    <div class="auth-context">
-                        <div class="auth-context-text">
-                            <span class="auth-context-label">Signed in as administrator</span>
-                            <strong id="active-admin-label" data-no-i18n></strong>
+                <div id="admin-step" class="auth-step" role="tabpanel" aria-labelledby="tab-admin" hidden>
+                    <div id="admin-sign-in">
+                        <h1 class="auth-title">Administrator sign in</h1>
+                        <form id="admin-login-form" method="post">
+                            <div class="auth-field">
+                                <label for="admin-username">Username</label>
+                                <input type="text" id="admin-username" placeholder="Your administrator username" maxlength="64"
+                                       autocomplete="username" required>
+                            </div>
+                            <div class="auth-field">
+                                <label for="admin-password">Password</label>
+                                <input type="password" id="admin-password" placeholder="Your password" maxlength="256"
+                                       autocomplete="current-password" required>
+                            </div>
+                            <div id="admin-msg" class="auth-inline-msg" role="alert"></div>
+                            <button type="submit" id="btn-admin-login" class="auth-btn-primary">Sign in</button>
+                        </form>
+                        <div class="auth-secondary">
+                            <a href="/create-admin" class="auth-link">Create administrator account</a>
+                            <a href="/delete-admin" class="auth-link">Delete account</a>
                         </div>
                     </div>
-                    <nav class="auth-dashboard-links" aria-label="Administrator navigation">
-                        <a class="btn btn-sm" href="/shadow-ai">Shadow AI</a>
-                        <a class="btn btn-sm" href="/stats">Statistics</a>
-                        <a class="btn btn-sm" href="/team">Team</a>
-                        <a class="btn btn-sm" href="/create-member">Add team member</a>
-                        <a class="btn btn-sm" href="/delete-member">Remove team member</a>
-                    </nav>
-                    <div class="auth-secondary">
-                        <button type="button" id="btn-switch-member" class="auth-link">Switch to member sign-in</button>
-                        <button type="button" id="btn-admin-logout" class="auth-link">Sign out</button>
+
+                    <div id="admin-session-badge" hidden>
+                        <h1 class="auth-title">Administrator workspace</h1>
+                        <div class="auth-context">
+                            <div class="auth-context-text">
+                                <span class="auth-context-label">Signed in as administrator</span>
+                                <strong id="active-admin-label" data-no-i18n></strong>
+                            </div>
+                        </div>
+                        <nav class="auth-dashboard" aria-label="Administrator navigation">
+                            <a class="auth-dash-card" href="/shadow-ai" aria-keyshortcuts="1">
+                                <span data-icon="search"></span>
+                                <span class="auth-dash-text">
+                                    <strong>Shadow AI</strong>
+                                    <span class="auth-dash-desc">Discovered tools, risk levels and the workspace policy behind them.</span>
+                                </span>
+                                <kbd class="kbd shortcut auth-dash-key" aria-hidden="true" data-no-i18n>1</kbd>
+                            </a>
+                            <a class="auth-dash-card" href="/stats" aria-keyshortcuts="2">
+                                <span data-icon="stats"></span>
+                                <span class="auth-dash-text">
+                                    <strong>Statistics</strong>
+                                    <span class="auth-dash-desc">Blocks, approvals and daily trends, ready to export.</span>
+                                </span>
+                                <kbd class="kbd shortcut auth-dash-key" aria-hidden="true" data-no-i18n>2</kbd>
+                            </a>
+                            <a class="auth-dash-card" href="/team" aria-keyshortcuts="3">
+                                <span data-icon="team"></span>
+                                <span class="auth-dash-text">
+                                    <strong>Team</strong>
+                                    <span class="auth-dash-desc">Seats, active checks and each member's recent activity.</span>
+                                </span>
+                                <kbd class="kbd shortcut auth-dash-key" aria-hidden="true" data-no-i18n>3</kbd>
+                            </a>
+                            <a class="auth-dash-card" href="/create-member" aria-keyshortcuts="4">
+                                <span data-icon="plus"></span>
+                                <span class="auth-dash-text">
+                                    <strong>Add team member</strong>
+                                    <span class="auth-dash-desc">Create a seat with its own password, ready to sign in.</span>
+                                </span>
+                                <kbd class="kbd shortcut auth-dash-key" aria-hidden="true" data-no-i18n>4</kbd>
+                            </a>
+                            <a class="auth-dash-card is-danger" href="/delete-member" aria-keyshortcuts="5">
+                                <span data-icon="delete"></span>
+                                <span class="auth-dash-text">
+                                    <strong>Remove team member</strong>
+                                    <span class="auth-dash-desc">Revoke a seat and every session it still holds.</span>
+                                </span>
+                                <kbd class="kbd shortcut auth-dash-key" aria-hidden="true" data-no-i18n>5</kbd>
+                            </a>
+                        </nav>
+                        <div class="auth-secondary">
+                            <button type="button" id="btn-switch-member" class="auth-link">Switch to member sign-in</button>
+                            <button type="button" id="btn-admin-logout" class="auth-link">Sign out</button>
+                        </div>
                     </div>
                 </div>
             </div>

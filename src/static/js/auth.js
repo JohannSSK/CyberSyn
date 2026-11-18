@@ -9,6 +9,7 @@
     var $ = Dom.$;
     var options = { member: false, onUnauthorised: false };
     var tabs = Dom.$$("[data-auth-tab]");
+    var panel = document.querySelector(".auth-panel");
     var explicit = new URLSearchParams(location.search).get("tab");
     var selected = explicit === "admin" ? "admin" : "member";
     var changedTabs = false;
@@ -31,6 +32,8 @@
         $("#admin-session-badge").hidden = !admin;
         $("#active-admin-label").textContent = admin ? admin.username : "";
         $("#member-ends-admin").hidden = !admin;
+        // The hub is a small dashboard of cards, so the column widens for it.
+        if (panel) panel.classList.toggle("is-hub", !!admin);
     }
 
     function showError(target, message) {
@@ -63,6 +66,42 @@
         });
     });
     selectTab(selected, false);
+
+    /* ---- single-key navigation --------------------------------------
+       1 and 2 switch sign-in type; on the administrator hub the same digits
+       open its cards in order (1-5). Hints sit inside each control and are
+       only painted while it is hovered.
+       ---------------------------------------------------------------- */
+
+    function typingInField(target) {
+        if (!target || !target.tagName) return false;
+        var tag = target.tagName;
+        return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" ||
+            target.isContentEditable === true;
+    }
+
+    Dom.on(document, "keydown", function (event) {
+        if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
+        if (typingInField(event.target)) return;
+        if (!event.key || event.key.length !== 1) return;
+
+        var hub = $("#admin-session-badge");
+        if (hub && !hub.hidden) {
+            var card = hub.querySelector('a[aria-keyshortcuts="' + event.key + '"]');
+            if (!card) return;
+            event.preventDefault();
+            card.click();
+            return;
+        }
+
+        var index = parseInt(event.key, 10);
+        if (!(index === 1 || index === 2)) return;
+        event.preventDefault();
+        changedTabs = true;
+        selectTab(tabs[index - 1].dataset.authTab, true);
+        var field = index === 1 ? $("#employee-username") : $("#admin-username");
+        if (field) field.focus();
+    });
 
     Dom.on($("#admin-login-form"), "submit", function (event) {
         event.preventDefault();

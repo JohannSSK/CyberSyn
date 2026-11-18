@@ -144,12 +144,21 @@ class Rules(unittest.TestCase):
         import re
 
         template = (Path(__file__).resolve().parents[1] / "src/templates/workspace.html").read_text()
-        tiles = re.findall(
-            r'data-starter data-check="(\w*)">\s*'
-            r'<span class="demo-tile-label">([^<]+)</span>\s*'
-            r'<span class="demo-tile-prompt">([^<]+)</span>',
-            template,
-        )
+
+        # Each tile is a button whose label/prompt spans may sit beside a
+        # hover-only shortcut pill, so read the block rather than the line.
+        def field(body, name):
+            found = re.search(r'class="' + name + r'">([^<]+)<', body)
+            return found.group(1) if found else ""
+
+        tiles = [
+            (rule, field(body, "demo-tile-label"), field(body, "demo-tile-prompt"))
+            for rule, body in re.findall(
+                r'<button[^>]*data-starter[^>]*data-check="(\w*)"[^>]*>(.*?)</button>',
+                template,
+                re.S,
+            )
+        ]
         self.assertEqual([rule for rule, _label, _prompt in tiles],
                          ["", "check1", "check2", "check3"])
         prompts = {rule: html.unescape(prompt).strip() for rule, _label, prompt in tiles}

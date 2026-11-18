@@ -33,6 +33,30 @@
         "Administrator navigation": "Πλοήγηση διαχειριστή",
         "Switch to member sign-in": "Μετάβαση στη σύνδεση μέλους",
         "Sign in to manage your workspace and open administrator dashboards.": "Συνδεθείτε για να διαχειριστείτε τον χώρο εργασίας και να δείτε τους πίνακες διαχειριστή.",
+        // ---- The left third of the sign-in portal ----
+        "The gate every AI prompt passes through.": "Η πύλη από την οποία περνά κάθε αίτημα προς την ΤΝ.",
+        "Checked before it leaves": "Έλεγχος πριν φύγει",
+        "Personal data, confidential context and prompt injection are screened on this computer.":
+            "Προσωπικά δεδομένα, εμπιστευτικό περιεχόμενο και εισαγωγή οδηγιών ελέγχονται σε αυτόν τον υπολογιστή.",
+        "Shadow AI, mapped": "Χαρτογράφηση μη καταγεγραμμένης ΤΝ",
+        "See which AI tools reach your workspace and set a policy for each one.":
+            "Δείτε ποια εργαλεία ΤΝ φτάνουν στον χώρο σας και ορίστε πολιτική για καθένα.",
+        "Every seat, one audit trail": "Κάθε μέλος, ένα ιστορικό ελέγχου",
+        "Members, provider keys and activity sit together for the administrator.":
+            "Τα μέλη, τα κλειδιά παρόχων και η δραστηριότητα βρίσκονται μαζί για τον διαχειριστή.",
+        "Runs on this computer — never a third-party screening service.":
+            "Εκτελείται σε αυτόν τον υπολογιστή — ποτέ σε υπηρεσία τρίτων.",
+        // ---- The administrator hub cards ----
+        "Discovered tools, risk levels and the workspace policy behind them.":
+            "Εντοπισμένα εργαλεία, επίπεδα κινδύνου και η πολιτική του χώρου πίσω τους.",
+        "Blocks, approvals and daily trends, ready to export.":
+            "Αποκλεισμοί, εγκρίσεις και ημερήσιες τάσεις, έτοιμα για εξαγωγή.",
+        "Seats, active checks and each member's recent activity.":
+            "Θέσεις, ενεργοί έλεγχοι και πρόσφατη δραστηριότητα κάθε μέλους.",
+        "Create a seat with its own password, ready to sign in.":
+            "Δημιουργήστε θέση με δικό της κωδικό, έτοιμη για σύνδεση.",
+        "Revoke a seat and every session it still holds.":
+            "Ανακαλέστε μια θέση και κάθε συνεδρία που κρατά.",
         "Optional when this gateway has one workspace; otherwise enter your administrator's username.": "Προαιρετικό αν η πύλη έχει έναν μόνο χώρο εργασίας· διαφορετικά πληκτρολογήστε το όνομα χρήστη του διαχειριστή σας.",
         "Signing in as a member ends the administrator session in this browser.": "Η σύνδεση ως μέλος τερματίζει τη συνεδρία διαχειριστή σε αυτό το πρόγραμμα περιήγησης.",
         "Enter your workspace name to sign in.": "Πληκτρολογήστε το όνομα του χώρου εργασίας σας για να συνδεθείτε.",
@@ -756,6 +780,12 @@
             "Οι σελίδες διαχειριστή μένουν ξεκλείδωτες στην τρέχουσα καρτέλα για 15 λεπτά μετά την εισαγωγή του κωδικού. Πατήστε",
         "in the sidebar to close that window immediately.":
             "στην πλευρική στήλη για άμεσο κλείδωμα.",
+        "On the sign-in screen, press 1 or 2 to switch between the team member and administrator forms; on the administrator hub, 1–5 open its cards in order.":
+            "Στην οθόνη σύνδεσης, πατήστε 1 ή 2 για εναλλαγή μεταξύ της φόρμας μέλους και της φόρμας διαχειριστή· στον χώρο διαχειριστή, τα 1–5 ανοίγουν τις κάρτες με τη σειρά.",
+        "In a conversation, press / to jump to search and 1–4 to place a starter prompt in the message box; on Team, press R to refresh the roster.":
+            "Σε μια συνομιλία, πατήστε / για αναζήτηση και 1–4 για να βάλετε ένα έτοιμο αίτημα στο πεδίο μηνύματος· στην Ομάδα, πατήστε R για ανανέωση της λίστας.",
+        "Every shortcut shows itself as a small key on the control it belongs to while you hover it, so nothing is printed on the page at rest.":
+            "Κάθε συντόμευση εμφανίζεται ως μικρό πλήκτρο πάνω στο στοιχείο στο οποίο ανήκει όταν το περνάτε με τον δείκτη, ώστε να μην υπάρχει τίποτα τυπωμένο στην υπόλοιπη σελίδα.",
         "On Statistics, use": "Στα Στατιστικά, επιλέξτε",
         "to export workspace totals and trends, or print either Statistics or Team cleanly to A4 — API keys and prompt excerpts are omitted on paper.":
             "για εξαγωγή συνόλων και τάσεων, ή εκτυπώστε τα Στατιστικά ή την Ομάδα σε A4 — τα κλειδιά API και τα αποσπάσματα μηνυμάτων παραλείπονται στο χαρτί.",
