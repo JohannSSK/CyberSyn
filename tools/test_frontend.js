@@ -21,9 +21,9 @@ const candidates = [
     "/tmp/jsdomtest/node_modules/jsdom",
 ].filter(Boolean);
 
-let JSDOM;
+let JSDOM, VirtualConsole;
 for (const c of candidates) {
-    try { ({ JSDOM } = require(c)); break; } catch (_) {}
+    try { ({ JSDOM, VirtualConsole } = require(c)); break; } catch (_) {}
 }
 if (!JSDOM) {
     console.error("jsdom not found. Set CYBERSYN_JSDOM or npm install jsdom.");
@@ -468,6 +468,9 @@ async function finish() {
     await runEditInPlace();
     testBrowserBoundaries();
     await testSignedInScreens();
+    await testPortal();
+    await testScreeningActions();
+    await testDiscovery();
 
     console.log(`\n${pass} passed, ${fail} failed`);
     process.exit(fail ? 1 : 0);
@@ -655,36 +658,371 @@ function testBrowserBoundaries() {
     win.close();
 }
 
-function screenFixture(page, answer, employeeId = 5) {
+function screenFixture(page, answer, opts = {}) {
     const html = template(page + ".html").match(/\{% block body %\}([\s\S]*?)\{% endblock %\}/)[1]
         .replace(/\{% include "([^"]+\.html)" %\}/g, (_, name) => template(name))
         .replace("{% include sidebar_extra %}", page === "workspace" ? partial("chat_list.html") : "")
         .replace(/\{#[\s\S]*?#\}|\{%[\s\S]*?%\}/g, "");
-    const win = new JSDOM(html, { url: BASE + "/" + page, runScripts: "outside-only", pretendToBeVisual: true }).window;
+    const virtualConsole = new VirtualConsole();
+    const navigations = [];
+    virtualConsole.on("jsdomError", (error) => {
+        if (/^Not implemented: navigation/.test(error.message)) navigations.push(error.message);
+        else check(`${page} runs without browser errors`, false, error.message);
+    });
+    const win = new JSDOM(html, { url: BASE + "/" + (page === "index" ? "" : page.replaceAll("_", "-")) + (opts.query || ""),
+        runScripts: "outside-only", pretendToBeVisual: true, virtualConsole }).window;
     const routes = ROUTES;
     win.document.body.dataset.routes = JSON.stringify(routes);
     const posted = [], approvals = [], messages = [];
+    if (opts.narrow) win.matchMedia = (query) => ({ matches: query.includes("max-width") });
     win.HTMLElement.prototype.scrollTo = function () {};
     win.HTMLElement.prototype.scrollIntoView = function () { this.dataset.scrolled = "1"; };
     win.fetch = (url, opts) => {
         const key = Object.keys(routes).find((k) => routes[k] === url);
         const body = JSON.parse(opts.body);
         posted.push({ key, body });
-        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(answer(key, body)) });
+        return Promise.resolve(answer(key, body)).then((data) => {
+            const status = (data && data.httpStatus) || 200;
+            return { ok: status >= 200 && status < 300, status, json: () => Promise.resolve(data) };
+        });
     };
     for (const f of ["dom", "stages", "icons", "i18n", "markdown", "api"]) win.eval(read("core/" + f + ".js"));
-    win.Api.Session.setMember({ parentId: 2, employeeId, username: "Settings" });
-    win.Shell = { guard: () => true, withAdmin: (opts) => {
-        approvals.push(opts); return Promise.resolve("test-grant-" + approvals.length);
-    } };
+    if (opts.member !== false) win.Api.Session.setMember({ parentId: 2, employeeId: opts.employeeId || 5, username: "Settings" });
     win.Loading = { toast: (text) => messages.push(text), withButton: (_, task) => Promise.resolve().then(task) };
-    win.eval(read(page + ".js"));
-    return { win, posted, approvals, messages, $: (s) => win.document.querySelector(s) };
+    if (opts.realShell) win.eval(read("core/shell.js"));
+    else win.Shell = { guard: () => true, withAdmin: (options) => {
+        approvals.push(options); return Promise.resolve("test-grant-" + approvals.length);
+    } };
+    win.eval(read((page === "index" ? "auth" : page) + ".js"));
+    const $ = (selector) => win.document.querySelector(selector);
+    return { win, posted, approvals, messages, navigations, $,
+        submit: (selector) => $(selector).dispatchEvent(new win.Event("submit", { cancelable: true, bubbles: true })),
+        change: (selector, value) => {
+            $(selector).value = value;
+            $(selector).dispatchEvent(new win.Event("change", { bubbles: true }));
+        } };
+}
+
+const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+const DENIED = { httpStatus: 401, success: false };
+const VERIFIED = { success: true, Parent_id: "72", username: "Settings" };
+
+async function testPortal() {
+    console.log("\nIndependent sign-in");
+    const p = screenFixture("index", (key, body) => {
+        if (key === "ADMIN_SESSION") return DENIED;
+        if (key === "ADMIN_LOGIN") return VERIFIED;
+        if (key === "EMPLOYEE_LOGIN") return body.workspace ? { Parent_id: "72", Employee_id: "4", username: "member_fixture" } : {
+            httpStatus: 400, error: true, error_message: "Enter your workspace name to sign in."
+        };
+        return {};
+    }, { member: false, realShell: true });
+    await tick();
+    const { $, win, posted } = p;
+    const active = (type) => $("#tab-" + type).getAttribute("aria-selected") === "true" &&
+        $("#tab-" + type).tabIndex === 0 && !$("#" + $("#tab-" + type).getAttribute("aria-controls")).hidden;
+    const press = (type, key) => $("#tab-" + type).dispatchEvent(new win.KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+    check("the portal starts with an independent member form", active("member") && $("#admin-step").hidden &&
+        $("#employee-workspace").getAttribute("aria-describedby") === "workspace-hint");
+    press("member", "ArrowRight");
+    check("Right moves focus and selection to Administrator", active("admin") && win.document.activeElement === $("#tab-admin") && $("#employee-card").hidden);
+    press("admin", "ArrowLeft");
+    check("Left switches back to Team member", active("member") && win.document.activeElement === $("#tab-member"));
+    press("member", "End");
+    check("End and Home move across the tab group", active("admin") && (press("admin", "Home"), active("member")));
+    $("#employee-username").value = "member_fixture";
+    $("#employee-password").value = "  fixture member pass  ";
+    p.submit("#employee-login-form");
+    await tick();
+    const independent = posted.find((r) => r.key === "EMPLOYEE_LOGIN").body;
+    check("member form submits without admin authorization or an empty workspace field",
+        JSON.stringify(independent) === JSON.stringify({ username: "member_fixture", password: "  fixture member pass  " }));
+    check("an ambiguous workspace explains what to enter", $("#employee-msg").textContent === "Enter your workspace name to sign in.");
+    win.I18n.set("el");
+    check("translated member tab, hint, placeholder and sign-in error", $("#tab-member").textContent === "Μέλος ομάδας" &&
+        /χώρο/.test($("#workspace-hint").textContent) && $("#employee-workspace").placeholder !== "Administrator username" &&
+        /Πληκτρολογήστε/.test($("#employee-msg").textContent));
+    win.I18n.set("en");
+    check("member sign-in copy and input survive a language round-trip", $("#employee-msg").textContent === "Enter your workspace name to sign in." &&
+        $("#employee-username").value === "member_fixture" && $("#employee-password").value === "  fixture member pass  ");
+    $("#tab-admin").click();
+    $("#admin-username").value = " Settings ";
+    $("#admin-password").value = "  fixture owner pass  ";
+    p.submit("#admin-login-form");
+    await tick();
+    const login = posted.find((r) => r.key === "ADMIN_LOGIN").body;
+    check("separate admin form submits exact password and opens the hub", login.username === "Settings" && login.password === "  fixture owner pass  " &&
+        $("#admin-sign-in").hidden && !$("#admin-session-badge").hidden && !$("#admin-password").value);
+    check("the hub links to the admin tasks directly", ["/shadow-ai", "/stats", "/team", "/create-member", "/delete-member"].every(
+        (href) => $("#admin-session-badge a[href='" + href + "']")));
+    $("#btn-switch-member").click();
+    check("switching prefills workspace and explains session revocation", active("member") && $("#employee-workspace").value === "Settings" &&
+        !$("#member-ends-admin").hidden && win.document.activeElement === $("#employee-username"));
+    p.submit("#employee-login-form");
+    await tick();
+    check("member login sends the workspace name, accepts the returned workspace ID and drops admin hints",
+        posted.filter((r) => r.key === "EMPLOYEE_LOGIN").at(-1).body.workspace === "Settings" &&
+        win.Api.Session.getMember().parentId === "72" && !win.Api.Session.getAdmin() && $("#member-ends-admin").hidden && p.navigations.length === 1);
+    check("no sign-in secrets are retained in browser storage", !/fixture.*pass|_token|session_token/.test(JSON.stringify(win.localStorage) + JSON.stringify(win.sessionStorage)));
+    win.close();
+
+    const restored = screenFixture("index", (key) => key === "ADMIN_SESSION" ? VERIFIED : {}, { member: false, realShell: true, query: "?tab=admin" });
+    await tick();
+    restored.win.I18n.set("el");
+    check("a server-verified cookie restores the hub without local hints and preserves the administrator name",
+        !restored.$("#admin-step").hidden && !restored.$("#admin-session-badge").hidden && restored.$("#active-admin-label").textContent === "Settings");
+    restored.$("#btn-admin-logout").click();
+    await tick();
+    check("hub sign-out revokes the cookie and restores the admin form", restored.posted.some((r) => r.key === "ADMIN_LOGOUT") &&
+        !restored.win.Api.Session.getAdmin() && !restored.$("#admin-sign-in").hidden && restored.$("#admin-session-badge").hidden);
+    restored.win.close();
+
+    const explicit = screenFixture("index", (key) => key === "ADMIN_SESSION" ? VERIFIED : {}, { member: false, realShell: true, query: "?tab=member" });
+    await tick();
+    check("an explicit member tab is not overridden by a restored admin session", !explicit.$("#employee-card").hidden &&
+        !explicit.$("#member-ends-admin").hidden);
+    explicit.win.close();
+}
+
+async function testScreeningActions() {
+    console.log("\nWorkspace policy actions");
+    const old = { id: "fixture-message", prompt: "Synthetic stored prompt", answer: "Original reply", created_at: "2026-11-18T10:00:00Z" };
+    const evidence = "<fixture@example.example>";
+    const warn = { warned: true, action: "warn", warn_info: { stage: "check1", will_redact: true, matches: [
+        { stage: "check1", cause: "EMAIL", main_cause: "legacy cause", line: 2, snippet: evidence },
+        { stage: "check2", main_cause: "Synthetic match", line: 3 }, { line: 4 }
+    ] } };
+    const receipt = { count: 1, categories: ["EMAIL"], placeholders: ["[EMAIL_1]"], restored: true };
+    const masked = "Settings [EMAIL_1]";
+    const redacted = { redacted: true, action: "redact", redacted_prompt: masked, redaction_info: receipt,
+        reply_message: "Local reply " + evidence, chat_id: 1, message_id: "fixture-new" };
+    const history = (id) => ({ id, prompt: masked, answer: "Unrestored [EMAIL_1]", redacted: true,
+        redaction_info: { ...receipt, restored: false }, created_at: old.created_at });
+    let thread = [old];
+    let regenBlocked = false;
+    const p = screenFixture("workspace", (key, body) => {
+        if (key === "SETTINGS") return { action_check1: "warn", action_check2: "redact", action_check3: "block", action_code: "warn" };
+        if (key === "CHATS") return { chats: [{ id: 1, title: "Settings" }] };
+        if (key === "CHATS_OPEN") return { chat: { id: 1, title: "Settings", messages: structuredClone(thread) } };
+        if (key === "CHAT") {
+            if (!body.confirm_warn) return warn;
+            thread = [old, history(redacted.message_id)];
+            return redacted;
+        }
+        if (key === "CHAT_REGENERATE") {
+            if (regenBlocked) return { blocked: true, block_info: { stage: "policy", main_cause: "UNAPPROVED_AI_TOOL", tool_name: "<Fixture AI>" } };
+            if (!body.confirm_warn) return warn;
+            thread = [history(body.message_id), history(redacted.message_id)];
+            return { ...redacted, messages: structuredClone(thread) };
+        }
+        return {};
+    });
+    const { $, win, posted } = p;
+    const submitDraft = () => {
+        $("#prompt-input").value = "Review " + evidence;
+        p.submit("#form-send");
+        return tick();
+    };
+    const regen = () => $(".msg-actions-ai button[title='Generate a different answer']").click();
+    await tick();
+    check("workspace counts all four non-Allow actions", $("#checks-summary").textContent === "All checks on");
+    await submitDraft();
+    check("warning lists causes in order, including the fallback, and escapes evidence",
+        [...win.document.querySelectorAll(".bubble-warned .blocked-match .badge")].map((b) => b.textContent).join("|") === "EMAIL|Synthetic match|match" &&
+        $(".bubble-warned code").textContent === evidence && !$(".bubble-warned code fixture") && /will be redacted/.test($(".bubble-warned").textContent));
+    win.I18n.set("el");
+    check("warning buttons and aria label translate without changing evidence", $(".warn-send").textContent !== "Send anyway" &&
+        $(".bubble-warned").getAttribute("aria-label") !== "Message paused for review" && $(".bubble-warned code").textContent === evidence);
+    win.I18n.set("en");
+    $(".warn-edit").click();
+    check("warning edit returns the original draft to the focused composer without sending again", $("#prompt-input").value === "Review " + evidence &&
+        win.document.activeElement === $("#prompt-input") && posted.filter((r) => r.key === "CHAT").length === 1);
+    await submitDraft();
+    $(".warn-send").click();
+    await tick();
+    const confirmed = posted.filter((r) => r.key === "CHAT").at(-1).body;
+    check("warning confirmation repeats the same draft with a boolean confirmation and no administrator grant", confirmed.confirm_warn === true &&
+        confirmed.prompt === "Review " + evidence && !confirmed.bypass && !posted.some((r) => r.key === "ADMIN_APPROVE"));
+    const details = $(".redaction-receipt");
+    details.open = true;
+    check("the live exchange shows sanitized text and an expandable redaction receipt", details.querySelector(".redaction-preview").textContent === masked &&
+        details.querySelector("summary").textContent.includes("Redacted 1") && $(".msg[data-id='fixture-new'] .bubble-ai").textContent.includes(evidence));
+    win.I18n.set("el");
+    check("receipt copy translates but its token and sanitized prompt do not", !details.querySelector("summary").textContent.includes("Redacted") &&
+        details.querySelector(".redaction-tokens").textContent === "[EMAIL_1]" && details.querySelector(".redaction-preview").textContent === masked);
+    win.I18n.set("en");
+    regen();
+    await tick();
+    check("a warned regeneration preserves the original answer and other messages", !!$(".bubble-warned") &&
+        $(".msg[data-id='fixture-message'] .bubble-ai").textContent === "Original reply" && !!$(".msg[data-id='fixture-new'] .bubble-ai"));
+    $(".warn-send").click();
+    await tick();
+    check("confirmation uses regeneration, updates only its live answer and retains unrestored history for the others", posted.some((r) =>
+        r.key === "CHAT_REGENERATE" && r.body.confirm_warn === true && r.body.message_id === old.id) &&
+        $(".msg[data-id='fixture-message'] .bubble-ai").textContent.includes(evidence) &&
+        $(".msg[data-id='fixture-new'] .bubble-ai").textContent.includes("Unrestored [EMAIL_1]"));
+    regenBlocked = true;
+    regen();
+    await tick();
+    check("a blocked regeneration keeps the thread and names the destination safely", $(".bubble-blocked .blocked-why strong").textContent === "<Fixture AI>" &&
+        win.document.querySelectorAll(".msg[data-id]").length === 2);
+    win.close();
+}
+
+async function testDiscovery() {
+    console.log("\nShadow AI and administrator entry");
+    const base = { tool_key: "fixture_tool", name: "Settings", vendor: "Fixture Vendor", category: "gateway", domains: ["assistant.example"],
+        provider_key: "fixture", status: "unapproved", default_status: "unapproved", custom: false, risk_score: 80, risk_level: "high",
+        hosting: "On-premise", gdpr_summary: "This entry covers loopback inference only; verify that cloud features are disabled.",
+        training_policy: "opt_out_only", note: "Settings" };
+    let inventory = [base];
+    let events = [];
+    const sample = { host: "assistant.example", observed_at: "2026-11-18T09:00:00Z", actor: "192.0.2.55", team: "Settings",
+        tool_key: base.tool_key, tool_name: base.name, status: base.status, risk_level: "high", risk_score: 80, method: "POST", bytes_sent: 8000,
+        data_signal: "client_data" };
+    const response = () => ({ inventory, events, teams: events.length ? ["Settings"] : [], summary: { total_events: events.length },
+        by_team: events.length ? [{ team: "Settings", total_events: 1, unapproved_events: 1, sensitive_data_to_unapproved: 1,
+            client_data_to_unapproved: 1, unapproved_tools: [base.name] }] : [] });
+    const admin = screenFixture("shadow_ai", (key, body) => {
+        if (key === "ADMIN_SESSION") return VERIFIED;
+        if (key === "SHADOW_AI") return response();
+        if (key === "SHADOW_AI_IMPORT") {
+            events = body.clear ? [] : [sample];
+            return { lines_scanned: 2, ai_events_added: events.length, non_ai_ignored: 1 };
+        }
+        if (key === "SHADOW_AI_POLICY") {
+            if (body.method === "add") inventory = [...inventory, { ...base, tool_key: "custom:" + body.domain, name: body.name,
+                domains: [body.domain], custom: true }];
+            else if (body.method === "remove") inventory = inventory.filter((t) => t.tool_key !== body.tool_key);
+            else inventory = inventory.map((t) => t.tool_key === body.tool_key ? { ...t, note: body.note, status: body.status } : t);
+            return { inventory };
+        }
+        return {};
+    }, { realShell: true, narrow: true });
+    await tick();
+    const { $, win, posted } = admin;
+    check("primary admin page verifies the cookie, scopes reads to it and skips step-up even with stale member metadata",
+        posted[0].key === "ADMIN_SESSION" && Object.keys(posted[0].body).length === 0 && posted[1].key === "SHADOW_AI" &&
+        posted[1].body.Parent_id === "72" && !("Employee_id" in posted[1].body) && !$(".overlay"));
+    check("primary navigation hides member-only items and names the administrator", $("[data-sidebar-role]").textContent === "Administrator" &&
+        [...win.document.querySelectorAll("[data-member-only]")].every((link) => link.hidden) && !$("[data-admin-hub]").hidden);
+    $("[data-action='toggle-sidebar']").click();
+    check("Shadow AI has a working mobile navigation drawer", $("[data-sidebar]").classList.contains("is-open") &&
+        $("[data-nav='/shadow-ai']").getAttribute("aria-current") === "page");
+    $("#shadow-sample").click();
+    await tick();
+    check("sample import uses the primary cookie and refreshes counts and the event list", posted.some((r) => r.key === "SHADOW_AI_IMPORT" &&
+        r.body.sample === true && r.body.Parent_id === "72" && !("admin_token" in r.body)) &&
+        $("[data-summary='total_events']").textContent === "1" && $("#shadow-events").textContent.includes("192.0.2.55"));
+    admin.change("#shadow-days", "30");
+    admin.change("#shadow-status", "unapproved");
+    admin.change("#shadow-team", "Settings");
+    admin.change("#shadow-signal", "client_data");
+    await tick();
+    const filter = posted.filter((r) => r.key === "SHADOW_AI").at(-1).body;
+    check("all four filters travel with the verified workspace", JSON.stringify(filter) === JSON.stringify({
+        Parent_id: "72", days: 30, status: "unapproved", team: "Settings", data_signal: "client_data"
+    }));
+    const toolName = "<fixture-ai>";
+    $("#shadow-tool-name").value = toolName;
+    $("#shadow-domain").value = "second-assistant.example";
+    admin.submit("#shadow-add-tool");
+    await tick();
+    const custom = () => $("[data-tool='custom:second-assistant.example']");
+    check("custom tools can be added and their names are literal text", custom().querySelector("summary strong").textContent === toolName &&
+        !custom().querySelector("fixture-ai") && !$("#shadow-domain").value);
+    const tool = () => $("[data-tool='fixture_tool']");
+    tool().open = true;
+    tool().querySelector(".shadow-tool-note").value = "Settings";
+    tool().querySelector(".shadow-tool-status").value = "restricted";
+    tool().querySelector("button").click();
+    await tick();
+    check("policy save refreshes the status, keeps the note and leaves the facts expanded", tool().open &&
+        tool().querySelector("summary .badge-warn").textContent === "Restricted" && tool().querySelector(".shadow-tool-note").value === "Settings");
+    const statusName = $("#shadow-status option:checked").textContent;
+    win.I18n.set("el");
+    check("Shadow AI translates filter and result chrome but preserves team, actor, host, tool and note data", $("#shadow-status option:checked").textContent !== statusName &&
+        /Γραμμές που ελέγχθηκαν/.test($("#shadow-import-result").textContent) && $("#shadow-team option:checked").textContent === "Settings" &&
+        $("#shadow-events .mono").textContent === "assistant.example" && $("#shadow-events").textContent.includes("192.0.2.55") &&
+        tool().querySelector("summary strong").textContent === "Settings" && tool().querySelector(".shadow-tool-note").value === "Settings");
+    win.I18n.set("en");
+    check("Shadow AI English copy and filter values round-trip", $("#shadow-status option:checked").textContent === statusName &&
+        $("#shadow-signal").value === "client_data" && $("#shadow-import-result").textContent === "Scanned 2 lines · 1 AI event · 1 non-AI ignored");
+    const log = "192.0.2.56 POST assistant.example 5000";
+    Object.defineProperty($("#shadow-file"), "files", { value: [new win.File([log], "synthetic.log", { type: "text/plain" })] });
+    $("#shadow-file").dispatchEvent(new win.Event("change", { bubbles: true }));
+    for (let i = 0; i < 20 && !$("#shadow-content").value; i++) await tick();
+    check("local file picker populates the paste field without uploading", $("#shadow-content").value === log &&
+        posted.filter((r) => r.key === "SHADOW_AI_IMPORT").length === 1);
+    $("#shadow-import").click();
+    await tick();
+    check("import posts the selected text once and clears the field on success", posted.some((r) => r.key === "SHADOW_AI_IMPORT" &&
+        r.body.content === log) && $("#shadow-content").value === "");
+    custom().querySelector(".btn-danger").click();
+    $("[data-confirm-accept]").click();
+    await tick();
+    check("removing a custom service asks for confirmation then refreshes inventory", !custom() && posted.some((r) =>
+        r.key === "SHADOW_AI_POLICY" && r.body.method === "remove"));
+    $("#shadow-clear").click();
+    $("[data-confirm-cancel]").click();
+    await tick();
+    check("declining clear sends nothing", !posted.some((r) => r.body.clear));
+    $("#shadow-clear").click();
+    $("[data-confirm-accept]").click();
+    await tick();
+    check("confirmed clear resets discovery but not policy", $("#shadow-import-result").textContent === "Discovery logs cleared." &&
+        $("[data-summary='total_events']").textContent === "0" && !!tool() && $("#shadow-team").value === "");
+    win.close();
+
+    const approve = (page) => {
+        page.$("#admin-gate-username").value = "fixture_admin";
+        page.$("#admin-gate-password").value = "  fixture approval pass  ";
+        page.$("[data-gate-unlock]").click();
+    };
+    const member = screenFixture("shadow_ai", (key, body) => {
+        if (key === "ADMIN_SESSION") return DENIED;
+        if (key === "ADMIN_APPROVE") return { success: true, Parent_id: "2", username: body.username,
+            ...(body.scope === "once" && { admin_token: "once-shadow-fixture" }) };
+        if (key === "SHADOW_AI") return response();
+        if (key === "SHADOW_AI_IMPORT") return { lines_scanned: 25, ai_events_added: 22, non_ai_ignored: 3 };
+        return {};
+    }, { realShell: true });
+    await tick();
+    check("member entry prompts for read-only unlock before loading any discovery data", !!member.$(".overlay") && member.posted.length === 1);
+    approve(member);
+    await tick();
+    check("page grant loads Shadow AI for the member's own workspace and exposes Lock now", member.posted[1].body.scope === "page" &&
+        member.posted[2].body.Parent_id === 2 && !member.$("[data-admin-lock]").classList.contains("hidden"));
+    member.$("#shadow-sample").click();
+    await tick();
+    check("member imports still require a fresh password after page unlock", !!member.$(".overlay") && !member.posted.some((r) => r.key === "SHADOW_AI_IMPORT"));
+    approve(member);
+    await tick();
+    const write = member.posted.find((r) => r.key === "SHADOW_AI_IMPORT");
+    check("fresh approval is used only in the scoped import request and never stored", write.body.admin_token === "once-shadow-fixture" &&
+        write.body.Parent_id === 2 && member.posted.some((r) => r.body.scope === "once") &&
+        !/once-shadow-fixture/.test(JSON.stringify(member.win.localStorage) + JSON.stringify(member.win.sessionStorage)));
+    member.win.close();
+
+    for (const page of ["stats", "team"]) {
+        const direct = screenFixture(page, (key) => key === "ADMIN_SESSION" ? VERIFIED : {
+            admin: "Settings", stats: { members: 1 }, members: [{ id: 4, username: "Settings", checks_on: 4, model: "Settings" }]
+        }, { member: false, realShell: true });
+        await tick();
+        check(`${page} loads directly from the primary administrator cookie, without a member gate`,
+            direct.posted.some((r) => r.key === "TEAM" && r.body.Parent_id === "72") && !direct.$(".overlay") &&
+            direct.$(".member-meta").textContent.includes("4 of 4 checks on"));
+        direct.win.close();
+    }
+    const anonymous = screenFixture("shadow_ai", () => DENIED, { realShell: true, member: false });
+    await tick();
+    check("without either session the page redirects without a discovery request or unlock", anonymous.posted.length === 1 &&
+        !anonymous.$(".overlay") && anonymous.navigations.length === 1);
+    anonymous.win.close();
 }
 
 async function testSignedInScreens() {
     console.log("\nSigned-in screens");
-    const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
     const revoked = makePage({ revoked: true });
     revoked.win.sessionStorage.setItem("cybersyn_page_hint", JSON.stringify({ username: "boss", parentId: 2, until: Date.now() + 60000 }));
     const pending = revoked.win.Shell.withAdmin({ title: "Team", what: "the roster" }).catch(() => {});
@@ -701,12 +1039,13 @@ async function testSignedInScreens() {
     fresh.win.close();
 
     const base = "https://models.example/prefix/v1";
-    const records = { 5: true, 6: false };
+    const records = { 5: "warn", 6: "allow" };
     const answer = (key, body) => {
         if (key === "SETTINGS") {
-            if (typeof body.block_code === "boolean") records[body.Employee_id] = body.block_code;
+            if (body.action_code) records[body.Employee_id] = body.action_code;
             return {
-                check1: true, check2: false, check3: true, block_code: records[body.Employee_id], MODEL_NAME: "Settings",
+                action_check1: body.action_check1 || "block", action_check2: body.action_check2 || "allow", action_check3: "warn",
+                action_code: records[body.Employee_id], restore_redactions: !!body.restore_redactions, MODEL_NAME: "Settings",
                 API_KEY_MASK: body.CLEAR_API_KEY ? "" : "****1234", PROVIDER: "openai", API_BASE: base
             };
         }
@@ -714,19 +1053,29 @@ async function testSignedInScreens() {
         if (key === "MODELS") return { models: ["Settings"], provider: body.provider };
         return {};
     };
-    const first = screenFixture("settings", answer), other = screenFixture("settings", answer, 6);
+    const first = screenFixture("settings", answer), other = screenFixture("settings", answer, { employeeId: 6 });
     await tick();
-    check("Settings renders each member's own code toggle", first.$("#setting-block-code").checked && !other.$("#setting-block-code").checked);
+    check("Settings renders each member's own saved actions", first.$("#setting-block-code").value === "warn" && other.$("#setting-block-code").value === "allow");
+    check("prompt injection has no redact option; restoration is off by default", !first.$("#setting-check3 option[value='redact']") &&
+        !first.$("#setting-restore-redactions").checked);
     check("saved named-provider base path survives load and automatic discovery", first.$("#setting-base").value === base &&
         first.posted.find((r) => r.key === "MODELS").body.API_BASE === base);
     first.win.I18n.set("el");
     check("model names are data, not interface copy", first.$("#setting-model option:checked").textContent === "Settings");
-    first.$("#setting-block-code").checked = false;
+    check("settings action labels translate without modifying action values", first.$("#setting-block-code option:checked").textContent !== "Warn" &&
+        first.$("#setting-block-code").value === "warn");
+    first.win.I18n.set("en");
+    first.change("#setting-check1", "redact");
+    first.change("#setting-block-code", "allow");
+    first.$("#setting-restore-redactions").checked = true;
+    first.$("#also-default").checked = true;
     first.$("#btn-save-checks").click();
     await tick();
-    const policy = first.posted.find((r) => r.key === "SETTINGS" && "block_code" in r.body).body;
-    check("saving targets this member, not the default or another member", policy.Employee_id === 5 && policy.block_code === false &&
-        !policy.also_default && policy.admin_token === "test-grant-1" && first.approvals[0].fresh);
+    const policy = first.posted.find((r) => r.key === "SETTINGS" && "action_code" in r.body).body;
+    check("four actions and local restoration require fresh approval, scoped to this member with an opt-in default copy", policy.Employee_id === 5 &&
+        policy.action_code === "allow" && policy.action_check1 === "redact" && policy.action_check2 === "allow" && policy.action_check3 === "warn" &&
+        policy.restore_redactions === true && policy.also_default === true && policy.admin_token === "test-grant-1" && first.approvals[0].fresh &&
+        !first.$("#also-default").checked && !("block_code" in policy));
     first.$("#setting-base").value = "";
     first.$("#btn-refresh-models").click();
     await tick();

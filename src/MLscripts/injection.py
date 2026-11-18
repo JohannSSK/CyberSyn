@@ -64,7 +64,7 @@ def _already_blocked(matches):
     )
 
 
-def analyze(raw_text, stop=None):
+def analyze(raw_text, stop=None, full_detail=False):
     """Analyse a prompt.
 
     `stop` is a callable returning True once another check has already
@@ -119,11 +119,13 @@ def analyze(raw_text, stop=None):
         # Stop early only once the verdict is settled *and* the leftover is
         # big enough to be worth stopping for. Short prompts keep the full
         # report, because finishing them costs almost nothing.
-        settled = _already_blocked(matches) and len(keys) > DETAIL_LINES
+        settled = not full_detail and _already_blocked(matches) and len(keys) > DETAIL_LINES
         if not settled:
             results = classify_batched(keys, LABELS, stop=stop)
             if isinstance(results, dict):
                 results = [results]
+            if len(results) != len(keys) and not (stop is not None and stop()):
+                raise ValueError("Incomplete injection verdict.")
             # Nothing computed yet means another check refused the prompt
             # before the first batch went in.
             if results:
@@ -132,6 +134,8 @@ def analyze(raw_text, stop=None):
             for text, res in zip(keys, results):
                 top_label = res["labels"][0]
                 top_score = round(float(res["scores"][0]), 4)
+                if top_label not in LABELS or not 0 <= top_score <= 1:
+                    raise ValueError("Invalid injection classification.")
 
                 if top_label == INJECTION_LABEL and top_score >= THRESHOLD:
                     for chunk in distinct[text]:
@@ -142,7 +146,7 @@ def analyze(raw_text, stop=None):
                                 "line": chunk["line"],
                                 "start_offset": chunk["start_offset"],
                                 "end_offset": chunk["end_offset"],
-                                "snippet": chunk["text"],
+                                "snippet": raw_text[chunk["start_offset"]:chunk["end_offset"]],
                             }
                         )
 
@@ -184,7 +188,7 @@ def analyze(raw_text, stop=None):
 
 def analyze_stdin():
     """CLI entry point: read the prompt from stdin and return the verdict."""
-    return analyze(sys.stdin.read())
+    return analyze(sys.stdin.read(), full_detail="--full-detail" in sys.argv)
 
 
 if __name__ == "__main__":

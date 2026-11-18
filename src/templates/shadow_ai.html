@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+
+{% block title %}Shadow AI — CyberSyn{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/page.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/stats.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/shadow_ai.css') }}">
+{% endblock %}
+
+{% block body %}
+<div class="app-shell">
+    <div class="layout">
+        {% include "partials/sidebar.html" %}
+        <main class="layout-main">
+            {% include "partials/page_bar.html" %}
+            <header class="page-head">
+                <span class="eyebrow">Administrator</span>
+                <h1>Shadow AI</h1>
+                <p class="dim">See which AI tools your teams access and set a workspace policy for each tool.</p>
+            </header>
+
+            <div class="page-body page-body-wide shadow-page">
+                <section class="card stack" aria-labelledby="shadow-overview-title">
+                    <h2 class="card-title" id="shadow-overview-title"><span data-icon="stats"></span><span>Discovery overview</span></h2>
+                    <div class="shadow-filters" id="shadow-filters" role="group" aria-label="Discovery filters">
+                        <label class="field"><span>Window</span>
+                            <select class="select" id="shadow-days">
+                                <option value="7">This week (7d)</option>
+                                <option value="30">30 days</option>
+                                <option value="0">All time</option>
+                            </select>
+                        </label>
+                        <label class="field"><span>Status</span>
+                            <select class="select" id="shadow-status">
+                                <option value="">All statuses</option>
+                                <option value="unapproved">Unapproved</option>
+                                <option value="restricted">Restricted</option>
+                                <option value="approved">Approved</option>
+                            </select>
+                        </label>
+                        <label class="field"><span>Team</span>
+                            <select class="select" id="shadow-team"><option value="">All teams</option></select>
+                        </label>
+                        <label class="field"><span>Data signal</span>
+                            <select class="select" id="shadow-signal">
+                                <option value="">All data signals</option>
+                                <option value="client_data">Client data</option>
+                                <option value="source_code">Source code</option>
+                                <option value="contracts">Contracts</option>
+                                <option value="hr_data">HR data</option>
+                                <option value="financial">Financial data</option>
+                                <option value="credentials">Credentials</option>
+                                <option value="large_upload">Large upload</option>
+                                <option value="general">General</option>
+                            </select>
+                        </label>
+                    </div>
+                    <div class="tiles tiles-5" id="shadow-summary" aria-live="polite">
+                        <div class="tile"><div class="tile-label">Tools discovered</div><div class="tile-value" data-summary="tools_discovered">—</div></div>
+                        <div class="tile"><div class="tile-label">Unapproved tools active</div><div class="tile-value" data-summary="unapproved_tools_active">—</div></div>
+                        <div class="tile"><div class="tile-label">Unapproved events</div><div class="tile-value" data-summary="unapproved_events">—</div></div>
+                        <div class="tile"><div class="tile-label">Sensitive events to unapproved AI</div><div class="tile-value" data-summary="sensitive_data_to_unapproved">—</div></div>
+                        <div class="tile"><div class="tile-label">Total events</div><div class="tile-value" data-summary="total_events">—</div></div>
+                    </div>
+                    <div>
+                        <h3 id="shadow-breakdown-title">Teams sending sensitive/client data to unapproved AI</h3>
+                        <p class="hint">Data signals come from supplied tags or transfer size, not from inspecting message content.</p>
+                    </div>
+                    <div class="shadow-table-wrap">
+                        <table class="shadow-table" aria-labelledby="shadow-breakdown-title">
+                            <thead><tr><th scope="col">Team</th><th scope="col">Total events</th><th scope="col">Unapproved events</th>
+                                <th scope="col">Sensitive to unapproved</th><th scope="col">Client data to unapproved</th><th scope="col">Unapproved tools</th></tr></thead>
+                            <tbody id="shadow-by-team"></tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <section class="card stack" aria-labelledby="shadow-import-title">
+                    <h2 class="card-title" id="shadow-import-title"><span data-icon="history"></span><span>Activity log ingestion</span></h2>
+                    <p class="small muted">Use synthetic CSV, proxy or DNS logs only. Parsing is local; only destination hosts and structured event metadata are kept.</p>
+                    <label class="field"><span>Choose a log file</span>
+                        <input class="input" id="shadow-file" type="file" accept=".csv,.log,.txt" aria-describedby="shadow-import-limit">
+                    </label>
+                    <label class="field"><span>Paste log text</span>
+                        <textarea class="input mono" id="shadow-content" rows="4" placeholder="Paste CSV, proxy or DNS lines…" aria-describedby="shadow-import-limit" spellcheck="false"></textarea>
+                    </label>
+                    <p id="shadow-import-limit" class="hint">Up to 2,000 lines and 192 KiB per import. URL paths, queries and prompt columns are discarded.</p>
+                    <div class="row wrap">
+                        <button class="btn btn-primary" id="shadow-import" type="button">Import logs</button>
+                        <button class="btn" id="shadow-sample" type="button">Load sample week</button>
+                        <button class="btn btn-danger" id="shadow-clear" type="button">Clear logs</button>
+                    </div>
+                    <p class="callout hidden" id="shadow-import-result" role="status" aria-live="polite"></p>
+                    <h3 id="shadow-events-title">Discovered events</h3>
+                    <p class="hint">Showing up to 200 matching events, newest first (UTC).</p>
+                    <div class="shadow-table-wrap">
+                        <table class="shadow-table" aria-labelledby="shadow-events-title">
+                            <thead><tr><th scope="col">Observed (UTC)</th><th scope="col">Team / actor</th><th scope="col">Tool / host</th>
+                                <th scope="col">Status / risk</th><th scope="col">Method / bytes sent</th><th scope="col">Data signal</th></tr></thead>
+                            <tbody id="shadow-events"></tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <section class="card stack" aria-labelledby="shadow-inventory-title">
+                    <h2 class="card-title" id="shadow-inventory-title"><span data-icon="search"></span><span>AI tool risk inventory</span></h2>
+                    <p class="small muted">Approved and restricted tools can be used through CyberSyn. Restricted direct access is flagged here; unapproved tools are blocked at the gateway.</p>
+                    <p class="small muted">Risk scores are baseline assessments, not compliance certifications. Check the terms for your account before approving a tool.</p>
+                    <div id="shadow-inventory" class="stack"></div>
+                    <form class="shadow-add stack" id="shadow-add-tool" method="post">
+                        <h3>Add a custom AI tool</h3>
+                        <div class="shadow-filters">
+                            <label class="field"><span>Tool name (optional)</span><input class="input" id="shadow-tool-name" maxlength="80" placeholder="Internal assistant"></label>
+                            <label class="field"><span>Tool domain</span><input class="input mono" id="shadow-domain" maxlength="261" placeholder="assistant.example" required></label>
+                        </div>
+                        <p class="hint">Use a hostname with an optional port, without a scheme, path or wildcard.</p>
+                        <div><button class="btn" id="shadow-add" type="submit">Add custom tool</button></div>
+                    </form>
+                </section>
+            </div>
+        </main>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/shadow_ai.js') }}"></script>
+{% endblock %}

@@ -947,3 +947,17 @@ mark {
 .search-hit:focus-visible:not(:disabled) {
     background: var(--surface-2);
 }
+
+.bubble-warned {
+    align-self: start;
+    max-width: min(100%, 42rem);
+    border: 1px solid var(--warn-line);
+    background: var(--surface-2);
+}
+.bubble-warned .blocked-head { color: var(--warn); }
+.policy-match { color: inherit; background: transparent; }
+.bubble-warned .policy-match { background: var(--warn-line); }
+.redaction-receipt { align-self: end; max-width: 100%; color: var(--text-dim); }
+.redaction-receipt summary { cursor: pointer; overflow-wrap: anywhere; }
+.redaction-tokens { margin-inline-start: .5em; font-size: var(--text-xs); }
+.redaction-preview { white-space: pre-wrap; overflow-wrap: anywhere; padding: .75rem; background: var(--surface-2); }

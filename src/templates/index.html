@@ -17,12 +17,10 @@
 
             <div class="auth-brand-body">
                 <h2>Use AI at work without exposing what matters.</h2>
-                <p>Every message you send is checked on your own computer before
-                   an AI model ever sees it, so client and company details stay
-                   with your team.</p>
+                <p>This gateway applies your workspace's local policy before a prompt reaches an AI model.</p>
                 <ul class="auth-points">
                     <li><strong>Checked on this machine</strong>
-                        <span>All three checks run locally. Nothing leaves for review.</span></li>
+                        <span>Enabled checks run locally. Nothing leaves for review.</span></li>
                     <li><strong>Aware of Greek records</strong>
                         <span>Spots AFM, AMKA, IBANs, phone numbers, names and company details.</span></li>
                     <li><strong>Guided by your administrator</strong>
@@ -36,76 +34,86 @@
         <div class="auth-panel">
             <div data-lang-switch class="auth-lang"></div>
 
-            <!-- Step 1 — the administrator signs in first -->
-            <div id="admin-step" class="auth-step">
-                <div class="auth-progress" aria-hidden="true">
-                    <span class="is-active"></span><span></span>
-                </div>
-                <div class="auth-eyebrow">Step 1 of 2</div>
-                <h1 class="auth-title">Administrator sign in</h1>
-                <p class="auth-lead">Sign in with your administrator account to unlock this workspace.</p>
-
-                <div class="auth-field">
-                    <label for="admin-username">Username</label>
-                    <input type="text" id="admin-username" placeholder="Your administrator username"
-                           autocomplete="username" autofocus>
-                </div>
-                <div class="auth-field">
-                    <label for="admin-password">Password</label>
-                    <input type="password" id="admin-password" placeholder="Your password"
-                           autocomplete="current-password">
-                </div>
-
-                <div id="admin-msg" class="auth-inline-msg" role="alert"></div>
-                <button type="button" id="btn-admin-login" class="auth-btn-primary">Continue</button>
-
-                <div class="auth-secondary">
-                    <a href="/create-admin" class="auth-link">Create administrator account</a>
-                    <a href="/delete-admin" class="auth-link">Delete account</a>
-                </div>
+            <div class="auth-tabs" role="tablist" aria-label="Sign-in type">
+                <button type="button" role="tab" id="tab-member" data-auth-tab="member"
+                        aria-controls="employee-card" aria-selected="true">Team member</button>
+                <button type="button" role="tab" id="tab-admin" data-auth-tab="admin"
+                        aria-controls="admin-step" aria-selected="false" tabindex="-1">Administrator</button>
             </div>
 
-            <!-- Step 2 — pick the team member to work as -->
-            <div id="employee-card" class="auth-step hidden">
-                <div class="auth-progress" aria-hidden="true">
-                    <span class="is-active"></span><span class="is-active"></span>
-                </div>
-                <div class="auth-eyebrow">Step 2 of 2</div>
+            <div id="employee-card" class="auth-step" role="tabpanel" aria-labelledby="tab-member">
                 <h1 class="auth-title">Team member sign in</h1>
                 <p class="auth-lead">Sign in with your team member account to open your chats.</p>
-
-                <div id="admin-session-badge" class="auth-context hidden">
-                    <div class="auth-context-text">
-                        <span class="auth-context-label">Signed in as administrator</span>
-                        <strong id="active-admin-label">Admin</strong>
+                <form id="employee-login-form" method="post">
+                    <div class="auth-field">
+                        <label for="employee-username">Username</label>
+                        <input type="text" id="employee-username" placeholder="Your member username" maxlength="64"
+                               autocomplete="username" required>
                     </div>
-                    <div class="auth-context-actions">
-                        <button type="button" id="btn-admin-logout" class="auth-link">Switch administrator</button>
-                        <a href="/stats" class="auth-link">Team statistics</a>
+                    <div class="auth-field">
+                        <label for="employee-password">Password</label>
+                        <input type="password" id="employee-password" placeholder="Your password" maxlength="256"
+                               autocomplete="current-password" required>
+                    </div>
+                    <div class="auth-field">
+                        <label for="employee-workspace">Workspace</label>
+                        <input type="text" id="employee-workspace" placeholder="Administrator username" maxlength="64"
+                               autocomplete="off" aria-describedby="workspace-hint">
+                        <p id="workspace-hint" class="hint">Optional when this gateway has one workspace; otherwise enter your administrator's username.</p>
+                    </div>
+                    <p id="member-ends-admin" class="hint" hidden>Signing in as a member ends the administrator session in this browser.</p>
+                    <div id="employee-msg" class="auth-inline-msg" role="alert"></div>
+                    <button type="submit" id="btn-employee-login" class="auth-btn-primary">Open workspace</button>
+                </form>
+            </div>
+
+            <div id="admin-step" class="auth-step" role="tabpanel" aria-labelledby="tab-admin" hidden>
+                <div id="admin-sign-in">
+                    <h1 class="auth-title">Administrator sign in</h1>
+                    <p class="auth-lead">Sign in to manage your workspace and open administrator dashboards.</p>
+                    <form id="admin-login-form" method="post">
+                        <div class="auth-field">
+                            <label for="admin-username">Username</label>
+                            <input type="text" id="admin-username" placeholder="Your administrator username" maxlength="64"
+                                   autocomplete="username" required>
+                        </div>
+                        <div class="auth-field">
+                            <label for="admin-password">Password</label>
+                            <input type="password" id="admin-password" placeholder="Your password" maxlength="256"
+                                   autocomplete="current-password" required>
+                        </div>
+                        <div id="admin-msg" class="auth-inline-msg" role="alert"></div>
+                        <button type="submit" id="btn-admin-login" class="auth-btn-primary">Sign in</button>
+                    </form>
+                    <div class="auth-secondary">
+                        <a href="/create-admin" class="auth-link">Create administrator account</a>
+                        <a href="/delete-admin" class="auth-link">Delete account</a>
                     </div>
                 </div>
 
-                <div class="auth-field">
-                    <label for="employee-username">Username</label>
-                    <input type="text" id="employee-username" placeholder="Your member username"
-                           autocomplete="off">
-                </div>
-                <div class="auth-field">
-                    <label for="employee-password">Password</label>
-                    <input type="password" id="employee-password" placeholder="Your password"
-                           autocomplete="off">
-                </div>
-
-                <div id="employee-msg" class="auth-inline-msg" role="alert"></div>
-                <button type="button" id="btn-employee-login" class="auth-btn-primary">Open workspace</button>
-
-                <div class="auth-secondary">
-                    <a href="/create-member" class="auth-link">Add team member</a>
-                    <a href="/delete-member" class="auth-link">Remove team member</a>
+                <div id="admin-session-badge" hidden>
+                    <h1 class="auth-title">Administrator workspace</h1>
+                    <div class="auth-context">
+                        <div class="auth-context-text">
+                            <span class="auth-context-label">Signed in as administrator</span>
+                            <strong id="active-admin-label" data-no-i18n></strong>
+                        </div>
+                    </div>
+                    <nav class="auth-dashboard-links" aria-label="Administrator navigation">
+                        <a class="btn btn-sm" href="/shadow-ai">Shadow AI</a>
+                        <a class="btn btn-sm" href="/stats">Statistics</a>
+                        <a class="btn btn-sm" href="/team">Team</a>
+                        <a class="btn btn-sm" href="/create-member">Add team member</a>
+                        <a class="btn btn-sm" href="/delete-member">Remove team member</a>
+                    </nav>
+                    <div class="auth-secondary">
+                        <button type="button" id="btn-switch-member" class="auth-link">Switch to member sign-in</button>
+                        <button type="button" id="btn-admin-logout" class="auth-link">Sign out</button>
+                    </div>
                 </div>
             </div>
 
-            <div class="auth-footnote">Every message is checked on this computer before it reaches the AI. Your words never leave first.</div>
+            <div class="auth-footnote">Your workspace policy is applied locally before the AI receives a message.</div>
         </div>
     </section>
 </div>

@@ -157,7 +157,7 @@ async function createAdmin() {
         /8 characters/.test(page.text("#admin-password-rule")));
     check("its button is not a sign-in button",
         page.doc.querySelector("#btn-create-admin").textContent.trim() === "Create account");
-    check("it offers a way back", page.doc.querySelector('.auth-link[href="/"]') !== null);
+    check("it offers a way back", page.doc.querySelector('.auth-link[href="/?tab=admin"]') !== null);
 
     await page.click("#btn-create-admin");
     check("an empty username sends nothing", page.posted.length === 0, page.posted.length);

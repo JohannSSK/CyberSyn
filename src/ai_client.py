@@ -13,20 +13,27 @@ from errors import ChatError
 from providers import get, normalise_model, validate_base_url
 
 
+def _client():
+    # LiteLLM's own diagnostics can include submitted messages and provider
+    # responses. Keep the gateway's sanitized, type-only error log instead.
+    for name in ("LiteLLM", "LiteLLM Router", "LiteLLM Proxy"):
+        logging.getLogger(name).disabled = True
+    import litellm
+
+    litellm.suppress_debug_info = True
+    litellm.set_verbose = False
+    litellm.log_raw_request_response = False
+    litellm.turn_off_message_logging = True
+    litellm.redact_messages_in_exceptions = True
+    return litellm
+
+
 def preload():
-    """Import LiteLLM now, on the warm-up thread, rather than on a prompt.
-
-    Importing it costs a couple of seconds. Paid during start-up it is
-    invisible; paid inside the first request it looks like a slow provider.
-    """
+    """Import the provider client on the warm-up thread if available."""
     try:
-        import litellm
-
-        # LiteLLM prints a "give feedback / get help" banner on error. It is
-        # noise in a log that also carries the real failure.
-        litellm.suppress_debug_info = True
+        _client()
         return True
-    except Exception:  # noqa: BLE001 - warm-up must never stop start-up
+    except Exception:  # warm-up must never stop startup
         return False
 
 
@@ -50,8 +57,7 @@ def complete(api_key, model, prompt, api_base=None, provider=None):
     else:
         name = normalise_model(name)  # preserve legacy, auto-provider settings
     try:
-        from litellm import completion
-
+        client = _client()
         kwargs = {
             "model": name,
             "messages": [{"role": "user", "content": prompt}],
@@ -61,7 +67,7 @@ def complete(api_key, model, prompt, api_base=None, provider=None):
         # Revalidate even a previously saved base, including named providers.
         if api_base:
             kwargs["api_base"] = validate_base_url(api_base, require_dns=True)
-        resp = completion(**kwargs)
+        resp = client.completion(**kwargs)
         return resp.choices[0].message.content or ""
     except Exception as exc:
         # Third-party exceptions can include headers, prompt text or the key.

@@ -86,6 +86,11 @@ def team():
     return render_template("team.html", **_timeouts())
 
 
+@pages.get("/shadow-ai")
+def shadow_ai():
+    return render_template("shadow_ai.html", **_timeouts())
+
+
 @pages.get("/help")
 def help_page():
     return render_template("help.html", **_timeouts())

@@ -1,0 +1,20 @@
+.shadow-page h2, .shadow-page h3 { margin: 0; }
+.shadow-page h3 { font-size: var(--text-md); }
+.shadow-page .stack { min-width: 0; }
+.shadow-filters { display: flex; flex-wrap: wrap; gap: 12px; }
+.shadow-filters .field { flex: 1 1 11rem; min-width: 0; }
+.shadow-table-wrap { overflow-x: auto; }
+.shadow-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+.shadow-table :is(th, td) { text-align: start; vertical-align: top; padding: .65rem .5rem; border-bottom: 1px solid var(--border); }
+.shadow-table th { color: var(--text-dim); font-weight: 600; }
+.shadow-table td { overflow-wrap: anywhere; }
+.shadow-cell-sub { display: block; color: var(--text-muted); }
+.shadow-tool { border: 1px solid var(--border); border-radius: var(--r-md); padding: .8rem 1rem; }
+.shadow-tool summary { cursor: pointer; overflow-wrap: anywhere; }
+.shadow-tool summary .badge { margin-inline-start: .5em; }
+.shadow-tool-body { margin-top: .9rem; }
+.shadow-tool-body dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr)); gap: .75rem; margin: 0; }
+.shadow-tool-body dt { font-size: var(--text-xs); color: var(--text-muted); }
+.shadow-tool-body dd { margin: .2rem 0 0; overflow-wrap: anywhere; }
+.shadow-tool-body p { margin: 0; }
+.shadow-add { border-top: 1px solid var(--border); padding-top: 1rem; }

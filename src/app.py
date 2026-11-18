@@ -80,13 +80,12 @@ def create_app():
     @app.errorhandler(Exception)
     def handle_unexpected(exc):
         # A JSON answer, never an HTML traceback: this app is an API first.
-        if DEBUG:
-            app.logger.exception("Unhandled request error")
-        else:
-            app.logger.error("Unhandled request error (%s)", type(exc).__name__)
+        # Scanner, provider and parser exceptions can carry private input.
+        # This remains metadata-only even with framework debugging enabled.
+        app.logger.error("Unhandled request error (%s)", type(exc).__name__)
         return jsonify({
             "error": True,
-            "error_message": f"Server error: {exc}" if DEBUG else "Internal server error.",
+            "error_message": "Internal server error.",
         }), 500
 
     return app
@@ -97,6 +96,7 @@ def register_api(app):
     from routes import admin_api, assets, chat_api, chat_history, member_api
     from models_route import register as register_models
     from team_stats import register as register_team_stats
+    from shadow_ai import shadow_api
 
     app.register_blueprint(assets.assets)
     app.register_blueprint(admin_api.admin_api)
@@ -105,6 +105,7 @@ def register_api(app):
     app.register_blueprint(chat_history.chat_history)
     register_models(app)
     register_team_stats(app)
+    app.register_blueprint(shadow_api)
 
 
 def _import(name):

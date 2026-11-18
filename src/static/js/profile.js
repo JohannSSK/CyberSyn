@@ -58,10 +58,10 @@
     function paintSettings() {
         if (!cachedSettings) return;
         var data = cachedSettings;
-        var on = [data.check1, data.check2 || data.block_code, data.check3].filter(Boolean).length;
+        var on = Dom.activeChecks(data);
         nodes.checks.innerHTML = "";
-        var cls = on === 0 ? "badge badge-warn" : (on === 3 ? "badge badge-accent" : "badge");
-        nodes.checks.appendChild(Dom.el("span", cls, t(on + " of 3 active")));
+        var cls = on === 0 ? "badge badge-warn" : (on === 4 ? "badge badge-accent" : "badge");
+        nodes.checks.appendChild(Dom.el("span", cls, t(on + " of 4 active")));
         nodes.model.textContent = data.MODEL_NAME || "gpt-4o-mini";
         nodes.key.textContent = data.API_KEY_MASK || t("No key saved");
     }
