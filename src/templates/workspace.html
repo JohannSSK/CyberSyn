@@ -82,6 +82,13 @@
 
             <footer class="composer">
                 <div class="composer-inner">
+                    <div class="callout composer-key-note hidden" id="missing-key-note" role="status">
+                        <p class="composer-key-copy"><span>No AI is wired up for this workspace yet — ask your administrator to add a provider in</span> <a href="/settings" class="composer-key-link">Settings</a>.</p>
+                        <button type="button" class="icon-btn composer-key-dismiss" id="btn-dismiss-key-note"
+                                title="Dismiss notice" aria-label="Dismiss notice">
+                            <span data-icon="close"></span>
+                        </button>
+                    </div>
                     <form id="form-send" class="composer-box">
                         <textarea id="prompt-input" rows="1"
                                   placeholder="Write a message… (Enter to send, Shift+Enter for a new line)"

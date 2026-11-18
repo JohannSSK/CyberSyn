@@ -901,6 +901,39 @@ mark {
     margin: 0 auto;
 }
 
+.composer-key-note {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+    padding: 6px 8px 6px 14px;
+}
+
+.composer-key-copy {
+    margin: 0;
+    font-size: var(--text-sm);
+    color: var(--text-dim);
+    line-height: 1.5;
+}
+
+.composer-key-link {
+    color: var(--text);
+    font-weight: 500;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.composer-key-link:hover,
+.composer-key-link:focus-visible {
+    color: var(--text-strong);
+}
+
+.composer-key-dismiss {
+    flex: none;
+    color: var(--text-muted);
+}
+
 .composer-box {
     display: flex;
     align-items: flex-end;

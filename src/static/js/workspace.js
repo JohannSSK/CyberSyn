@@ -68,6 +68,8 @@
         checksPopover: $("#checks-popover"),
         checksPopoverList: $("#checks-popover-list"),
         checksPopoverSettings: $("#checks-popover-settings"),
+        missingKeyNote: $("#missing-key-note"),
+        dismissKeyNote: $("#btn-dismiss-key-note"),
         firstRunTpl: $("#first-run-template")
     };
 
@@ -355,6 +357,47 @@
             event.stopPropagation();
             setChecksPopoverOpen(false, true);
         }
+    });
+
+    /* ------------------------------------------------------------------
+       Missing provider key callout (v3 Item 2)
+
+       Inferred strictly from the existing /api/admin/employee/settings
+       API_KEY_MASK field (empty when no key is stored). Non-blocking and
+       dismissible for the current browser session.
+       ------------------------------------------------------------------ */
+
+    function missingKeyStorageKey() {
+        var m = Api.Session.getMember() || {};
+        return "cybersyn_missing_key_dismissed_" +
+            (m.parentId || "0") + "_" + (m.employeeId || "0");
+    }
+
+    function isMissingKeyDismissed() {
+        try {
+            return sessionStorage.getItem(missingKeyStorageKey()) === "1";
+        } catch (err) {
+            return false;
+        }
+    }
+
+    function updateMissingKeyNote(data) {
+        if (!nodes.missingKeyNote || !data || typeof data.API_KEY_MASK !== "string") {
+            return;
+        }
+        var hasKey = data.API_KEY_MASK.length > 0;
+        if (hasKey) {
+            try { sessionStorage.removeItem(missingKeyStorageKey()); } catch (err) {}
+            nodes.missingKeyNote.classList.add("hidden");
+            return;
+        }
+        nodes.missingKeyNote.classList.toggle("hidden", isMissingKeyDismissed());
+    }
+
+    Dom.on(nodes.dismissKeyNote, "click", function () {
+        try { sessionStorage.setItem(missingKeyStorageKey(), "1"); } catch (err) {}
+        if (nodes.missingKeyNote) nodes.missingKeyNote.classList.add("hidden");
+        nodes.input.focus();
     });
 
     /* ------------------------------------------------------------------
@@ -1088,6 +1131,7 @@
             state.settings.check2 = data.check2 !== false;
             state.settings.check3 = data.check3 !== false;
             updateChecksBadge();
+            updateMissingKeyNote(data);
         }).catch(function () { updateChecksBadge(); });
 
         loadChats()

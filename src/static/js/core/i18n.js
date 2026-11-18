@@ -257,6 +257,9 @@
         "Send message": "Αποστολή μηνύματος",
         "Checked on this computer before anything reaches the AI.":
             "Ελέγχεται σε αυτόν τον υπολογιστή πριν φτάσει οτιδήποτε στην ΤΝ.",
+        "No AI is wired up for this workspace yet — ask your administrator to add a provider in":
+            "Δεν έχει συνδεθεί ακόμη πάροχος ΤΝ σε αυτόν τον χώρο εργασίας — ζητήστε από τον διαχειριστή σας να προσθέσει έναν στις",
+        "Dismiss notice": "Απόκρυψη ειδοποίησης",
         "Local safety checks": "Τοπικοί έλεγχοι ασφάλειας",
         "Checks": "Έλεγχοι",
         "On": "Ενεργός",
