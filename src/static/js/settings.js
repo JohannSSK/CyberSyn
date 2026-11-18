@@ -35,6 +35,7 @@
         check1: $("#setting-check1"),
         check2: $("#setting-check2"),
         check3: $("#setting-check3"),
+        consequence: $("#checks-consequence"),
         allOff: $("#all-checks-off-note"),
         saveChecks: $("#btn-save-checks"),
         checksState: $("#checks-state"),
@@ -52,10 +53,46 @@
     var probedKey = null;
     var BASE_NEEDED = {};
 
+    var CHECK_CONSEQUENCES = [
+        {
+            key: "check1",
+            name: "Personal data",
+            body: " (AFM, AMKA, IBAN, phones, Greek IDs, names) will not be flagged."
+        },
+        {
+            key: "check2",
+            name: "Context:",
+            body: " Legal, financial, HR and customer records will not be flagged."
+        },
+        {
+            key: "check3",
+            name: "Prompt-injection",
+            body: " attempts will not be flagged."
+        }
+    ];
+
     function updateAllOff() {
-        if (!nodes.allOff) return;
-        var anyOn = nodes.check1.checked || nodes.check2.checked || nodes.check3.checked;
-        nodes.allOff.classList.toggle("hidden", anyOn);
+        var off = CHECK_CONSEQUENCES.filter(function (item) {
+            return nodes[item.key] && !nodes[item.key].checked;
+        });
+        var noneOn = off.length === CHECK_CONSEQUENCES.length;
+        var partialOff = off.length > 0 && !noneOn;
+
+        if (nodes.allOff) {
+            nodes.allOff.classList.toggle("hidden", !noneOn);
+        }
+        if (nodes.consequence) {
+            nodes.consequence.textContent = "";
+            if (partialOff) {
+                off.forEach(function (item) {
+                    var line = Dom.el("p", "checks-consequence-item");
+                    line.appendChild(Dom.el("strong", "", t(item.name)));
+                    line.appendChild(document.createTextNode(t(item.body)));
+                    nodes.consequence.appendChild(line);
+                });
+            }
+            nodes.consequence.classList.toggle("hidden", !partialOff);
+        }
     }
 
     function markDirty() {
@@ -284,6 +321,7 @@
     });
 
     Dom.on(document, "cybersyn:lang", function () {
+        updateAllOff();
         paintKeyState();
         if (dirty) nodes.checksState.textContent = t("Unsaved changes");
         var autoOpt = nodes.provider.querySelector('option[value="auto"]');

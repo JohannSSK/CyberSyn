@@ -350,6 +350,14 @@
             "Κρυφές οδηγίες και απόπειρες παράκαμψης κανόνων — συχνές σε επικολλημένα email, ιστοσελίδες και έγγραφα.",
         "All three checks are turned off. Messages from this account will go straight to the AI provider until at least one check is turned back on.":
             "Και οι τρεις έλεγχοι είναι ανενεργοί. Τα μηνύματα αυτού του λογαριασμού θα στέλνονται απευθείας στον πάροχο ΤΝ μέχρι να ενεργοποιηθεί τουλάχιστον ένας.",
+        "(AFM, AMKA, IBAN, phones, Greek IDs, names) will not be flagged.":
+            "(ΑΦΜ, ΑΜΚΑ, IBAN, τηλέφωνα, ελληνικές ταυτότητες, ονόματα) δεν θα επισημαίνονται.",
+        "Context:": "Συμφραζόμενα:",
+        "Legal, financial, HR and customer records will not be flagged.":
+            "Νομικά, οικονομικά, στοιχεία HR και αρχεία πελατών δεν θα επισημαίνονται.",
+        "Prompt-injection": "Εντολές παράκαμψης (prompt injection):",
+        "attempts will not be flagged.":
+            "Οι απόπειρες παράκαμψης δεν θα επισημαίνονται.",
         "Save checks": "Αποθήκευση ελέγχων",
         "Unsaved changes": "Μη αποθηκευμένες αλλαγές",
         "Approve": "Έγκριση",
