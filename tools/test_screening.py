@@ -27,7 +27,8 @@ Three findings, in the order they were found:
 import os
 import sys
 import time
-from unittest.mock import patch
+from threading import Event
+from unittest.mock import call, patch
 
 sys.path.insert(0, "src")
 
@@ -82,8 +83,9 @@ try:
     check("a scanner that dies raises instead of passing", False, "no exception")
 except ChatError as exc:
     check("a scanner that dies raises instead of passing", True)
-    check("the reason is the last useful line, not a traceback",
-          "missing dependencies" in str(exc) and "spacy" not in str(exc), str(exc))
+    check("a missing module gives an actionable reason, not a traceback",
+          "scanner installation is broken" in str(exc) and "run ./setup.sh" in str(exc)
+          and "spacy" not in str(exc), str(exc))
 
 # The prompt must travel on stdin, and stdin alone.
 check("the prompt is passed on stdin", calls[-1]["stdin"] == PII, calls[-1]["stdin"][:40])
@@ -123,14 +125,57 @@ except ChatError as exc:
           "check2: scanner exited without a usable verdict" in exc.message and PII not in exc.message,
           exc.message)
 
-scanning.subprocess.run, _ = fake_subprocess(lambda c: FakeCompleted(stderr="ImportError: " + c["stdin"], returncode=1))
+scanning.subprocess.run, _ = fake_subprocess(lambda c: FakeCompleted(stderr="RuntimeError: " + c["stdin"], returncode=1))
 try:
     scanning.screen(PII, ALL)
-    check("multiple fallback failures refuse the prompt", False)
+    check("multiple ordinary fallback failures refuse the prompt", False)
 except ChatError as exc:
-    check("all failed fallback checks show the actionable diagnosis without stderr",
-          exc.status == 503 and all(f"{stage}: missing dependencies" in exc.message for stage in ALL)
+    check("ordinary fallback failures are still reported together without stderr",
+          exc.status == 503 and all(f"{stage}: scanner exited" in exc.message for stage in ALL)
           and PII not in exc.message, exc.message)
+
+# check1 is earlier in scanner order and is still stuck when check2 reports
+# a dependency error. Do not wait for check1 (even if it ignores cancellation).
+peer_started, release_peer, peer_done = Event(), Event(), Event()
+peer_stopped = []
+
+
+def busy_peer(stage, prompt, stop):
+    peer_started.set()
+    release_peer.wait(5)
+    peer_stopped.append(stop())
+    peer_done.set()
+    return {"blocked": False}
+
+
+def broken_import(c):
+    peer_started.wait(1)
+    return FakeCompleted(stderr="ImportError: " + c["stdin"], returncode=1)
+
+
+scanning.subprocess.run, _ = fake_subprocess(broken_import)
+with (patch.object(scanning.registry, "available", side_effect=lambda stage: stage == "check1"),
+      patch.object(scanning.registry, "run", side_effect=busy_peer),
+      patch.object(scanning, "SCREEN_BUDGET", 2), patch.object(scanning, "logging") as logging):
+    t = time.monotonic()
+    try:
+        scanning.screen(PII, {"check1": True, "check2": True})
+        check("a broken installation refuses the prompt", False)
+    except ChatError as exc:
+        elapsed = time.monotonic() - t
+        check("an import failure refuses immediately even while an earlier scanner is busy",
+              elapsed < 1 and not peer_done.is_set(), f"{elapsed:.2f}s with a 2s budget")
+        check("the refusal explains how to repair the installation without echoing stderr",
+              exc.status == 503 and exc.payload.get("error_code") == "screening_failed"
+              and "check2: scanner installation is broken" in exc.message
+              and "run ./setup.sh" in exc.message and PII not in exc.message, exc.message)
+    finally:
+        release_peer.set()
+        peer_done.wait(1)
+    logged = logging.getLogger.return_value.warning.call_args_list
+    check("logs only the failure type, not the prompt or raw exception",
+          logged == [call("Scanner dependency failure (%s)", "ImportError")], logged)
+    check("peers are asked to stop on an import failure", peer_stopped == [True])
 
 # --------------------------------------------------------------------------
 # 2. Screening is bounded and the checks run together

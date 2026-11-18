@@ -13,7 +13,7 @@
 # For the containerised flow instead:  docker compose up --build
 
 # Started as `sh run.sh`? On Debian and friends that is dash, which has no
-# [[ ]] and no arrays. Hand over to bash rather than fail on line 40.
+# [[ ]] and no arrays. Hand over to bash before using either.
 if [ -z "${BASH_VERSION:-}" ]; then
     if command -v bash >/dev/null 2>&1; then
         exec bash "$0" "$@"
@@ -22,13 +22,13 @@ if [ -z "${BASH_VERSION:-}" ]; then
     exit 1
 fi
 
-set -e
-
 # Sourcing would let the `exec` at the end replace the caller's shell.
 if [ "${BASH_SOURCE[0]}" != "$0" ]; then
     echo "run.sh must be executed, not sourced. Use: ./run.sh" >&2
-    return 1 2>/dev/null || exit 1
+    return 1
 fi
+
+set -e
 
 # Resolve this script's own directory, following symlinks. `readlink -f` is
 # a GNU extension and macOS does not have it, so walk the links by hand;
@@ -51,32 +51,49 @@ ROOT="$(script_dir "${BASH_SOURCE[0]}")"
 
 say() { printf '%s\n' "$*"; }
 die() { printf 'run.sh: %s\n' "$*" >&2; exit 1; }
+not_ready() {
+    {
+        printf '\nCyberSyn cannot start: the local screeners are not ready.\n'
+        printf '%s\n' "$1"
+        printf 'Run ./setup.sh (or cybersyn --setup) to repair the installation.\n'
+        printf 'For debugging only, CYBERSYN_SKIP_VERIFY=1 skips the dependency probe.\n'
+    } >&2
+    exit 1
+}
 
 # ---------------------------------------------------------------------------
 # Which Python. The virtual environment setup.sh built is the only one that
 # has the dependencies, so it comes first.
 # ---------------------------------------------------------------------------
 
+# shellcheck source=tools/local_python.sh disable=SC1091
 . "$ROOT/tools/local_python.sh"
 
 if [ -x "$ROOT/.venv/Scripts/python.exe" ]; then
     # Created by setup.sh running under Git Bash or Cygwin on Windows.
-    die "this looks like a Windows virtual environment (.venv/Scripts).
-   The scanners and the server are not supported on Windows.
-   Use WSL (Ubuntu on Windows) and run setup.sh again inside it,
-   or use Docker:  docker compose up --build"
+    not_ready "This looks like a Windows virtual environment (.venv/Scripts).
+Use WSL (Ubuntu on Windows) or Docker: docker compose up --build"
 fi
 
+skip_verify=${CYBERSYN_SKIP_VERIFY:-0}
 if has_project_venv; then
-    PY=$(venv_python)
+    PY=$(venv_python 2>&1) || not_ready "$PY"
+elif [ "$skip_verify" = 1 ]; then
+    PY=$(path_python) || not_ready "No Python 3.11–3.13 interpreter found on PATH."
+    say "==> CYBERSYN_SKIP_VERIFY=1: no project .venv found; using Python from PATH."
 else
-    # Keep supporting manually installed dependencies, including a versioned
-    # interpreter on PATH behind an incompatible system python3.
-    PY=$(path_python) || die "no Python 3.11–3.13 environment found. Run ./setup.sh first.
-   Setup can provision Python 3.12 with uv. On Arch, if uv is missing: sudo pacman -S --needed uv"
-    say "==> No project .venv found. Using Python from PATH; run ./setup.sh if dependencies are missing."
+    not_ready "No project .venv found."
 fi
 say "==> Using $("$PY" --version) at $PY"
+
+# Seeding does not screen prompts. All normal server starts must pass both
+# checks before binding, without fetching packages or weights.
+if [ "${1:-}" != seed ] && [ "$skip_verify" != 1 ]; then
+    cd "$ROOT"
+    say "==> Checking installed dependencies and cached scanner models..."
+    PIP_DISABLE_PIP_VERSION_CHECK=1 "$PY" -m pip check || not_ready "pip check failed."
+    "$PY" src/MLscripts/model_cache.py --verify || not_ready "Offline model verification failed."
+fi
 
 # Use config.py as the source of truth for the bind and paths. The server
 # prints the actual URL after binding. exec keeps Ctrl-C and SIGTERM on the

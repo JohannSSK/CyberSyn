@@ -905,6 +905,8 @@
             "Δεν στάλθηκε — η αποθηκευμένη πολιτική ελέγχων δεν είναι έγκυρη. Ζητήστε από τον διαχειριστή να ελέγξει τη ρύθμιση της πύλης.",
         "missing dependencies": "λείπουν εξαρτήσεις",
         "ask your administrator to check the scanner installation": "ζητήστε από τον διαχειριστή να ελέγξει την εγκατάσταση των ελέγχων",
+        "scanner installation is broken": "η εγκατάσταση των ελέγχων δεν λειτουργεί",
+        "ask your administrator to run ./setup.sh": "ζητήστε από τον διαχειριστή να εκτελέσει το ./setup.sh",
         "ask your administrator to check the gateway setup": "ζητήστε από τον διαχειριστή να ελέγξει τη ρύθμιση της πύλης",
         "try a smaller paste": "δοκιμάστε μικρότερο κείμενο",
         "try again": "δοκιμάστε ξανά",

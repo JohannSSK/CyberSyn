@@ -2,9 +2,12 @@
 """Check the model cache contract without downloading or running any models."""
 
 import os
+import runpy
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
+from io import StringIO
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -71,6 +74,54 @@ class ModelCache(unittest.TestCase):
         self.assertFalse(calls[1].kwargs.get("local_files_only", False))
         self.assertIn("pytorch_model*.bin", calls[1].kwargs["allow_patterns"])
         self.assertTrue(calls[2].kwargs["local_files_only"])
+
+    def cli(self, *args):
+        stdout, stderr = StringIO(), StringIO()
+        self.taggers = [Mock(pipe_names=["ner"]), Mock(pipe_names=["ner"])]
+        self.load_spacy = Mock(side_effect=self.taggers)
+        with (patch.dict(sys.modules, {
+            "config": SimpleNamespace(MODEL_CACHE=self.cache),
+            "spacy": SimpleNamespace(load=self.load_spacy),
+            "torch": SimpleNamespace(version=SimpleNamespace(cuda=None)),
+        }), patch.object(sys, "argv", [model_cache.__file__, *args]),
+              redirect_stdout(stdout), redirect_stderr(stderr), self.assertRaises(SystemExit) as stopped):
+            runpy.run_path(model_cache.__file__, run_name="__main__")
+        return stopped.exception.code, stdout.getvalue(), stderr.getvalue()
+
+    def test_verify_runs_one_inference_per_model_offline(self):
+        def offline_download(*args, **kwargs):
+            self.assertEqual(os.environ["HF_HUB_OFFLINE"], "1")
+            return self.snapshot
+
+        self.download.side_effect = offline_download
+        self.pipeline.return_value.return_value = {"scores": [0.9, 0.1]}
+        status, stdout, stderr = self.cli("--verify")
+        self.assertEqual(status, 0, stderr)
+        self.assertIn("Verified CPU inference", stdout)
+        self.assertEqual([call.args[0] for call in self.load_spacy.call_args_list],
+                         ["en_core_web_sm", "el_core_news_sm"])
+        self.assertTrue(all(tagger.call_count == 1 for tagger in self.taggers))
+        self.download.assert_called_once_with(model_cache.ZERO_SHOT_MODEL, cache_dir=self.cache, local_files_only=True)
+        self.pipeline.return_value.assert_called_once()
+
+    def test_verify_exits_nonzero_when_project_weights_are_missing(self):
+        # A legacy snapshot does not make this checkout ready to start.
+        self.download.side_effect = [FileNotFoundError, "/legacy/snapshot"]
+        status, stdout, stderr = self.cli("--verify")
+        self.assertEqual(status, 1)
+        self.assertFalse(stdout)
+        self.assertIn("Local DistilBART model unavailable", stderr)
+        self.assertIn(self.cache, stderr)
+        self.assertEqual(len(stderr.splitlines()), 1)
+        self.download.assert_called_once_with(model_cache.ZERO_SHOT_MODEL, cache_dir=self.cache, local_files_only=True)
+        self.pipeline.assert_not_called()
+
+    def test_verify_and_download_are_mutually_exclusive(self):
+        status, _, stderr = self.cli("--verify", "--download")
+        self.assertEqual(status, 2)
+        self.assertIn("not allowed with", stderr)
+        self.load_spacy.assert_not_called()
+        self.download.assert_not_called()
 
 
 if __name__ == "__main__":

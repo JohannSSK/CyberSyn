@@ -235,51 +235,62 @@ sudo pacman -S --needed uv
 Then run the same commands as on other supported systems:
 
 ```bash
-./setup.sh                 # creates .venv, installs dependencies, fetches the model
-./run.sh                   # starts the server
+./setup.sh
+cybersyn -p 8000
 ```
+
+Open **<http://127.0.0.1:8000>**. Setup installs `cybersyn` to `/usr/local/bin`, or to
+`$HOME/.local/bin` if it cannot use `sudo`. For the latter, run the printed PATH command before
+starting (for Bash and other POSIX-style shells: `export PATH="$HOME/.local/bin:$PATH"`).
+No virtual environment activation is needed. Start `cybersyn` from any directory and stop it
+with Ctrl+C. If you move the checkout, rerun `./setup.sh` there or set `CYBERSYN_HOME` to its new
+path. You can always start from the checkout with `CYBERSYN_PORT=8000 ./run.sh`; Docker does not
+need the launcher, and unattended setup (`CI=true` or `CYBERSYN_UNATTENDED=1`) skips installing it
+if passwordless `sudo` is unavailable.
 
 `setup.sh` reuses a compatible `.venv` first, then looks for a supported interpreter on `PATH`
 (including `python3.13`, `python3.12` and `python3.11`). If neither exists, it uses `uv` to create
-`.venv` with Python 3.12, downloading that interpreter if needed. No activation or `PATH` change is
-required. Once setup succeeds, run `./run.sh` again after closing a terminal or rebooting. Stop
-it with Ctrl+C. Neither activation nor a setup rerun is needed as long as the checkout, `.venv`,
-and its underlying Python are still in place. If an OS upgrade removed that Python, move only
-the broken `.venv` aside and rerun setup; this preserves your workspace data.
+`.venv` with Python 3.12, downloading that interpreter if needed. Linux setup installs PyTorch from
+the CPU-only index first; macOS uses the native arm64 PyPI wheel. Prefer `setup.sh` over a direct
+Linux `pip install -r requirements.txt`, which otherwise uses PyPI’s default torch build.
 
-Setup installs the English and Greek spaCy pipelines in `.venv` and verifies DistilBART from
-`src/backend/model-cache/`. The native cache does not depend on `HOME`, `XDG_CACHE_HOME`,
-`HF_HOME` or `HF_HUB_CACHE` from the setup shell. The running app reads the installed weights;
-it never downloads missing weights during startup or a chat request. Older installs can still
-use an existing local Hugging Face cache. If local weights are missing, run `./setup.sh` to repair
-the installation. The initial setup needs network access to PyPI, GitHub, Hugging Face, and
-(on Linux) the CPU PyTorch index. Provider calls still need access to the chosen provider.
+Setup installs the English and Greek spaCy pipelines in `.venv` and prepares DistilBART in
+`src/backend/model-cache/`, independent of the installing shell's Hugging Face cache. On every
+native server start, `run.sh` (also used by `cybersyn`) requires a working project `.venv`, runs
+`pip check`, and runs a tiny inference on all three models offline before binding the port.
+Startup and chat requests never download missing weights. Setup needs network access to PyPI,
+GitHub, Hugging Face, and (on Linux) the CPU PyTorch index. Provider calls still need access to
+the chosen provider.
 
 Stop CyberSyn before backing up `src/backend/app.db` and `src/backend/secret.key` together.
 Losing the encryption key makes saved provider keys unreadable. The model cache can be regenerated.
 
-Linux setup installs PyTorch from the CPU-only index first; macOS uses the native arm64 PyPI wheel.
-Prefer `setup.sh` over a direct Linux `pip install -r requirements.txt`, which otherwise uses PyPI’s
-default torch build.
-
 There is no default account. To create the first administrator from the command line, run
-`./run.sh seed alice` with your chosen username. Omit the password and a random one is generated
-and printed once.
+`cybersyn seed alice` (or `./run.sh seed alice`) with your chosen username. Omit the password and
+a random one is generated and printed once. Seeding does not need the scanner models.
 
-`run.sh` uses the app's settings in `includes/constants.json` and prints the bound URL when
-it has started (by default, `http://127.0.0.1:5000/`). For a port conflict, stop the other process
-or run `CYBERSYN_PORT=5001 ./run.sh`. For access from another device, deliberately bind to the
-network interface after creating your administrator account:
+Without port or host overrides, CyberSyn uses `includes/constants.json` (by default,
+`http://127.0.0.1:5000/`). Choose another port with `cybersyn --port 8123` or
+`cybersyn --port=8123`. For access from another device, deliberately bind to the network
+interface **after** creating your administrator account:
 
 ```bash
-CYBERSYN_HOST=0.0.0.0 ./run.sh
+cybersyn --host 0.0.0.0 -p 8000
 ```
 
-Both scripts work on glibc Linux and Apple Silicon macOS, under bash, zsh, fish, dash or ksh, and from any
-directory, including when symlinked onto your `PATH`. **Windows is not supported:**
-the scanners need `torch` and `spaCy`, which do not build reliably there. Use WSL
-(`wsl --install`, then run `setup.sh` inside Ubuntu) or `docker compose up --build`.
-`setup.sh` detects Windows and says so rather than failing halfway through.
+Native setup supports glibc Linux and Apple Silicon macOS. **Windows is not supported:**
+use WSL (`wsl --install`, then run `setup.sh` inside Ubuntu) or `docker compose up --build`.
+
+### Troubleshooting
+
+- **Checks fail on every message, or the startup probe reports missing dependencies or weights:**
+  Stop the running gateway, then run `cybersyn --setup` to repair the installation and start
+  again. Include your usual `--host` or port flags. If the launcher is not installed yet, run
+  `./setup.sh` from the checkout.
+- **Setup says `.venv` is broken after an OS or Python upgrade:** Move only `.venv` aside and
+  rerun setup. Your workspace data and the model cache are separate from the virtual environment.
+- **Debugging the web app without scanners:** `CYBERSYN_SKIP_VERIFY=1 ./run.sh` bypasses the
+  probe, but does not repair screening. Do not use this for normal service.
 
 ## Testing
 
@@ -426,7 +437,8 @@ models.
 ├── docker-compose.yml       # one-command start, separate data and secrets volumes
 ├── includes/constants.json  # host, port, paths, route names
 ├── requirements.txt
-├── setup.sh                 # local dev environment
+├── setup.sh                 # local environment and cybersyn launcher install
+├── run.sh                   # local start with offline scanner checks
 ├── assets/icons/            # 27 PNG icons, rendered by tools/build_icons.py
 ├── src/
 │   ├── app.py               # create_app(): wiring only, no route bodies
@@ -464,6 +476,7 @@ models.
 │           ├── core/        # dom, icons, api, loading, markdown, shell
 │           └── auth.js workspace.js profile.js settings.js stats.js team.js shadow_ai.js
 └── tools/
+    ├── cybersyn.sh          # launcher template used by setup.sh
     ├── evaluate.py          # precision / recall / F1 harness
     ├── smoke.py             # drives the app over HTTP
     ├── test_auth.py         # authorisation unit tests

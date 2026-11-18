@@ -2,7 +2,7 @@
 """Exercise run.sh against real Flask and SQLite, in a disposable checkout.
 
 Usage after setup: .venv/bin/python tools/test_native_restart.py --models
-Omit --models to check only the web app on an installation without model weights.
+Omit --models to check only the web app, bypassing the model probe in the fixture.
 No provider calls are made, and the real checkout's database is not touched.
 """
 
@@ -65,7 +65,8 @@ class NativeRestart(unittest.TestCase):
         home = Path(tempfile.mkdtemp(dir=self.temp))
         return dict(cwd=home, env=dict(PATH=str(self.bin), HOME=str(home),
             HF_HUB_CACHE=str(home / "empty-hub"), HF_HUB_OFFLINE="1", PIP_NO_INDEX="1",
-            CYBERSYN_WARM_MODELS="1" if self.verify_models else "0"))
+            CYBERSYN_WARM_MODELS="1" if self.verify_models else "0",
+            CYBERSYN_SKIP_VERIFY="0" if self.verify_models else "1"))
 
     def cli(self, *args, **overrides):
         options = self.shell()

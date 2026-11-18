@@ -625,7 +625,7 @@ class GatewayFeatures(unittest.TestCase):
 
         def broken(stage, prompt, stop=None, **policy):
             if stage == "check1":
-                raise ModuleNotFoundError(FIXTURE_SECRET)
+                raise ValueError(FIXTURE_SECRET)
             if stage == "check2":
                 raise OSError(FIXTURE_SECRET)
             return {"blocked": FIXTURE_SECRET}
@@ -638,11 +638,30 @@ class GatewayFeatures(unittest.TestCase):
                 self.assertEqual(answer.status_code, 503)
                 self.assertEqual(answer.json["error_code"], "screening_failed")
                 self.assertFalse(answer.json["blocked"])
-                for stage_reason in ("check1: missing dependencies", "check2: scanner could not load its model files",
+                for stage_reason in ("check1: scanner failed", "check2: scanner could not load its model files",
                                      "check3: scanner returned an invalid result"):
                     self.assertIn(stage_reason, answer.json["error_message"])
                 self.assertNotIn(FIXTURE_SECRET, repr(answer.json))
             complete.assert_not_called()
+        self.assertEqual(len(self.workspace_rows("CHATS")), 1)
+
+    def test_broken_scanner_installation_reaches_both_routes_without_private_diagnostics(self):
+        draft = self.history_seed()
+        self.configure(action_check1="block")
+        with (patch.object(chat_api, "complete") as complete,
+              patch.object(scanning.registry, "available", return_value=True),
+              patch.object(scanning.registry, "run", side_effect=ModuleNotFoundError(FIXTURE_SECRET)),
+              self.assertLogs("scanning", "WARNING") as log):
+            for route, args in (("CHAT", {}), ("CHAT_REGENERATE", draft)):
+                answer = self.send(route, **args, prompt=FIXTURE_SECRET)
+                self.assertEqual(answer.status_code, 503)
+                self.assertEqual(answer.json["error_code"], "screening_failed")
+                self.assertFalse(answer.json["blocked"])
+                self.assertIn("check1: scanner installation is broken", answer.json["error_message"])
+                self.assertIn("run ./setup.sh", answer.json["error_message"])
+                self.assertNotIn(FIXTURE_SECRET, repr(answer.json))
+            complete.assert_not_called()
+        self.assertEqual(log.output, ["WARNING:scanning:Scanner dependency failure (ModuleNotFoundError)"] * 2)
         self.assertEqual(len(self.workspace_rows("CHATS")), 1)
 
     def test_fail_closed_on_invalid_error_or_timeout_for_both_routes(self):
