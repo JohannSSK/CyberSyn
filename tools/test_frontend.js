@@ -474,13 +474,23 @@ function finish() {
         Stages.name("check2") === "Confidential context", Stages.name("check2"));
     check("check2 is numbered for tables",
         Stages.label("check2") === "Check 2 · Confidential context", Stages.label("check2"));
-    check("the present-participle form reads naturally",
-        /Checking for confidential/.test(Stages.checking("check2")), Stages.checking("check2"));
+    // Fix Batch v3.1: chat verdict, reason and detailLine stay stage-agnostic
+    // (Stages.checking was removed when the in-flight tracker became anonymous).
+    check("the blocked verdict is stage-agnostic",
+        /local check/.test(Stages.verdict("check2")) &&
+        !/confidential/i.test(Stages.verdict("check2")),
+        Stages.verdict("check2"));
 
     const reason = Stages.reason({ stage: "check1", main_cause: "AFM", line: 3 });
-    check("a block explains why and where",
-        /Greek ID numbers/.test(reason) && /AFM/.test(reason) && /line 3/.test(reason),
+    check("a block explains why and where without naming the check",
+        /local check/.test(reason) && /AFM/.test(reason) && /line 3/.test(reason) &&
+        !/Greek ID numbers|Check 1/.test(reason),
         reason);
+    const detail = Stages.detailLine("check1", {
+        main_cause: "AFM", line: 2, start_offset: 40, end_offset: 49
+    });
+    check("the trace row omits stage identity and labels cause, line and offsets",
+        detail === "Cause: AFM · Line: 2 · Characters: 40–49", detail);
     check("'unknown' is not shown as a cause",
         !/unknown/.test(Stages.reason({ stage: "check3", main_cause: "unknown" })),
         Stages.reason({ stage: "check3", main_cause: "unknown" }));

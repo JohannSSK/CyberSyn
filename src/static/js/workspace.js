@@ -117,21 +117,8 @@
     }
 
     /* ------------------------------------------------------------------
-       Three-stage tracker — shared by the in-flight card and the blocked
-       receipt so order, labels and state come from one source (Stages).
-       ------------------------------------------------------------------ */
-
-    function buildTracker(outcome) {
-        return Stages.tracker(state.settings, outcome);
-    }
-
-    /* ------------------------------------------------------------------
-       In-flight screening receipt (D2)
-
-       Shows the three checks in configured order (personal data -> context
-       -> injection) with neutral warm-grey dots while the request is open,
-       and resolves straight from the server verdict (--danger on the
-       blocking stage, --success on clean completion) with no fake timers.
+       In-flight waiting card — anonymous copy with no stage names,
+       resolving straight from the server verdict with no fake timers.
        ------------------------------------------------------------------ */
 
     var LONG_WAIT_MS = 8000;
@@ -154,13 +141,17 @@
 
         var note = Dom.el("div", "msg-pending");
 
-        var tracker = null;
+        var line = Dom.el("div", "pending-line");
+        var dots = null;
         if (checking) {
-            tracker = buildTracker({ checking: true });
-            note.appendChild(tracker);
+            dots = Dom.el("span", "pending-dots");
+            dots.setAttribute("aria-hidden", "true");
+            for (var d = 0; d < 3; d++) {
+                dots.appendChild(Dom.el("span", "pending-dot"));
+            }
+            line.appendChild(dots);
         }
 
-        var line = Dom.el("div", "pending-line");
         var label = Dom.el("span", "pending-text");
         label.setAttribute("role", "status");
         label.setAttribute("aria-live", "polite");
@@ -169,10 +160,8 @@
             ? "Sending once with administrator approval."
             : (!enabled.length
                 ? "Waiting for the AI reply."
-                : "Checking locally before sending.");
-        var slowKey = checking
-            ? "Still checking — normal on a long paste."
-            : "Still waiting — normal on a long paste.";
+                : "Checking…");
+        var slowKey = "Still working — normal on a long paste.";
         var resolvedClean = false;
 
         label.textContent = t(labelKey);
@@ -220,12 +209,8 @@
             resolve: function (blockedStage) {
                 stopTimer();
                 slow.classList.add("hidden");
-                if (!tracker) return;
-                var replacement = buildTracker(
-                    blockedStage ? { blockedStage: blockedStage } : { passedAll: true }
-                );
-                tracker.replaceWith(replacement);
-                tracker = replacement;
+                if (dots) dots.remove();
+                if (!checking) return;
                 if (!blockedStage) {
                     resolvedClean = true;
                     label.textContent = t("All checks passed.");
@@ -365,6 +350,16 @@
         Dom.highlightText(mineText, state.query);
         wrap.appendChild(mine);
 
+        var hasPrompt = !!(message.prompt && String(message.prompt).trim() !== "");
+        if (hasPrompt) {
+            var userActions = Dom.el("div", "msg-actions msg-actions-user");
+            var editBtn = iconButton("edit", "Edit this message", function () {
+                beginEdit(wrap, message, editBtn);
+            });
+            userActions.appendChild(editBtn);
+            wrap.appendChild(userActions);
+        }
+
         var hasAnswer = message.answer && String(message.answer).trim() !== "" &&
             String(message.answer) !== "NULL";
         var reply = null;
@@ -392,8 +387,8 @@
             ));
         }
 
-        var actions = Dom.el("div", "msg-actions");
-        actions.appendChild(iconButton("copy", "Copy the answer", function () {
+        var actionsAi = Dom.el("div", "msg-actions msg-actions-ai");
+        actionsAi.appendChild(iconButton("copy", "Copy the answer", function () {
             Dom.copyText(message.answer || "")
                 .then(function () {
                     if (reply) {
@@ -410,19 +405,16 @@
                     Loading.toast("Clipboard access was blocked — select the text to copy it.", "error");
                 });
         }));
-        var editBtn = iconButton("edit", "Edit this message", function () {
-            beginEdit(wrap, message, editBtn);
-        });
-        actions.appendChild(editBtn);
         if (hasAnswer) {
-            actions.appendChild(iconButton("regenerate", "Generate a different answer", function () {
-                regenerate(message, actions);
-            }));
+            var regenBtn = iconButton("regenerate", "Generate a different answer", function () {
+                regenerate(message, regenBtn);
+            });
+            actionsAi.appendChild(regenBtn);
         }
-        actions.appendChild(iconButton("delete", "Delete this message", function () {
-            removeMessage(message, actions);
+        actionsAi.appendChild(iconButton("delete", "Delete this message", function () {
+            removeMessage(message, actionsAi);
         }, true));
-        wrap.appendChild(actions);
+        wrap.appendChild(actionsAi);
 
         return wrap;
     }
@@ -558,6 +550,17 @@
             }).then(function (data) {
                 state.messages = data.messages || [];
                 renderMessages();
+                if (message.id !== undefined && message.id !== null) {
+                    var targetId = String(message.id);
+                    var rows = nodes.stream.querySelectorAll(".msg");
+                    for (var i = 0; i < rows.length; i++) {
+                        if (rows[i].dataset.id === targetId) {
+                            var nextTrigger = rows[i].querySelector(".msg-actions-user .icon-btn");
+                            if (nextTrigger) nextTrigger.focus();
+                            break;
+                        }
+                    }
+                }
                 loadChats();
                 Loading.toast("Message updated.", "success");
             }).catch(function (err) {
@@ -565,7 +568,12 @@
             });
         });
 
-        wrap.appendChild(editor);
+        var anchor = wrap.querySelector(".msg-actions-user") || wrap.querySelector(".bubble-user");
+        if (anchor) {
+            wrap.insertBefore(editor, anchor.nextSibling);
+        } else {
+            wrap.appendChild(editor);
+        }
         textarea.focus();
         textarea.setSelectionRange(textarea.value.length, textarea.value.length);
     }
@@ -598,6 +606,7 @@
     }
 
     function regenerate(message, button) {
+        if (button && button.dataset && button.dataset.busy === "1") return;
         Loading.withButton(button, function () {
             return Api.post("/api/admin/employee/chat/regenerate", {
                 chat_id: state.chatId,
@@ -634,11 +643,6 @@
         wrap.appendChild(Dom.el("div", "bubble bubble-user", promptText));
 
         var card = Dom.el("div", "bubble bubble-blocked");
-
-        // Resolved three-stage receipt: shows where screening stopped.
-        var receipt = buildTracker({ blockedStage: blockInfo.stage || "check1" });
-        receipt.classList.add("blocked-tracker");
-        card.appendChild(receipt);
 
         var header = Dom.el("div", "blocked-head");
         header.innerHTML = Icons.svg("warning", "icon") +
@@ -681,7 +685,7 @@
         }).join("");
         card.appendChild(summary);
 
-        // "Why?" expander with labelled mono trace rows (stage, cause, line, offsets).
+        // "Why?" expander with labelled mono trace rows (cause, line, offsets).
         var expander = Dom.el("details", "blocked-expander");
         var expSummary = Dom.el("summary", "blocked-summary", t("Why was this stopped?"));
         var details = Dom.el("div", "blocked-details");
@@ -690,7 +694,7 @@
                 "div",
                 "blocked-detail-row",
                 Stages.detailLine(blockInfo.stage, {
-                    main_cause: match.main_cause || blockInfo.main_cause,
+                    main_cause: match.main_cause || match.cause || blockInfo.main_cause,
                     line: match.line || blockInfo.line,
                     start_offset: typeof match.start_offset === "number"
                         ? match.start_offset

@@ -262,12 +262,9 @@
         "Local safety checks": "Τοπικοί έλεγχοι ασφάλειας",
         "All checks on": "Όλοι οι έλεγχοι ενεργοί",
         "All checks off": "Όλοι οι έλεγχοι ανενεργοί",
-        "Checking locally before sending.": "Τοπικός έλεγχος πριν την αποστολή.",
-        "Still checking — normal on a long paste.":
-            "Ο έλεγχος συνεχίζεται — φυσιολογικό σε μεγάλο κείμενο.",
-        "Still waiting — normal on a long paste.":
-            "Η αναμονή συνεχίζεται — φυσιολογικό σε μεγάλο κείμενο.",
-        "Checking the message": "Έλεγχος μηνύματος",
+        "Checking…": "Ελέγχεται…",
+        "Still working — normal on a long paste.":
+            "Η επεξεργασία συνεχίζεται — φυσιολογικό σε μεγάλο κείμενο.",
         "All checks passed.": "Όλοι οι έλεγχοι ολοκληρώθηκαν.",
         "Waiting for the AI reply.": "Αναμονή απάντησης από την ΤΝ.",
         "Sending once with administrator approval.":
@@ -293,26 +290,11 @@
         "Check": "Έλεγχος",
         "Local check": "Τοπικός έλεγχος",
         "a local check": "έναν τοπικό έλεγχο",
-        "Checking for personal and Greek identifiers":
-            "Έλεγχος για προσωπικά και ελληνικά στοιχεία",
-        "Checking for confidential context":
-            "Έλεγχος για εμπιστευτικό περιεχόμενο",
-        "Checking for prompt injection":
-            "Έλεγχος για κρυφές εντολές (prompt injection)",
-        "Stopped — this looks like personal data":
-            "Κρατήθηκε — μοιάζει με προσωπικά στοιχεία",
-        "Stopped — this looks like client or company data":
-            "Κρατήθηκε — μοιάζει με στοιχεία πελάτη ή εταιρείας",
-        "Stopped — this looks like a hidden instruction":
-            "Κρατήθηκε — μοιάζει με κρυφή εντολή προς το μοντέλο",
+        "Cause": "Αιτία",
+        "Line": "Γραμμή",
+        "Characters": "Χαρακτήρες",
         "Stopped — a local check flagged this message":
             "Κρατήθηκε — ένας τοπικός έλεγχος επισήμανε το μήνυμα",
-        "Check 1 looks for personal identifiers and Greek ID numbers.":
-            "Ο Έλεγχος 1 εντοπίζει προσωπικά στοιχεία και ελληνικούς αριθμούς όπως ΑΦΜ και ΑΜΚΑ.",
-        "Check 2 looks for confidential company material.":
-            "Ο Έλεγχος 2 εντοπίζει εμπιστευτικό εταιρικό ή πελατειακό περιεχόμενο.",
-        "Check 3 looks for instructions aimed at the model itself.":
-            "Ο Έλεγχος 3 εντοπίζει εντολές που προσπαθούν να παρακάμψουν τους κανόνες του μοντέλου.",
         "A local check matched this message.":
             "Ένας τοπικός έλεγχος εντόπισε ευαίσθητο περιεχόμενο σε αυτό το μήνυμα.",
         "Nothing left this computer. Your message stayed here and was not sent to the AI.":
