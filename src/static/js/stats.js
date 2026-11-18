@@ -42,7 +42,6 @@
         logout:          { icon: "logout",     label: "Signed out" }
     };
 
-    var BAR_COLOURS = ["", "warn", "danger", "success", ""];
     var PREFIX_CAP = 80;
 
     var latestData = null;
@@ -50,12 +49,6 @@
 
     function meta(kind) {
         return KIND_META[kind] || { icon: "clock", label: kind };
-    }
-
-    function rateColour(rate) {
-        if (rate >= 40) return "var(--danger)";
-        if (rate >= 18) return "var(--warn)";
-        return "var(--success)";
     }
 
     function emptyBox(title, body) {
@@ -86,7 +79,6 @@
         donut.tabIndex = 0;
         donut.setAttribute("role", "img");
         donut.setAttribute("aria-label", summary);
-        donut.style.setProperty("--donut-color", rateColour(pct));
 
         donut.innerHTML =
             '<svg viewBox="0 0 56 56" aria-hidden="true">' +
@@ -159,7 +151,7 @@
        Ranking bars & daily trend (keyboard-focusable tooltips throughout)
        ------------------------------------------------------------------ */
 
-    function barRow(label, count, percent, colour) {
+    function barRow(label, count, percent) {
         var pct = Math.round(Number(percent) || 0);
         var tipText = isGreek()
             ? label + " — " + Dom.formatNumber(count) + " (" +
@@ -174,8 +166,8 @@
             '<div class="bar-top"><span>' + Dom.esc(label) + "</span>" +
             '<span class="bar-value">' + Dom.esc(Dom.formatNumber(count)) + " · " +
             Dom.esc(Dom.formatPercent(pct)) + "</span></div>" +
-            '<div class="bar-track" aria-hidden="true"><div class="bar-fill ' +
-            (colour || "") + '" style="width:' + Math.max(pct, 2) + '%"></div></div>' +
+            '<div class="bar-track" aria-hidden="true"><div class="bar-fill" style="width:' +
+            Math.max(pct, 2) + '%"></div></div>' +
             '<span class="chart-tip" role="tooltip">' + Dom.esc(tipText) + "</span>";
         return row;
     }
@@ -186,12 +178,11 @@
             node.appendChild(emptyBox(emptyTitle, emptyBody));
             return;
         }
-        items.forEach(function (item, index) {
-            var colour = BAR_COLOURS[index % BAR_COLOURS.length];
+        items.forEach(function (item) {
             var pct = typeof item.percent === "number"
                 ? item.percent
                 : Math.round(item.count * 100 / (total || 1));
-            node.appendChild(barRow(item.label, item.count, pct, colour));
+            node.appendChild(barRow(item.label, item.count, pct));
         });
     }
 
@@ -310,12 +301,12 @@
 
         var tiles = Dom.el("div", "tiles");
         [
-            ["Sent", member.sent, ""],
-            ["Answered", member.answered, "tile-success"],
-            ["Blocked", member.blocked, "tile-danger"],
-            ["Overrides", member.overrides, "tile-warn"]
+            ["Sent", member.sent],
+            ["Answered", member.answered],
+            ["Blocked", member.blocked],
+            ["Overrides", member.overrides]
         ].forEach(function (entry) {
-            var tile = Dom.el("div", "tile tile-compact " + entry[2]);
+            var tile = Dom.el("div", "tile tile-compact");
             tile.innerHTML =
                 '<div class="tile-label">' + Dom.esc(t(entry[0])) + "</div>" +
                 '<div class="tile-value tile-value-sm">' +
@@ -326,9 +317,8 @@
 
         if (member.reasons && member.reasons.length) {
             var why = Dom.el("div", "bars");
-            member.reasons.slice(0, 3).forEach(function (reason, index) {
-                why.appendChild(barRow(reason.label, reason.count, reason.percent,
-                    BAR_COLOURS[index % BAR_COLOURS.length]));
+            member.reasons.slice(0, 3).forEach(function (reason) {
+                why.appendChild(barRow(reason.label, reason.count, reason.percent));
             });
             card.appendChild(why);
         }

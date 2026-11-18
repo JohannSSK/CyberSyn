@@ -25,12 +25,6 @@
 
     var latestData = null;
 
-    function rateColour(rate) {
-        if (rate >= 40) return "var(--danger)";
-        if (rate >= 18) return "var(--warn)";
-        return "var(--success)";
-    }
-
     function buildDonut(rate, blocked, sent) {
         var pct = Math.max(0, Math.min(100, Math.round(Number(rate) || 0)));
         var radius = 23;
@@ -46,7 +40,6 @@
         donut.tabIndex = 0;
         donut.setAttribute("role", "img");
         donut.setAttribute("aria-label", summary);
-        donut.style.setProperty("--donut-color", rateColour(pct));
         donut.innerHTML =
             '<svg viewBox="0 0 56 56" aria-hidden="true">' +
             '  <circle class="donut-track" cx="28" cy="28" r="' + radius + '"></circle>' +
@@ -80,11 +73,11 @@
 
         var tiles = Dom.el("div", "tiles");
         [
-            ["Sent", member.sent, ""],
-            ["Blocked", member.blocked, "tile-danger"],
-            ["Overrides", member.overrides, "tile-warn"]
+            ["Sent", member.sent],
+            ["Blocked", member.blocked],
+            ["Overrides", member.overrides]
         ].forEach(function (entry) {
-            var tile = Dom.el("div", "tile tile-compact " + entry[2]);
+            var tile = Dom.el("div", "tile tile-compact");
             tile.innerHTML =
                 '<div class="tile-label">' + Dom.esc(t(entry[0])) + "</div>" +
                 '<div class="tile-value tile-value-sm">' +
