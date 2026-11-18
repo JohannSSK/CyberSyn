@@ -1,6 +1,6 @@
 {# Shared shell for creating and removing administrator and member accounts.
    Each action sits on its own page with dedicated fields so a form never
-   doubles as sign-in. #}
+   doubles as sign-in. One calm centred surface, matching the sign-in screen. #}
 {% extends "base.html" %}
 
 {% block styles %}
@@ -10,27 +10,16 @@
 {% block body %}
 <div class="app-shell">
     <section class="auth-shell">
-        <aside class="auth-brand">
-            <div class="auth-logo">
+        <div class="auth-panel">
+            <div data-lang-switch class="auth-lang"></div>
+
+            <div class="auth-brand-mark">
                 <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M12 2.4L19.6 5.65V11.5c0 4.95-3.32 9.04-7.6 10.22C7.72 20.54 4.4 16.45 4.4 11.5V5.65L12 2.4zm3.53 7.07a.85.85 0 00-1.2 0L11 12.8 9.67 11.47a.85.85 0 10-1.2 1.2l1.93 1.93a.85.85 0 001.2 0l3.93-3.93a.85.85 0 000-1.2z"/></svg>
                 <span>CyberSyn</span>
             </div>
 
-            <div class="auth-brand-body">
-                <h2>{{ brand_title }}</h2>
-                <p>{{ brand_lead }}</p>
-            </div>
-
-            <div class="auth-brand-foot">Self-hosted AI security gateway · Local screening</div>
-        </aside>
-
-        <div class="auth-panel">
-            <div data-lang-switch class="auth-lang"></div>
-
             <div class="auth-step">
-                <div class="auth-eyebrow">{{ eyebrow }}</div>
                 <h1 class="auth-title">{{ title }}</h1>
-                <p class="auth-lead">{{ lead }}</p>
 
                 {% if context_label %}
                 <div class="auth-context">
@@ -47,8 +36,6 @@
                     <a href="{{ back_href }}" class="auth-link">{{ back_label }}</a>
                 </div>
             </div>
-
-            <div class="auth-footnote">{{ footnote }}</div>
         </div>
     </section>
 </div>

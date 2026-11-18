@@ -14,151 +14,153 @@
         <main class="layout-main">
             {% include "partials/page_bar.html" %}
             <header class="page-head">
-                <div>
-                    <span class="eyebrow">Workspace</span>
-                    <h1>Settings</h1>
-                    <p class="dim">Local safety checks, provider connection and the model answering your messages.</p>
-                </div>
+                <h1>Settings</h1>
             </header>
 
             <div class="page-body">
 
-                <section class="card stack">
-                    <div>
-                        <div class="card-title"><span data-icon="shield"></span><span>Local safety checks</span></div>
-                        <p class="small muted settings-intro">Choose what happens when an enabled rule finds a match. Changes require administrator approval and are recorded in the audit log.</p>
+                <section class="section" id="checks-section">
+                    <div class="section-label">
+                        <h2>Local safety checks</h2>
+                        <p>Choose what happens when an enabled rule finds a match. Changes require administrator approval and are recorded in the audit log.</p>
                     </div>
 
-                    <div id="toggle-list">
-                        <div class="toggle-row" data-toggle="check1">
-                            <div class="toggle-text">
-                                <label for="setting-check1">Personal &amp; Greek IDs</label>
-                                <p>AFM with checksum, AMKA, IBANs, phone numbers, email addresses, payment cards and names in English and Greek.</p>
+                    <div class="section-body">
+                        <div id="toggle-list">
+                            <div class="toggle-row" data-toggle="check1">
+                                <div class="toggle-text">
+                                    <label for="setting-check1">Personal &amp; Greek IDs</label>
+                                    <p>AFM with checksum, AMKA, IBANs, phone numbers, email addresses, payment cards and names in English and Greek.</p>
+                                </div>
+                                <select class="select policy-action" id="setting-check1">
+                                    <option value="allow">Allow</option>
+                                    <option value="warn">Warn</option>
+                                    <option value="redact">Redact &amp; send</option>
+                                    <option value="block" selected>Block</option>
+                                </select>
                             </div>
-                            <select class="select policy-action" id="setting-check1">
-                                <option value="allow">Allow</option>
-                                <option value="warn">Warn</option>
-                                <option value="redact">Redact &amp; send</option>
-                                <option value="block" selected>Block</option>
-                            </select>
+
+                            <div class="toggle-row" data-toggle="check2">
+                                <div class="toggle-text">
+                                    <label for="setting-check2">Confidential context</label>
+                                    <p>Confidential contracts, internal financials, HR and payroll records, and credentials</p>
+                                </div>
+                                <select class="select policy-action" id="setting-check2">
+                                    <option value="allow">Allow</option>
+                                    <option value="warn">Warn</option>
+                                    <option value="redact">Redact &amp; send</option>
+                                    <option value="block" selected>Block</option>
+                                </select>
+                            </div>
+
+                            <div class="toggle-row" data-toggle="check3">
+                                <div class="toggle-text">
+                                    <label for="setting-check3">Prompt injection</label>
+                                    <p>Hidden instructions and override attempts — especially common in pasted emails, web pages and documents.</p>
+                                </div>
+                                <select class="select policy-action" id="setting-check3">
+                                    <option value="allow">Allow</option>
+                                    <option value="warn">Warn</option>
+                                    <option value="block" selected>Block</option>
+                                </select>
+                            </div>
+
+                            <div class="toggle-row" data-toggle="block_code">
+                                <div class="toggle-text">
+                                    <label for="setting-block-code">Proprietary source code</label>
+                                    <p>Applies to source-code pastes. Other enabled rules still apply to text within code.</p>
+                                </div>
+                                <select class="select policy-action" id="setting-block-code">
+                                    <option value="allow" selected>Allow</option>
+                                    <option value="warn">Warn</option>
+                                    <option value="redact">Redact &amp; send</option>
+                                    <option value="block">Block</option>
+                                </select>
+                            </div>
                         </div>
 
-                        <div class="toggle-row" data-toggle="check2">
-                            <div class="toggle-text">
-                                <label for="setting-check2">Confidential context</label>
-                                <p>Confidential contracts, internal financials, HR and payroll records, and credentials</p>
-                            </div>
-                            <select class="select policy-action" id="setting-check2">
-                                <option value="allow">Allow</option>
-                                <option value="warn">Warn</option>
-                                <option value="redact">Redact &amp; send</option>
-                                <option value="block" selected>Block</option>
-                            </select>
+                        <div>
+                            <label class="check-option">
+                                <input type="checkbox" id="setting-restore-redactions" aria-describedby="restore-redactions-hint">
+                                <span>Restore redacted values locally in replies</span>
+                            </label>
+                            <p class="hint" id="restore-redactions-hint">Matching placeholders are swapped back in memory for this reply only. Only the redacted prompt and unrestored reply are saved.</p>
                         </div>
-
-                        <div class="toggle-row" data-toggle="check3">
-                            <div class="toggle-text">
-                                <label for="setting-check3">Prompt injection</label>
-                                <p>Hidden instructions and override attempts — especially common in pasted emails, web pages and documents.</p>
-                            </div>
-                            <select class="select policy-action" id="setting-check3">
-                                <option value="allow">Allow</option>
-                                <option value="warn">Warn</option>
-                                <option value="block" selected>Block</option>
-                            </select>
-                        </div>
-
-                        <div class="toggle-row" data-toggle="block_code">
-                            <div class="toggle-text">
-                                <label for="setting-block-code">Proprietary source code</label>
-                                <p>Applies to source-code pastes. Other enabled rules still apply to text within code.</p>
-                            </div>
-                            <select class="select policy-action" id="setting-block-code">
-                                <option value="allow" selected>Allow</option>
-                                <option value="warn">Warn</option>
-                                <option value="redact">Redact &amp; send</option>
-                                <option value="block">Block</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div>
                         <label class="check-option">
-                            <input type="checkbox" id="setting-restore-redactions" aria-describedby="restore-redactions-hint">
-                            <span>Restore redacted values locally in replies</span>
+                            <input type="checkbox" id="also-default">
+                            <span>Also save as the workspace default for new team members</span>
                         </label>
-                        <p class="hint" id="restore-redactions-hint">Matching placeholders are swapped back in memory for this reply only. Only the redacted prompt and unrestored reply are saved.</p>
-                    </div>
-                    <label class="check-option">
-                        <input type="checkbox" id="also-default">
-                        <span>Also save as the workspace default for new team members</span>
-                    </label>
 
-                    <div id="checks-consequence" class="callout callout-warn checks-consequence hidden"
-                         role="status" aria-live="polite"></div>
+                        <div id="checks-consequence" class="callout callout-warn checks-consequence hidden"
+                             role="status" aria-live="polite"></div>
 
-                    <div id="all-checks-off-note" class="callout callout-warn hidden" role="status">
-                        All prompt rules are set to Allow. The workspace AI tool policy still applies.
-                    </div>
+                        <div id="all-checks-off-note" class="callout callout-warn hidden" role="status">
+                            All prompt rules are set to Allow. The workspace AI tool policy still applies.
+                        </div>
 
-                    <div class="row">
-                        <button type="button" class="btn btn-primary" id="btn-save-checks">Save checks</button>
-                        <span class="tiny muted" id="checks-state" role="status" aria-live="polite"></span>
+                        <div class="section-actions">
+                            <button type="button" class="btn btn-primary" id="btn-save-checks">Save checks</button>
+                            <span class="tiny muted" id="checks-state" role="status" aria-live="polite"></span>
+                        </div>
                     </div>
                 </section>
 
-                <section class="card stack">
-                    <div class="card-title"><span data-icon="key"></span><span>AI connection</span></div>
-
-                    <div class="field">
-                        <label for="setting-provider">Provider</label>
-                        <select id="setting-provider" class="select">
-                            <option value="auto">Detect automatically</option>
-                        </select>
-                        <span class="hint" id="provider-state">Automatic detection uses the key prefix. For unfamiliar or shared formats, select your provider before entering a key.</span>
+                <section class="section" id="connection-section">
+                    <div class="section-label">
+                        <h2>AI connection</h2>
                     </div>
 
-                    <div class="field" id="field-base">
-                        <label for="setting-base">Base URL</label>
-                        <input type="text" id="setting-base" class="input mono"
-                               placeholder="https://gateway.example/v1" autocomplete="off"
-                               spellcheck="false">
-                        <span class="hint">Where that provider is reached. Leave empty for the hosted address.</span>
-                    </div>
-
-                    <div class="field">
-                        <label for="setting-model">Model</label>
-                        <div class="row">
-                            <select id="setting-model" class="select mono grow">
-                                <option value="gpt-4o-mini">gpt-4o-mini</option>
+                    <div class="section-body">
+                        <div class="field">
+                            <label for="setting-provider">Provider</label>
+                            <select id="setting-provider" class="select">
+                                <option value="auto">Detect automatically</option>
                             </select>
-                            <button type="button" class="btn" id="btn-refresh-models">Refresh list</button>
+                            <span class="hint" id="provider-state">Automatic detection uses the key prefix. For unfamiliar or shared formats, select your provider before entering a key.</span>
                         </div>
-                        <span class="hint" id="model-state">Paste a key first to load the models it can reach.</span>
-                    </div>
 
-                    <div class="field">
-                        <label for="setting-api-key">API key</label>
-                        <div class="input-icon">
-                            <span data-icon="key"></span>
-                            <input type="password" id="setting-api-key" class="input mono"
-                                   placeholder="Paste your API key…" autocomplete="off" spellcheck="false">
+                        <div class="field" id="field-base">
+                            <label for="setting-base">Base URL</label>
+                            <input type="text" id="setting-base" class="input mono"
+                                   placeholder="https://gateway.example/v1" autocomplete="off"
+                                   spellcheck="false">
+                            <span class="hint">Where that provider is reached. Leave empty for the hosted address.</span>
                         </div>
-                        <div class="row wrap">
-                            <button type="button" class="btn btn-sm btn-danger hidden" id="btn-clear-key">Remove saved key</button>
-                            <span class="hint mono" id="key-state">No key saved yet.</span>
+
+                        <div class="field">
+                            <label for="setting-model">Model</label>
+                            <div class="row">
+                                <select id="setting-model" class="select mono grow">
+                                    <option value="gpt-4o-mini">gpt-4o-mini</option>
+                                </select>
+                                <button type="button" class="btn" id="btn-refresh-models">Refresh list</button>
+                            </div>
+                            <span class="hint" id="model-state">Paste a key first to load the models it can reach.</span>
                         </div>
-                    </div>
 
-                    <label class="check-option">
-                        <input type="checkbox" id="connection-also-default">
-                        <span>Also save this connection, including its key, as the default for new team members</span>
-                    </label>
+                        <div class="field">
+                            <label for="setting-api-key">API key</label>
+                            <div class="input-icon">
+                                <span data-icon="key"></span>
+                                <input type="password" id="setting-api-key" class="input mono"
+                                       placeholder="Paste your API key…" autocomplete="off" spellcheck="false">
+                            </div>
+                            <div class="row wrap">
+                                <button type="button" class="btn btn-sm btn-danger hidden" id="btn-clear-key">Remove saved key</button>
+                                <span class="hint mono" id="key-state">No key saved yet.</span>
+                            </div>
+                        </div>
 
-                    <div class="row wrap">
-                        <button type="button" class="btn btn-primary" id="btn-save-connection">Save connection</button>
-                        <span class="tiny muted" id="connection-state" role="status" aria-live="polite"></span>
-                        <span class="tiny muted">Encrypted on this computer and never sent back in full to the browser.</span>
+                        <label class="check-option">
+                            <input type="checkbox" id="connection-also-default">
+                            <span>Also save this connection, including its key, as the default for new team members</span>
+                        </label>
+
+                        <div class="section-actions">
+                            <button type="button" class="btn btn-primary" id="btn-save-connection">Save connection</button>
+                            <span class="tiny muted" id="connection-state" role="status" aria-live="polite"></span>
+                            <span class="tiny muted">Encrypted on this computer and never sent back in full to the browser.</span>
+                        </div>
                     </div>
                 </section>
 

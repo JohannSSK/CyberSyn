@@ -1,9 +1,10 @@
 /* ==========================================================================
    workspace.js — the chat screen.
 
-   Owns: the conversation list, first-run starter prompts, live three-stage
-   screening tracker, teaching-moment blocked cards, one-off administrator
-   override, post-block grace note, per-message actions and in-chat search.
+   Owns: the conversation list, the four demo tiles on an empty conversation,
+   live three-stage screening tracker, teaching-moment blocked cards, one-off
+   administrator override, post-block grace note, per-message actions and
+   in-chat search.
    ========================================================================== */
 
 (function () {
@@ -250,6 +251,46 @@
     }
 
     /* ------------------------------------------------------------------
+       Demo tiles
+
+       Four tiles appear whenever the conversation is empty: one clean prompt
+       and one that trips each of the three local checks. A tile for a check
+       that is set to Allow is faded and completely inert, and the state is
+       refreshed whenever SETTINGS resolves or the language changes.
+       ------------------------------------------------------------------ */
+
+    function checkEnabled(rule) {
+        var flag = state.settings ? state.settings[rule] : undefined;
+        if (typeof flag === "boolean") return flag;
+        if (typeof flag === "number") return flag !== 0;
+        return Dom.policyAction(state.settings || {}, rule) !== "allow";
+    }
+
+    function applyStarterStates() {
+        if (!nodes.stream) return;
+        Dom.$$(".demo-tile[data-starter]", nodes.stream).forEach(function (tile) {
+            var rule = tile.getAttribute("data-check");
+            if (!rule) {
+                tile.disabled = false;
+                tile.classList.remove("is-disabled");
+                tile.removeAttribute("aria-disabled");
+                tile.removeAttribute("title");
+                return;
+            }
+            var enabled = checkEnabled(rule);
+            tile.disabled = !enabled;
+            tile.classList.toggle("is-disabled", !enabled);
+            if (enabled) {
+                tile.removeAttribute("aria-disabled");
+                tile.removeAttribute("title");
+            } else {
+                tile.setAttribute("aria-disabled", "true");
+                tile.setAttribute("title", t("This check is turned off in Settings."));
+            }
+        });
+    }
+
+    /* ------------------------------------------------------------------
        Missing provider key callout (v3 Item 2)
 
        Inferred strictly from the existing /api/admin/employee/settings
@@ -397,7 +438,7 @@
             wrap.appendChild(Dom.el(
                 "p",
                 "msg-receipt msg-receipt-grace",
-                t("Nicely rewritten — that went through cleanly.")
+                t("Rewritten — sent.")
             ));
         }
 
@@ -443,12 +484,15 @@
     function renderFirstRun() {
         if (!nodes.firstRunTpl || !nodes.firstRunTpl.content) return false;
         var fragment = nodes.firstRunTpl.content.cloneNode(true);
-        Dom.$$("[data-starter]", fragment).forEach(function (chip) {
-            Dom.on(chip, "click", function () {
-                fillComposer(chip.textContent.trim());
+        Dom.$$("[data-starter]", fragment).forEach(function (tile) {
+            Dom.on(tile, "click", function () {
+                if (tile.disabled) return;
+                var prompt = tile.querySelector(".demo-tile-prompt");
+                fillComposer((prompt ? prompt.textContent : tile.textContent).trim());
             });
         });
         nodes.stream.appendChild(fragment);
+        applyStarterStates();
         if (window.I18n && typeof window.I18n.apply === "function") {
             window.I18n.apply();
         }
@@ -474,21 +518,8 @@
                     : 'No message in this chat mentions "' + query +
                       '". Try another word or press Esc to show all messages.';
                 emptyStream(t("No messages match"), missBody, "search");
-            } else if (state.chatsLoaded && state.chats.length === 0) {
-                // D1: shown only when the member has zero conversations at all.
-                if (!renderFirstRun()) {
-                    emptyStream(
-                        t("What are we working on today?"),
-                        t("Write a message below. Your enabled local checks run here before the prompt reaches the AI."),
-                        "chat"
-                    );
-                }
-            } else {
-                emptyStream(
-                    t("Start the conversation"),
-                    t("Write a message below. Your enabled local checks run here before the prompt reaches the AI."),
-                    "chat"
-                );
+            } else if (!renderFirstRun()) {
+                emptyStream(t("Start the conversation"), t("Write a message below."), "chat");
             }
         } else {
             visible.forEach(function (message) {
@@ -569,7 +600,7 @@
             if (save.disabled) return;
             var next = textarea.value.trim();
             if (!next) {
-                Loading.toast("That message was empty — type a line first.", "warn");
+                Loading.toast("Type a message first.", "warn");
                 textarea.focus();
                 return;
             }
@@ -685,7 +716,7 @@
             }
             if (opts.bypass) state.overriddenMessages[message.id] = true;
             renderMessages();
-            Loading.toast("New answer ready.", "success");
+            Loading.toast("Answer regenerated.", "success");
         }).catch(function (err) {
             Loading.toast(err.message, "error");
         }).finally(function () {
@@ -760,7 +791,7 @@
 
     function renderBlocked(blockInfo, promptText, approveOverride) {
         // Clear any empty-state notice if this was the chat's first attempt.
-        var emptyNode = nodes.stream.querySelector(".first-run, .empty");
+        var emptyNode = nodes.stream.querySelector(".demo, .empty");
         if (emptyNode) emptyNode.remove();
 
         var wrap = Dom.el("div", "msg");
@@ -955,7 +986,7 @@
         var originalPrompt = typeof rawPrompt === "string" ? rawPrompt : text;
         var preSendKey = currentChatKey();
         var paused = false;
-        var emptyNode = nodes.stream.querySelector(".first-run, .empty");
+        var emptyNode = nodes.stream.querySelector(".demo, .empty");
         if (emptyNode) emptyNode.remove();
 
         var waiting = showPending(text, bypass);
@@ -1049,7 +1080,7 @@
         var raw = nodes.input.value;
         var text = raw.trim();
         if (!text) {
-            Loading.toast("That message was empty — type a line first.", "info");
+            Loading.toast("Type a message first.", "info");
             nodes.input.focus();
             return;
         }
@@ -1097,7 +1128,7 @@
 
     function deleteChat(button) {
         if (!state.chatId) {
-            Loading.toast("Nothing to delete yet — this chat has no saved messages.", "info");
+            Loading.toast("This chat has no saved messages.", "info");
             return;
         }
         Shell.confirm({
@@ -1236,6 +1267,7 @@
     Dom.on(document, "cybersyn:lang", function () {
         updateChecksBadge();
         renderChatList();
+        applyStarterStates();
         if (pending && pending.relocalise) pending.relocalise();
         if (!state.busy &&
             !nodes.stream.querySelector(".bubble-blocked, .bubble-warned") &&
@@ -1253,7 +1285,8 @@
             state.settings = data;
             updateChecksBadge();
             updateMissingKeyNote(data);
-        }).catch(function () { updateChecksBadge(); });
+            applyStarterStates();
+        }).catch(function () { updateChecksBadge(); applyStarterStates(); });
 
         loadChats()
             .then(function () {

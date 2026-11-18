@@ -9,30 +9,13 @@
 {% block body %}
 <div class="app-shell">
     <section id="portal-view" class="auth-shell">
-        <aside class="auth-brand">
-            <div class="auth-logo">
+        <div class="auth-panel">
+            <div data-lang-switch class="auth-lang"></div>
+
+            <div class="auth-brand-mark">
                 <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M12 2.4L19.6 5.65V11.5c0 4.95-3.32 9.04-7.6 10.22C7.72 20.54 4.4 16.45 4.4 11.5V5.65L12 2.4zm3.53 7.07a.85.85 0 00-1.2 0L11 12.8 9.67 11.47a.85.85 0 10-1.2 1.2l1.93 1.93a.85.85 0 001.2 0l3.93-3.93a.85.85 0 000-1.2z"/></svg>
                 <span>CyberSyn</span>
             </div>
-
-            <div class="auth-brand-body">
-                <h2>Use AI at work without exposing what matters.</h2>
-                <p>This gateway applies your workspace's local policy before a prompt reaches an AI model.</p>
-                <ul class="auth-points">
-                    <li><strong>Checked on this machine</strong>
-                        <span>Enabled checks run locally. Nothing leaves for review.</span></li>
-                    <li><strong>Aware of Greek records</strong>
-                        <span>Spots AFM, AMKA, IBANs, phone numbers, names and company details.</span></li>
-                    <li><strong>Guided by your administrator</strong>
-                        <span>Your administrator manages access, sets the checks and approves one-off exceptions.</span></li>
-                </ul>
-            </div>
-
-            <div class="auth-brand-foot">Self-hosted AI security gateway · Local screening</div>
-        </aside>
-
-        <div class="auth-panel">
-            <div data-lang-switch class="auth-lang"></div>
 
             <div class="auth-tabs" role="tablist" aria-label="Sign-in type">
                 <button type="button" role="tab" id="tab-member" data-auth-tab="member"
@@ -43,7 +26,6 @@
 
             <div id="employee-card" class="auth-step" role="tabpanel" aria-labelledby="tab-member">
                 <h1 class="auth-title">Team member sign in</h1>
-                <p class="auth-lead">Sign in with your team member account to open your chats.</p>
                 <form id="employee-login-form" method="post">
                     <div class="auth-field">
                         <label for="employee-username">Username</label>
@@ -70,7 +52,6 @@
             <div id="admin-step" class="auth-step" role="tabpanel" aria-labelledby="tab-admin" hidden>
                 <div id="admin-sign-in">
                     <h1 class="auth-title">Administrator sign in</h1>
-                    <p class="auth-lead">Sign in to manage your workspace and open administrator dashboards.</p>
                     <form id="admin-login-form" method="post">
                         <div class="auth-field">
                             <label for="admin-username">Username</label>
@@ -112,8 +93,6 @@
                     </div>
                 </div>
             </div>
-
-            <div class="auth-footnote">Your workspace policy is applied locally before the AI receives a message.</div>
         </div>
     </section>
 </div>

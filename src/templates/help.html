@@ -15,128 +15,154 @@
         <main class="layout-main">
             {% include "partials/page_bar.html" %}
             <header class="page-head">
-                <div class="help-hero">
-                    <span class="help-hero-icon" data-icon="shield"></span>
-                    <div>
-                        <span class="eyebrow">Guide</span>
-                        <h1>How CyberSyn works</h1>
-                        <p class="dim">What runs before a message reaches the AI, what stays on this computer, and what administrators can and cannot see.</p>
-                    </div>
-                </div>
+                <h1>Help</h1>
             </header>
 
             <div class="page-body">
 
-                <section class="card stack">
-                    <div class="card-title"><span data-icon="info"></span><span>The short version</span></div>
-                    <p>CyberSyn applies your workspace policy on the gateway before it sends a message to the configured AI provider.</p>
+                <section class="section">
+                    <div class="section-label">
+                        <h2>The short version</h2>
+                    </div>
+                    <div class="section-body">
+                        <p>CyberSyn applies your workspace policy on the gateway before it sends a message to the configured AI provider.</p>
 
-                    <div class="step-list">
-                        <div class="step">
-                            <span class="step-num">1</span>
-                            <div>
-                                <strong>Write your message as usual</strong>
-                                <p>Draft an email, paste code, summarise a note or ask a question in Chat. Nothing leaves this computer while you type.</p>
+                        <div class="step-list">
+                            <div class="step">
+                                <span class="step-num">1</span>
+                                <div>
+                                    <strong>Write your message as usual</strong>
+                                    <p>Draft an email, paste code, summarise a note or ask a question in Chat. Nothing leaves this computer while you type.</p>
+                                </div>
+                            </div>
+                            <div class="step">
+                                <span class="step-num">2</span>
+                                <div>
+                                    <strong>Enabled rules inspect it locally</strong>
+                                    <p>Local checks cover personal data, confidential context, prompt injection and source code.</p>
+                                </div>
+                            </div>
+                            <div class="step">
+                                <span class="step-num">3</span>
+                                <div>
+                                    <strong>The policy decides what is sent</strong>
+                                    <p>A rule can allow, pause for review, redact or block the message. If an enabled check fails, nothing is sent.</p>
+                                </div>
                             </div>
                         </div>
-                        <div class="step">
-                            <span class="step-num">2</span>
-                            <div>
-                                <strong>Enabled rules inspect it locally</strong>
-                                <p>Local checks cover personal data, confidential context, prompt injection and source code.</p>
+                    </div>
+                </section>
+
+                <section class="section">
+                    <div class="section-label">
+                        <h2>The four screening rules</h2>
+                    </div>
+                    <div class="section-body">
+                        <div class="guide-rows">
+                            <div class="guide-row">
+                                <strong>Personal &amp; Greek IDs</strong>
+                                <p>Catches names, email addresses, phone numbers, payment cards, IBANs and Greek national numbers such as AFM and AMKA before they reach an external model.</p>
+                            </div>
+                            <div class="guide-row">
+                                <strong>Confidential context</strong>
+                                <p>Reads the surrounding sentence to spot confidential plans, internal credentials or client information that does not follow a fixed number format.</p>
+                            </div>
+                            <div class="guide-row">
+                                <strong>Prompt injection</strong>
+                                <p>Detects hidden instructions trying to override how the model behaves — common in pasted web pages, forwarded emails and shared documents.</p>
+                            </div>
+                            <div class="guide-row">
+                                <strong>Proprietary source code</strong>
+                                <p>Applies a separate rule to recognized source code. CyberSyn does not determine who owns the code.</p>
                             </div>
                         </div>
-                        <div class="step">
-                            <span class="step-num">3</span>
-                            <div>
-                                <strong>The policy decides what is sent</strong>
-                                <p>A rule can allow, pause for review, redact or block the message. If an enabled check fails, nothing is sent.</p>
+                    </div>
+                </section>
+
+                <section class="section" id="policy-actions">
+                    <div class="section-label">
+                        <h2>Policy actions</h2>
+                    </div>
+                    <div class="section-body">
+                        <div class="guide-rows">
+                            <div class="guide-row"><strong>Allow</strong><p>Skip that rule; the other enabled rules still apply.</p></div>
+                            <div class="guide-row"><strong>Warn</strong><p>Pause and show the matches. You can edit the prompt or send anyway. Confirmation runs the current checks again.</p></div>
+                            <div class="guide-row"><strong>Redact &amp; send</strong><p>Replace detected values with placeholders before sending and saving. Optional local restoration swaps matching placeholders back for this reply only. History keeps the unrestored answer.</p></div>
+                            <div class="guide-row"><strong>Block</strong><p>Keep the message local. Edit it or ask for one-time administrator approval. Redaction rules still apply to an approved override.</p></div>
+                        </div>
+                        <p>Blocks take precedence over warnings, then redaction. Prompt injection cannot be set to Redact.</p>
+                    </div>
+                </section>
+
+                <section class="section" id="discovery-guide">
+                    <div class="section-label">
+                        <h2>Shadow AI discovery</h2>
+                    </div>
+                    <div class="section-body">
+                        <p>On Shadow AI, review the service inventory, choose approved, restricted or unapproved, and import synthetic CSV, proxy or DNS logs. Use the sample week and the client-data filter to see which teams accessed unapproved tools.</p>
+                        <p>Log discovery never contacts the network. Only hostnames and event metadata are kept, not URL paths, queries or message content. This is an analysis of imported logs, not live network monitoring.</p>
+                    </div>
+                </section>
+
+                <section class="section" id="sign-in-guide">
+                    <div class="section-label">
+                        <h2>Signing in</h2>
+                    </div>
+                    <div class="section-body">
+                        <p>Use the Team member tab to open your own conversations. Enter your administrator's username as the workspace name if there is more than one workspace.</p>
+                        <p>Use the Administrator tab to go directly to Shadow AI, Statistics, Team and account management. Member sign-in ends the administrator session in that browser.</p>
+                    </div>
+                </section>
+
+                <section class="section" id="privacy-storage">
+                    <div class="section-label">
+                        <h2>Privacy, visibility and deletion</h2>
+                    </div>
+                    <div class="section-body">
+                        <p>CyberSyn runs on a computer managed by your organisation. Here is what is stored locally and who can read it:</p>
+
+                        <div class="privacy-list">
+                            <div class="privacy-row">
+                                <strong>Conversations and AI replies</strong>
+                                <p>Sent messages and replies are stored in the local database for your account. For redacted exchanges, only the sanitized prompt and unrestored reply are saved. Administrator screens do not load your conversations.</p>
+                            </div>
+                            <div class="privacy-row">
+                                <strong>What administrators can see</strong>
+                                <p>Administrator pages show counts, rule categories and timestamps. Prompt previews are off by default. If enabled, only ordinary messages may leave a preview in the local audit log; blocked, warned, redacted and overridden text never does.</p>
+                            </div>
+                            <div class="privacy-row">
+                                <strong>Deleting messages, chats and accounts</strong>
+                                <p>Deleting a message or a chat removes it from your conversation history straight away; append-only block records, activity log entries and message counters remain in the local database for auditing. Removing a member or administrator deletes their sign-in, active sessions and saved model/key settings immediately; historical audit entries remain in the database file until wiped on disk.</p>
+                            </div>
+                            <div class="privacy-row">
+                                <strong>API keys, sessions and external requests</strong>
+                                <p>Provider API keys are encrypted before they are saved and shown masked everywhere on screen. Sessions use HttpOnly cookies stored as SHA-256 hashes on the server with server-side expiry and revocation. Typefaces are bundled locally (Inter and JetBrains Mono under the SIL Open Font License 1.1) — CyberSyn makes outbound requests only to the AI provider configured for your seat.</p>
                             </div>
                         </div>
                     </div>
                 </section>
 
-                <section class="card stack">
-                    <div class="card-title"><span data-icon="shield"></span><span>The four screening rules</span></div>
-
-                    <div class="check-card">
-                        <strong>Personal &amp; Greek IDs</strong>
-                        <p>Catches names, email addresses, phone numbers, payment cards, IBANs and Greek national numbers such as AFM and AMKA before they reach an external model.</p>
+                <section class="section">
+                    <div class="section-label">
+                        <h2>Models and API keys</h2>
                     </div>
-
-                    <div class="check-card">
-                        <strong>Confidential context</strong>
-                        <p>Reads the surrounding sentence to spot confidential plans, internal credentials or client information that does not follow a fixed number format.</p>
-                    </div>
-
-                    <div class="check-card">
-                        <strong>Prompt injection</strong>
-                        <p>Detects hidden instructions trying to override how the model behaves — common in pasted web pages, forwarded emails and shared documents.</p>
-                    </div>
-                    <div class="check-card">
-                        <strong>Proprietary source code</strong>
-                        <p>Applies a separate rule to recognized source code. CyberSyn does not determine who owns the code.</p>
+                    <div class="section-body">
+                        <p>CyberSyn works with OpenAI, Anthropic Claude, Google Gemini, Mistral, Cohere, Groq, DeepSeek and xAI Grok. Automatic discovery uses recognized key prefixes only; select your provider explicitly for unfamiliar formats. An administrator selects the model and saves the matching provider API key for each signed-in member on the <a href="/settings">Settings</a> page.</p>
                     </div>
                 </section>
 
-                <section class="card stack" id="policy-actions">
-                    <div class="card-title"><span data-icon="settings"></span><span>Policy actions</span></div>
-                    <div class="check-card"><strong>Allow</strong><p>Skip that rule; the other enabled rules still apply.</p></div>
-                    <div class="check-card"><strong>Warn</strong><p>Pause and show the matches. You can edit the prompt or send anyway. Confirmation runs the current checks again.</p></div>
-                    <div class="check-card"><strong>Redact &amp; send</strong><p>Replace detected values with placeholders before sending and saving. Optional local restoration swaps matching placeholders back for this reply only. History keeps the unrestored answer.</p></div>
-                    <div class="check-card"><strong>Block</strong><p>Keep the message local. Edit it or ask for one-time administrator approval. Redaction rules still apply to an approved override.</p></div>
-                    <p>Blocks take precedence over warnings, then redaction. Prompt injection cannot be set to Redact.</p>
-                </section>
-
-                <section class="card stack" id="discovery-guide">
-                    <div class="card-title"><span data-icon="search"></span><span>Shadow AI discovery</span></div>
-                    <p>On Shadow AI, review the service inventory, choose approved, restricted or unapproved, and import synthetic CSV, proxy or DNS logs. Use the sample week and the client-data filter to see which teams accessed unapproved tools.</p>
-                    <p>Log discovery never contacts the network. Only hostnames and event metadata are kept, not URL paths, queries or message content. This is an analysis of imported logs, not live network monitoring.</p>
-                </section>
-
-                <section class="card stack" id="sign-in-guide">
-                    <div class="card-title"><span data-icon="profile"></span><span>Signing in</span></div>
-                    <p>Use the Team member tab to open your own conversations. Enter your administrator's username as the workspace name if there is more than one workspace.</p>
-                    <p>Use the Administrator tab to go directly to Shadow AI, Statistics, Team and account management. Member sign-in ends the administrator session in that browser.</p>
-                </section>
-
-                <section class="card stack" id="privacy-storage">
-                    <div class="card-title"><span data-icon="lock"></span><span>Privacy, visibility and deletion</span></div>
-                    <p>CyberSyn runs on a computer managed by your organisation. Here is what is stored locally and who can read it:</p>
-
-                    <div class="privacy-list">
-                        <div class="privacy-row">
-                            <strong>Conversations and AI replies</strong>
-                            <p>Sent messages and replies are stored in the local database for your account. For redacted exchanges, only the sanitized prompt and unrestored reply are saved. Administrator screens do not load your conversations.</p>
-                        </div>
-                        <div class="privacy-row">
-                            <strong>What administrators can see</strong>
-                            <p>Administrator pages show counts, rule categories and timestamps. Prompt previews are off by default. If enabled, only ordinary messages may leave a preview in the local audit log; blocked, warned, redacted and overridden text never does.</p>
-                        </div>
-                        <div class="privacy-row">
-                            <strong>Deleting messages, chats and accounts</strong>
-                            <p>Deleting a message or a chat removes it from your conversation history straight away; append-only block records, activity log entries and message counters remain in the local database for auditing. Removing a member or administrator deletes their sign-in, active sessions and saved model/key settings immediately; historical audit entries remain in the database file until wiped on disk.</p>
-                        </div>
-                        <div class="privacy-row">
-                            <strong>API keys, sessions and external requests</strong>
-                            <p>Provider API keys are encrypted before they are saved and shown masked everywhere on screen. Sessions use HttpOnly cookies stored as SHA-256 hashes on the server with server-side expiry and revocation. Typefaces are bundled locally (Instrument Serif, Noto Serif Display, Inter and JetBrains Mono under the SIL Open Font License 1.1) — CyberSyn makes outbound requests only to the AI provider configured for your seat.</p>
-                        </div>
+                <section class="section">
+                    <div class="section-label">
+                        <h2>Everyday shortcuts and tips</h2>
                     </div>
-                </section>
-
-                <section class="card stack">
-                    <div class="card-title"><span data-icon="key"></span><span>Models and API keys</span></div>
-                    <p>CyberSyn works with OpenAI, Anthropic Claude, Google Gemini, Mistral, Cohere, Groq, DeepSeek and xAI Grok. Automatic discovery uses recognized key prefixes only; select your provider explicitly for unfamiliar formats. An administrator selects the model and saves the matching provider API key for each signed-in member on the <a href="/settings">Settings</a> page.</p>
-                </section>
-
-                <section class="card stack">
-                    <div class="card-title"><span data-icon="check"></span><span>Everyday shortcuts and tips</span></div>
-                    <ul class="help-list">
-                        <li>Press <span class="kbd">Enter</span> to send a message and <span class="kbd">Shift</span> + <span class="kbd">Enter</span> to add a new line.</li>
-                        <li>Use the search box at the top of Chat to filter the open conversation and search across other chats; press <span class="kbd">Esc</span> to clear it.</li>
-                        <li>When signed in as a member, administrator pages can be unlocked for 15 minutes. Use <strong>Lock now</strong> in the sidebar to end that access.</li>
-                        <li>On Statistics, use <strong>Download CSV</strong> to export workspace totals and trends, or print either Statistics or Team cleanly to A4 — API keys and prompt excerpts are omitted on paper.</li>
-                    </ul>
+                    <div class="section-body">
+                        <ul class="help-list">
+                            <li>Press <span class="kbd">Enter</span> to send a message and <span class="kbd">Shift</span> + <span class="kbd">Enter</span> to add a new line.</li>
+                            <li>Use the search box at the top of Chat to filter the open conversation and search across other chats; press <span class="kbd">Esc</span> to clear it.</li>
+                            <li>When signed in as a member, administrator pages can be unlocked for 15 minutes. Use <strong>Lock now</strong> in the sidebar to end that access.</li>
+                            <li>On Statistics, use <strong>Download CSV</strong> to export workspace totals and trends, or print either Statistics or Team cleanly to A4 — API keys and prompt excerpts are omitted on paper.</li>
+                        </ul>
+                    </div>
                 </section>
 
             </div>
