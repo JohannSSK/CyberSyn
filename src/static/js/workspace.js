@@ -191,12 +191,14 @@
     }
 
     function scrollToEnd(smooth) {
-        var useSmooth = smooth && !reducedMotion();
         requestAnimationFrame(function () {
-            nodes.viewport.scrollTo({
-                top: nodes.viewport.scrollHeight,
-                behavior: useSmooth ? "smooth" : "auto"
-            });
+            var viewport = nodes.viewport;
+            var top = viewport.scrollHeight;
+            var height = viewport.clientHeight;
+            var distance = top - height - viewport.scrollTop;
+            // Glide for nearby updates, but don't sweep through long chats.
+            var animate = smooth && distance > 0 && distance <= Math.min(height, 360) && !reducedMotion();
+            viewport.scrollTo({ top: top, behavior: animate ? "smooth" : "auto" });
         });
     }
 

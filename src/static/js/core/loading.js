@@ -67,7 +67,14 @@
         var life = kind === "error" ? 6000 : 3800;
         setTimeout(function () {
             node.classList.add("out");
-            setTimeout(function () { node.remove(); }, 240);
+            // Follow the actual CSS exit, including when it is shortened,
+            // disabled, or interrupted. No second hard-coded delay.
+            var remove = function () { node.remove(); };
+            var exit = node.getAnimations && node.getAnimations().find(function (animation) {
+                return animation.animationName === "toast-out";
+            });
+            if (exit) exit.finished.then(remove, remove);
+            else remove();
         }, life);
     }
 
