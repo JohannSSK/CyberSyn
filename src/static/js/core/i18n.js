@@ -251,8 +251,8 @@
             "Γράψτε ένα μήνυμα παρακάτω. Κάθε γραμμή ελέγχεται σε αυτόν τον υπολογιστή πριν φτάσει στην ΤΝ.",
         "No messages match": "Δεν βρέθηκαν αντίστοιχα μηνύματα",
         "Message": "Μήνυμα",
-        "Write a message… (Enter to send, Shift+Enter for a new line)":
-            "Γράψτε ένα μήνυμα… (Enter για αποστολή, Shift+Enter για νέα γραμμή)",
+        "Write a message (Enter to send, Shift+Enter for a new line)":
+            "Γράψτε ένα μήνυμα (Enter για αποστολή, Shift+Enter για νέα γραμμή)",
         "Send message": "Αποστολή μηνύματος",
         "Checked on this computer before anything reaches the AI.":
             "Ελέγχεται σε αυτόν τον υπολογιστή πριν φτάσει οτιδήποτε στην ΤΝ.",
@@ -262,16 +262,16 @@
         "Local safety checks": "Τοπικοί έλεγχοι ασφάλειας",
         "All checks on": "Όλοι οι έλεγχοι ενεργοί",
         "All checks off": "Όλοι οι έλεγχοι ανενεργοί",
-        "Checking locally before sending…": "Τοπικός έλεγχος πριν την αποστολή…",
+        "Checking locally before sending.": "Τοπικός έλεγχος πριν την αποστολή.",
         "Still checking — normal on a long paste.":
             "Ο έλεγχος συνεχίζεται — φυσιολογικό σε μεγάλο κείμενο.",
         "Still waiting — normal on a long paste.":
             "Η αναμονή συνεχίζεται — φυσιολογικό σε μεγάλο κείμενο.",
         "Checking the message": "Έλεγχος μηνύματος",
         "All checks passed.": "Όλοι οι έλεγχοι ολοκληρώθηκαν.",
-        "Waiting for the AI reply…": "Αναμονή απάντησης από την ΤΝ…",
-        "Sending once with administrator approval…":
-            "Μεμονωμένη αποστολή με έγκριση διαχειριστή…",
+        "Waiting for the AI reply.": "Αναμονή απάντησης από την ΤΝ.",
+        "Sending once with administrator approval.":
+            "Μεμονωμένη αποστολή με έγκριση διαχειριστή.",
         "Sent once with administrator approval — this was logged.":
             "Στάλθηκε μία φορά με έγκριση διαχειριστή — η ενέργεια καταγράφηκε.",
         "Nicely rewritten — that went through cleanly.":

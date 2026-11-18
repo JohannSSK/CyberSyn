@@ -166,10 +166,10 @@
         label.setAttribute("aria-live", "polite");
 
         var labelKey = bypass
-            ? "Sending once with administrator approval…"
+            ? "Sending once with administrator approval."
             : (!enabled.length
-                ? "Waiting for the AI reply…"
-                : "Checking locally before sending…");
+                ? "Waiting for the AI reply."
+                : "Checking locally before sending.");
         var slowKey = checking
             ? "Still checking — normal on a long paste."
             : "Still waiting — normal on a long paste.";
