@@ -105,6 +105,37 @@
                     </div>
                 </section>
 
+                <section class="section" id="context-section">
+                    <div class="section-label">
+                        <h2>Conversation context</h2>
+                        <p>How much of this chat travels with each new message. Only the new message is screened again; earlier ones were screened when you sent them.</p>
+                    </div>
+
+                    <div class="section-body">
+                        <div class="field">
+                            <label for="setting-context">Previous messages sent with your next prompt</label>
+                            <select id="setting-context" class="select" aria-describedby="context-hint">
+                                <option value="0" selected>This message only</option>
+                                <option value="2">Last 2 messages — one exchange</option>
+                                <option value="4">Last 4 messages — two exchanges</option>
+                                <option value="6">Last 6 messages — three exchanges</option>
+                                <option value="10">Last 10 messages — five exchanges</option>
+                            </select>
+                            <span class="hint" id="context-hint">A question and its answer count as two messages. Blocked prompts are never saved, so they are never replayed to the provider.</span>
+                        </div>
+
+                        <label class="check-option">
+                            <input type="checkbox" id="context-also-default">
+                            <span>Also save this context as the workspace default for new team members</span>
+                        </label>
+
+                        <div class="section-actions">
+                            <button type="button" class="btn btn-primary" id="btn-save-context">Save context</button>
+                            <span class="tiny muted" id="context-state" role="status" aria-live="polite"></span>
+                        </div>
+                    </div>
+                </section>
+
                 <section class="section" id="connection-section">
                     <div class="section-label">
                         <h2>AI connection</h2>

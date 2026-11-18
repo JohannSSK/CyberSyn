@@ -601,6 +601,24 @@
         "Safety checks saved.": "Οι έλεγχοι ασφάλειας αποθηκεύτηκαν.",
         "Changing the local safety checks requires the administrator password and is recorded in the audit log.":
             "Η αλλαγή των τοπικών ελέγχων απαιτεί τον κωδικό διαχειριστή και καταγράφεται στο αρχείο ελέγχου.",
+        "Conversation context": "Πλαίσιο συνομιλίας",
+        "How much of this chat travels with each new message. Only the new message is screened again; earlier ones were screened when you sent them.":
+            "Πόσο από αυτή τη συνομιλία συνοδεύει κάθε νέο μήνυμα. Μόνο το νέο μήνυμα ελέγχεται ξανά· τα προηγούμενα ελέγχθηκαν όταν τα στείλατε.",
+        "Previous messages sent with your next prompt": "Προηγούμενα μηνύματα που συνοδεύουν το επόμενο αίτημα",
+        "This message only": "Μόνο αυτό το μήνυμα",
+        "Last 2 messages — one exchange": "Τα τελευταία 2 μηνύματα — μία ανταλλαγή",
+        "Last 4 messages — two exchanges": "Τα τελευταία 4 μηνύματα — δύο ανταλλαγές",
+        "Last 6 messages — three exchanges": "Τα τελευταία 6 μηνύματα — τρεις ανταλλαγές",
+        "Last 10 messages — five exchanges": "Τα τελευταία 10 μηνύματα — πέντε ανταλλαγές",
+        "A question and its answer count as two messages. Blocked prompts are never saved, so they are never replayed to the provider.":
+            "Μια ερώτηση και η απάντησή της μετράνε ως δύο μηνύματα. Τα αποκλεισμένα αιτήματα δεν αποθηκεύονται, άρα δεν αποστέλλονται ποτέ ξανά στον πάροχο.",
+        "Also save this context as the workspace default for new team members":
+            "Αποθήκευση αυτού του πλαισίου ως προεπιλογή χώρου εργασίας για τα νέα μέλη",
+        "Save context": "Αποθήκευση πλαισίου",
+        "Changing how much of the conversation is sent to the AI requires the administrator password and is recorded in the audit log.":
+            "Η αλλαγή του πόσο από τη συνομιλία αποστέλλεται στην ΤΝ απαιτεί τον κωδικό διαχειριστή και καταγράφεται στο αρχείο ελέγχου.",
+        "Conversation context saved.": "Το πλαίσιο συνομιλίας αποθηκεύτηκε.",
+        "previous messages": "προηγούμενα μηνύματα",
         "AI connection": "Σύνδεση ΤΝ",
         "Provider": "Πάροχος",
         "Detect automatically": "Αυτόματος εντοπισμός",

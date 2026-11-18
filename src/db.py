@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS SETTINGS (
     MODEL_NAME  TEXT NOT NULL DEFAULT 'gpt-4o-mini',
     PROVIDER    TEXT NOT NULL DEFAULT 'auto',
     API_BASE    TEXT NOT NULL DEFAULT '',
+    CONTEXT_MESSAGES INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (Parent_id, Employee_id)
 );
 CREATE TABLE IF NOT EXISTS AI_TOOL_POLICY (
@@ -77,7 +78,7 @@ EXPECTED_COLUMNS = {
     "EMPLOYEES": {"id", "Parent_id", "username", "password", "CHAT_LOGS"},
     "SETTINGS": {"Parent_id", "Employee_id", "check1", "check2", "check3",
                  "block_code", "API_KEY", "MODEL_NAME", "PROVIDER", "API_BASE",
-                 *ACTION_FIELDS.values(), "restore_redactions"},
+                 *ACTION_FIELDS.values(), "restore_redactions", "CONTEXT_MESSAGES"},
     "AI_TOOL_POLICY": {"Parent_id", "tool_key", "status", "note", "updated_at", "updated_by", "domain", "name"},
     "DISCOVERY_EVENTS": {"id", "Parent_id", "observed_at", "team", "actor", "host", "tool_key",
                          "tool_name", "method", "bytes_sent", "data_signal", "imported_at", "is_sample"},
@@ -147,6 +148,7 @@ SETTINGS_MIGRATIONS = {
     **{column: f"TEXT NOT NULL DEFAULT '{legacy_action(DEFAULT_FLAGS[flag])}'"
        for flag, column in ACTION_FIELDS.items()},
     "restore_redactions": "INTEGER NOT NULL DEFAULT 0",
+    "CONTEXT_MESSAGES": "INTEGER NOT NULL DEFAULT 0",
 }
 
 

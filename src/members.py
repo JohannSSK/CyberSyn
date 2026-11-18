@@ -15,6 +15,11 @@ from secret_store import encrypt_secret, mask_stored_key
 SETTING_FLAGS = tuple(ACTION_FIELDS)
 POLICY_FIELDS = (*SETTING_FLAGS, *ACTION_FIELDS.values(), "restore_redactions")
 CONNECTION_FIELDS = ("API_KEY", "PROVIDER", "API_BASE", "MODEL_NAME")
+CONTEXT_FIELDS = ("CONTEXT_MESSAGES",)
+# How much of the conversation may travel with the next prompt. Zero keeps
+# the original behaviour: one message, this one only.
+DEFAULT_CONTEXT_MESSAGES = 0
+MAX_CONTEXT_MESSAGES = 20
 
 
 def employee_row(parent_id, employee_id):
@@ -49,7 +54,8 @@ def default_settings_values(parent_id=None):
     policy = _policy_values(row or DEFAULT_FLAGS)
     return {**policy, "API_KEY": (row["API_KEY"] or "") if row else "",
             "MODEL_NAME": (row["MODEL_NAME"] or DEFAULT_MODEL) if row else DEFAULT_MODEL,
-            "PROVIDER": _provider_of(row) if row else "auto", "API_BASE": _base_of(row) if row else ""}
+            "PROVIDER": _provider_of(row) if row else "auto", "API_BASE": _base_of(row) if row else "",
+            "CONTEXT_MESSAGES": _context_of(row) if row else DEFAULT_CONTEXT_MESSAGES}
 
 
 def _policy_values(row):
@@ -76,6 +82,20 @@ def _base_of(row):
     return _value(row, "API_BASE", "") or ""
 
 
+def _context_of(row):
+    """Previous messages that may travel with the next prompt, clamped."""
+    try:
+        value = int(_value(row, "CONTEXT_MESSAGES", DEFAULT_CONTEXT_MESSAGES))
+    except (TypeError, ValueError):
+        return DEFAULT_CONTEXT_MESSAGES
+    return max(0, min(MAX_CONTEXT_MESSAGES, value))
+
+
+def context_messages(row):
+    """The saved context size for a settings row, tolerating older schemas."""
+    return _context_of(row)
+
+
 def create_default_settings(parent_id, employee_id, *, inherit=False, commit=True):
     """Snapshot the template at enrolment only. Repair missing rows with app defaults."""
     db = get_db()
@@ -86,7 +106,7 @@ def create_default_settings(parent_id, employee_id, *, inherit=False, commit=Tru
     if exists:
         return
     d = default_settings_values(parent_id if inherit else None)
-    columns = (*POLICY_FIELDS, *CONNECTION_FIELDS)
+    columns = (*POLICY_FIELDS, *CONTEXT_FIELDS, *CONNECTION_FIELDS)
     placeholders = ", ".join("?" for _ in columns)
     db.execute(
         f"INSERT OR IGNORE INTO SETTINGS (Parent_id, Employee_id, {', '.join(columns)}) "
@@ -126,6 +146,7 @@ def settings_payload(parent_id, employee_id, row):
         "MODEL_NAME": row["MODEL_NAME"] or DEFAULT_MODEL,
         "PROVIDER": _provider_of(row),
         "API_BASE": _base_of(row),
+        "CONTEXT_MESSAGES": _context_of(row),
     }
 
 
@@ -155,6 +176,8 @@ def settings_updates(data):
         if not isinstance(data["restore_redactions"], bool):
             raise ApiError("'restore_redactions' must be true or false.", 400)
         updates["restore_redactions"] = int(data["restore_redactions"])
+    if "CONTEXT_MESSAGES" in data:
+        updates["CONTEXT_MESSAGES"] = _clean_context(data["CONTEXT_MESSAGES"])
     if "API_KEY" in data:
         if not isinstance(data["API_KEY"], str):
             raise ApiError("'API_KEY' must be a string.", 400)
@@ -174,6 +197,20 @@ def settings_updates(data):
     if "API_BASE" in data:
         updates["API_BASE"] = _clean_base(data["API_BASE"])
     return updates
+
+
+def _clean_context(value):
+    """A whole number of earlier messages, between the two published bounds."""
+    problem = f"'CONTEXT_MESSAGES' must be a whole number between 0 and {MAX_CONTEXT_MESSAGES}."
+    if isinstance(value, bool) or (isinstance(value, float) and not value.is_integer()):
+        raise ApiError(problem, 400)
+    try:
+        number = int(value)
+    except (TypeError, ValueError, OverflowError):
+        raise ApiError(problem, 400) from None
+    if number < 0 or number > MAX_CONTEXT_MESSAGES:
+        raise ApiError(problem, 400)
+    return number
 
 
 def _clean_provider(value):

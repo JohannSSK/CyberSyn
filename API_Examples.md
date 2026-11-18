@@ -83,7 +83,8 @@ A fresh member receives:
   "settings": {
     "Parent_id": "1", "Employee_id": "2", "check1": true, "check2": true, "check3": true, "block_code": false,
     "action_check1": "block", "action_check2": "block", "action_check3": "block", "action_code": "allow",
-    "restore_redactions": false, "API_KEY": "", "API_KEY_MASK": "", "MODEL_NAME": "gpt-4o-mini", "PROVIDER": "auto", "API_BASE": ""
+    "restore_redactions": false, "API_KEY": "", "API_KEY_MASK": "", "MODEL_NAME": "gpt-4o-mini", "PROVIDER": "auto", "API_BASE": "",
+    "CONTEXT_MESSAGES": 0
   }
 }
 ```
@@ -110,7 +111,8 @@ Response, assuming a previously saved connection:
 {
   "Parent_id": "1", "Employee_id": "2", "check1": true, "check2": true, "check3": true, "block_code": false,
   "action_check1": "redact", "action_check2": "warn", "action_check3": "block", "action_code": "allow",
-  "restore_redactions": true, "API_KEY": "", "API_KEY_MASK": "****7890", "MODEL_NAME": "gpt-4o-mini", "PROVIDER": "openai", "API_BASE": ""
+  "restore_redactions": true, "API_KEY": "", "API_KEY_MASK": "****7890", "MODEL_NAME": "gpt-4o-mini", "PROVIDER": "openai", "API_BASE": "",
+  "CONTEXT_MESSAGES": 0
 }
 ```
 
@@ -118,6 +120,7 @@ Response, assuming a previously saved connection:
 - Legacy `check1`/`check2`/`check3`/`block_code` still accept booleans: `false` is `allow`; `true` is `block`. If both forms are supplied, the corresponding action wins. Read booleans are `true` for any action other than `allow`.
 - `restore_redactions` is a boolean, off by default. It restores only exact request-local placeholders in the immediate reply, never in saved history.
 - `Employee_id:0` reads/updates the template for **future** members. `also_default:true` also saves the submitted checks to that template. When saving connection settings, it copies the resulting connection as a unit (provider, base, model and encrypted key), so the new destination never inherits a different default key. No other existing member changes.
+- `CONTEXT_MESSAGES` is a whole number from `0` to `20`, the number of **earlier** messages that travel with the next prompt (`0`, the default, sends this message only). It is applied in whole exchanges, so an odd number rounds down. Raising it replays earlier prompts exactly as they were sent (already sanitized or redacted) and the replies that came back; only the new prompt is screened again. Blocked prompts are never stored, so they are never replayed. An outbound request also stays under 24,000 characters of context, dropping the oldest exchanges first.
 - `API_KEY:""` means **keep** the saved secret; `CLEAR_API_KEY:true` means **delete** it. `API_BASE:""` clears the custom base. Nonempty bases can contain paths, not credentials, query strings or fragments. The API never returns the encrypted blob or the plaintext key; keys shorter than eight characters are masked completely.
 
 ### Discovery
@@ -136,6 +139,8 @@ With no pasted key, discovery uses the saved provider/base/key. A changed destin
 ```json
 {"error":false,"blocked":false,"warned":false,"redacted":false,"action":"allow","reply_message":"Athens.","error_message":"NULL","block_info":"NULL","chat_id":7,"message_id":"c88a9b82a35e28a0"}
 ```
+
+The provider receives `messages`: the earlier exchanges allowed by `CONTEXT_MESSAGES` (from this chat only, oldest first), then this prompt as the final `user` message. A new chat, or `CONTEXT_MESSAGES:0`, sends exactly one message. Regenerating an answer replays only the exchanges before it.
 
 **6B — code review in an existing chat:** with this member’s code blocking off, code alone is not a reason for refusal:
 

@@ -37,8 +37,31 @@ def preload():
         return False
 
 
-def complete(api_key, model, prompt, api_base=None, provider=None):
+def _messages(prompt, history=None):
+    """The current prompt, optionally preceded by the saved conversation.
+
+    Callers pass only messages that were already sent to the provider, so a
+    history item is the sanitized text that went out and the reply that came
+    back. Anything malformed is dropped rather than sent.
+    """
+    messages = []
+    for item in history or []:
+        if not isinstance(item, dict):
+            continue
+        role, content = item.get("role"), item.get("content")
+        if role not in ("user", "assistant") or not isinstance(content, str) or not content:
+            continue
+        messages.append({"role": role, "content": content})
+    messages.append({"role": "user", "content": prompt})
+    return messages
+
+
+def complete(api_key, model, prompt, api_base=None, provider=None, history=None):
     """Send one prompt and return the model's reply text.
+
+    `history` is the earlier part of the conversation the member chose to
+    include (see the CONTEXT_MESSAGES setting); it goes out ahead of the
+    current prompt, which is always the last user message.
 
     Raises ChatError(502) on any provider failure, so the route can report it
     without leaking a stack trace to the browser.
@@ -60,7 +83,7 @@ def complete(api_key, model, prompt, api_base=None, provider=None):
         client = _client()
         kwargs = {
             "model": name,
-            "messages": [{"role": "user", "content": prompt}],
+            "messages": _messages(prompt, history),
             "api_key": api_key or None,
             "timeout": OPENAI_TIMEOUT,
             "num_retries": 0,  # one completion budget after screening, not a chain of retries

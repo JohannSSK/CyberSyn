@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from math import ceil
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -19,6 +20,7 @@ sys.path.insert(0, str(ROOT / "src"))
 TMP = tempfile.TemporaryDirectory()
 os.environ.update(CYBERSYN_DB_FILE=str(Path(TMP.name) / "test.db"), CYBERSYN_KEY_FILE=str(Path(TMP.name) / "keys/key"))
 import admin_session
+import ai_client
 import auth
 import chat_store
 import config
@@ -445,6 +447,84 @@ class Gateway(unittest.TestCase):
             self.assertEqual(result.status_code, 200, result.json)
         self.assertEqual(self.post("CHATS", **self.ids).json["chats"][0]["title"], "Team review")
         self.assertEqual(self.post("CHATS_OPEN", **self.ids, chat_id=chat_id).json["chat"]["title"], "Team review")
+
+    def test_conversation_context_is_opt_in_and_carries_only_sent_messages(self):
+        self.edit(admin_token=self.admin, API_KEY="fixture", check1=False, check2=False, check3=False)
+        with patch.object(chat_api, "complete", return_value="first answer") as complete:
+            chat_id = self.post("CHAT", **self.ids, prompt="First question").json["chat_id"]
+            self.assertEqual(complete.call_args.kwargs["history"], [])
+        # The default stays singular: one message, this one only.
+        with patch.object(chat_api, "complete", return_value="second answer") as complete:
+            self.post("CHAT", **self.ids, chat_id=chat_id, prompt="Second question")
+            self.assertEqual(complete.call_args.kwargs["history"], [])
+
+        self.assertEqual(self.post("SETTINGS", **self.ids, CONTEXT_MESSAGES=2).status_code, 401)
+        for bad in (21, -1, "many", True, 2.5):
+            self.assertEqual(self.post("SETTINGS", **self.ids, CONTEXT_MESSAGES=bad, admin_token=self.admin).status_code, 400, bad)
+        saved = self.post("SETTINGS", **self.ids, CONTEXT_MESSAGES=2, admin_token=self.admin)
+        self.assertEqual((saved.status_code, saved.json["CONTEXT_MESSAGES"]), (200, 2))
+
+        with patch.object(chat_api, "complete", return_value="third answer") as complete:
+            third = self.post("CHAT", **self.ids, chat_id=chat_id, prompt="Third question").json
+            # Only the most recent exchange, oldest first, then the new prompt.
+            self.assertEqual(complete.call_args.kwargs["history"], [
+                {"role": "user", "content": "Second question"},
+                {"role": "assistant", "content": "second answer"}])
+
+        # Regenerating an answer replays what came before it, never itself.
+        with patch.object(chat_api, "complete", return_value="third answer") as complete:
+            self.assertEqual(self.post("CHAT_REGENERATE", **self.ids, chat_id=chat_id,
+                                       message_id=third["message_id"], prompt="Third question").status_code, 200)
+            self.assertEqual(complete.call_args.kwargs["history"], [
+                {"role": "user", "content": "Second question"},
+                {"role": "assistant", "content": "second answer"}])
+
+        self.edit(admin_token=self.admin, CONTEXT_MESSAGES=4, also_default=True)
+        with patch.object(chat_api, "complete", return_value="fourth answer") as complete:
+            self.post("CHAT", **self.ids, chat_id=chat_id, prompt="Fourth question")
+            history = complete.call_args.kwargs["history"]
+        self.assertEqual([item["content"] for item in history],
+                         ["Second question", "second answer", "Third question", "third answer"])
+        with contextlib.closing(db.connect()) as con:
+            self.assertEqual(con.execute("SELECT CONTEXT_MESSAGES FROM SETTINGS WHERE Parent_id=? AND Employee_id=0",
+                                         (self.pid,)).fetchone()[0], 4)
+
+        # A prompt in another chat starts from nothing, whatever the setting says.
+        with patch.object(chat_api, "complete", return_value="elsewhere") as complete:
+            self.post("CHAT", **self.ids, prompt="Unrelated question")
+            self.assertEqual(complete.call_args.kwargs["history"], [])
+
+    def test_the_wire_ends_with_the_current_prompt_and_drops_junk(self):
+        sent = {}
+
+        class FakeClient:
+            def completion(self, **kwargs):
+                sent.clear()
+                sent.update(kwargs)
+                return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="ok"))])
+
+        with patch.object(ai_client, "_client", return_value=FakeClient()):
+            ai_client.complete("fixture", "gpt-4o-mini", "now", history=[
+                {"role": "user", "content": "before"},
+                {"role": "assistant", "content": "earlier reply"},
+                {"role": "assistant", "content": ""},
+                {"role": "system", "content": "not ours"},
+                "not a message",
+            ])
+            self.assertEqual(sent["messages"], [
+                {"role": "user", "content": "before"},
+                {"role": "assistant", "content": "earlier reply"},
+                {"role": "user", "content": "now"}])
+            ai_client.complete("fixture", "gpt-4o-mini", "alone")
+            # The default stays singular: one message, this one only.
+            self.assertEqual(sent["messages"], [{"role": "user", "content": "alone"}])
+
+        chat = {"messages": [{"id": "a", "prompt": "x" * 25000, "answer": "old"},
+                             {"id": "b", "prompt": "short", "answer": "b"},
+                             {"id": "c", "prompt": "unanswered", "answer": ""}]}
+        self.assertEqual([m["content"] for m in chat_api._history(chat, None, 10)], ["short", "b"])
+        self.assertEqual(len(chat_api._history(chat, None, 3)), 2)  # whole exchanges only
+        self.assertEqual(chat_api._history(chat, None, 0), [])
 
     def test_deletion_during_completion_and_legacy_search_ids(self):
         self.edit(admin_token=self.admin, API_KEY="fixture", check1=False, check2=False, check3=False)

@@ -10,8 +10,8 @@ from block_log import record_activity
 from config import DB_FILE, NULL, ROUTES
 from db import get_db
 from errors import ApiError
-from members import (CONNECTION_FIELDS, POLICY_FIELDS, create_default_settings, employee_row, get_settings, not_found_employee_message,
-                     save_settings, settings_payload, settings_updates)
+from members import (CONNECTION_FIELDS, CONTEXT_FIELDS, POLICY_FIELDS, create_default_settings, employee_row, get_settings,
+                     not_found_employee_message, save_settings, settings_payload, settings_updates)
 from passwords import credentials_match, hash_password, member_password_problem, upgrade_password
 from rate_limit import limited
 from web import clean_str, fail, fail_employee_login, ok, password_field, require_body, to_int
@@ -138,7 +138,7 @@ def employee_settings():
     also_default = data.get("also_default", False)
     if not isinstance(also_default, bool):
         return fail("'also_default' must be true or false.", 400)
-    fields = {*POLICY_FIELDS, *CONNECTION_FIELDS, "CLEAR_API_KEY"}
+    fields = {*POLICY_FIELDS, *CONTEXT_FIELDS, *CONNECTION_FIELDS, "CLEAR_API_KEY"}
     writing = not fields.isdisjoint(data)
     with db:
         db.execute("BEGIN IMMEDIATE")
