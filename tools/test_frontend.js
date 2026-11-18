@@ -709,6 +709,8 @@ async function finish() {
     await testDemoTiles();
     testChatReskin();
     await testChatInBrowser();
+    await testChatMotion();
+    await testToastMotion();
     testBrowserBoundaries();
     await testSignedInScreens();
     await testPortal();
@@ -955,6 +957,83 @@ function screenFixture(page, answer, opts = {}) {
 }
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+async function testChatMotion() {
+    console.log("\nChat scroll motion");
+    let resolveSend;
+    const chat = { id: 1, title: "Kept chat", messages: [
+        { id: 1, prompt: "Hello", answer: "Hi", created_at: "2026-11-18T09:00:00Z" },
+    ] };
+    const p = screenFixture("workspace", (key) => {
+        if (key === "CHATS") return { chats: [{ id: chat.id, title: chat.title }] };
+        if (key === "CHATS_OPEN") return { chat };
+        if (key === "CHAT") return new Promise((resolve) => { resolveSend = resolve; });
+        return {};
+    });
+    const { win, $ } = p;
+    const viewport = $("#chat-stream");
+    Object.defineProperties(viewport, { clientHeight: { value: 400 }, scrollHeight: { value: 1200 } });
+    let lastScroll, reduced = false;
+    viewport.scrollTo = (options) => { lastScroll = options; };
+    win.matchMedia = (query) => ({ matches: reduced && query === "(prefers-reduced-motion: reduce)" });
+    const frames = [];
+    win.requestAnimationFrame = (frame) => frames.push(frame);
+    const flush = () => frames.splice(0).forEach((frame) => frame());
+    viewport.scrollTop = 720;
+    await tick();
+    flush();
+    check("opening a chat jumps to the latest message without a glide", lastScroll?.behavior === "auto");
+
+    let nextMessageId = 2;
+    for (const [label, position, reduce, behavior] of [
+        ["a nearby chat update glides", 720, false, "smooth"],
+        ["a long chat scroll jumps instead of sweeping through history", 100, false, "auto"],
+        ["reduced motion skips even a short glide", 720, true, "auto"],
+    ]) {
+        lastScroll = null;
+        viewport.scrollTop = position;
+        reduced = reduce;
+        $("#prompt-input").value = "Follow-up";
+        p.submit("#form-send");
+        flush();
+        check(label, lastScroll?.behavior === behavior && lastScroll.top === 1200);
+        resolveSend({ chat_id: chat.id, message_id: nextMessageId++, reply_message: "Fixture reply" });
+        await tick();
+        flush();
+    }
+    win.close();
+}
+
+async function testToastMotion() {
+    console.log("\nToast exit motion");
+    const { window: win } = new JSDOM('<div id="toast-container"></div>', { runScripts: "outside-only" });
+    for (const script of ["dom", "icons", "loading"]) win.eval(read("core/" + script + ".js"));
+    const container = win.document.getElementById("toast-container");
+    const timers = [];
+    win.setTimeout = (fn, delay) => timers.push({ fn, delay });
+    for (const [kind, duration, cancel] of [["success", 3800, false], ["error", 6000, true]]) {
+        win.Loading.toast("Fixture toast", kind);
+        const notice = container.lastElementChild;
+        let finish, interrupt;
+        const finished = new Promise((resolve, reject) => { finish = resolve; interrupt = reject; });
+        notice.getAnimations = () => notice.classList.contains("out") ? [{ animationName: "toast-out", finished }] : [];
+        const timer = timers.shift();
+        check(`${kind} toast keeps its reading time`, timer.delay === duration);
+        timer.fn();
+        check(`${kind} toast waits for its exit, not a fixed cleanup timer`, notice.isConnected && timers.length === 0);
+        if (cancel) interrupt(new Error("Cancelled"));
+        else finish();
+        await tick();
+        check(`the ${kind} toast is removed when its exit ${cancel ? "is interrupted" : "finishes"}`, !notice.isConnected);
+    }
+    win.Loading.toast("Fixture toast");
+    const instant = container.lastElementChild;
+    instant.getAnimations = () => [];
+    timers.shift().fn();
+    check("a toast with no exit animation is removed immediately", !instant.isConnected);
+    win.close();
+}
+
 const DENIED = { httpStatus: 401, success: false };
 const VERIFIED = { success: true, Parent_id: "72", username: "Settings" };
 

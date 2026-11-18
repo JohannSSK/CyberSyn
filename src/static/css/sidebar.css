@@ -268,7 +268,8 @@
         border-right: 1px solid var(--border);
         transform: translateX(-100%);
         visibility: hidden; /* also keep the closed drawer out of Tab before JS runs */
-        transition: transform var(--med) var(--ease), visibility 0s var(--med);
+        transition: transform var(--drawer-exit) var(--ease-exit),
+                    visibility 0s var(--drawer-exit);
         overflow-y: auto;
         overscroll-behavior: contain;
     }
@@ -277,7 +278,7 @@
         transform: none;
         visibility: visible;
         /* Make it focusable immediately, including in reduced-motion mode. */
-        transition: transform var(--med) var(--ease);
+        transition: transform var(--drawer-enter) var(--ease-enter);
     }
 }
 
