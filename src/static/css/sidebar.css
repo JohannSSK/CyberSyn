@@ -120,6 +120,12 @@
     flex: none;
 }
 
+/* Single surviving all-caps tier app-wide: sidebar section headings. */
+.sidebar-section-head .eyebrow {
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
 .chat-list {
     flex: 1;
     min-height: 0;

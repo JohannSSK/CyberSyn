@@ -159,10 +159,6 @@
 
 .topbar-status.off .dot { color: var(--warn); }
 
-.topbar-status.is-pulsing {
-    animation: pill-ring var(--slow) var(--ease) 1;
-}
-
 .topbar-status-text {
     min-width: 0;
     overflow: hidden;
@@ -411,8 +407,7 @@
     line-height: 1.4;
     text-align: left;
     transition: background var(--fast) var(--ease),
-                border-color var(--fast) var(--ease),
-                transform var(--fast) var(--ease);
+                border-color var(--fast) var(--ease);
 }
 
 .starter-chip:hover,
@@ -421,8 +416,10 @@
     border-color: var(--border-strong);
 }
 
-.starter-chip:hover { transform: translateY(-1px); }
-.starter-chip:active { transform: translateY(0) scale(0.985); }
+.starter-chip:active {
+    background: var(--surface-3);
+    border-color: var(--border-strong);
+}
 
 .first-run-caption {
     font-size: var(--text-sm);
@@ -618,7 +615,6 @@ html[lang="el"] .bubble { line-height: 1.74; }
     border-radius: var(--r-lg);
     background: var(--surface-2);
     border: 1px solid var(--border-soft);
-    animation: rise-in var(--med) var(--ease) both;
 }
 
 .stage-tracker {
@@ -895,8 +891,6 @@ html[lang="el"] .bubble { line-height: 1.74; }
     margin-bottom: 6px;
     font-size: var(--text-xs);
     font-weight: 600;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
     color: var(--text-muted);
 }
 
@@ -1005,14 +999,16 @@ mark {
     background: var(--accent);
     color: var(--ink);
     transition: background var(--fast) var(--ease),
-                transform var(--fast) var(--ease);
+                opacity var(--fast) var(--ease);
 }
 
 .composer-send:hover:not(:disabled),
 .composer-send:focus-visible:not(:disabled) { background: var(--accent-deep); }
 
-.composer-send:hover:not(:disabled) { transform: translateY(-1px); }
-.composer-send:active:not(:disabled) { transform: translateY(0) scale(0.985); }
+.composer-send:active:not(:disabled) {
+    background: var(--accent-deep);
+    opacity: 0.9;
+}
 .composer-send:disabled { opacity: 0.45; cursor: not-allowed; }
 .composer-send .icon { width: var(--icon-sm); height: var(--icon-sm); }
 

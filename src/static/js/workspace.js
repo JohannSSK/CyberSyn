@@ -38,7 +38,6 @@
         chatId: null,
         messages: [],
         settings: { check1: true, check2: true, check3: true },
-        checksCount: null,
         query: "",
         busy: false,
         // Per-chat session memory for D4 grace note and override receipts.
@@ -321,18 +320,7 @@
         nodes.checksStatus.classList.toggle("off", on === 0);
         nodes.checksStatus.classList.toggle("is-all-on", on === 3);
         renderChecksPopover();
-
-        if (state.checksCount === 0 && on > 0 && !reducedMotion()) {
-            nodes.checksStatus.classList.remove("is-pulsing");
-            void nodes.checksStatus.offsetWidth;
-            nodes.checksStatus.classList.add("is-pulsing");
-        }
-        state.checksCount = on;
     }
-
-    Dom.on(nodes.checksStatus, "animationend", function () {
-        nodes.checksStatus.classList.remove("is-pulsing");
-    });
 
     Dom.on(nodes.checksStatus, "click", function () {
         setChecksPopoverOpen(!isChecksPopoverOpen(), false);
