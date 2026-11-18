@@ -78,7 +78,9 @@
         screen.setAttribute("role", "status");
         screen.setAttribute("aria-live", "polite");
         screen.innerHTML =
-            '<img class="icon" src="/assets/icons/shield.svg" alt="" aria-hidden="true">' +
+            '<svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
+            '<path fill="currentColor" fill-rule="evenodd" d="M12 2.4L19.6 5.65V11.5c0 4.95-3.32 9.04-7.6 10.22C7.72 20.54 4.4 16.45 4.4 11.5V5.65L12 2.4zm3.53 7.07a.85.85 0 00-1.2 0L11 12.8 9.67 11.47a.85.85 0 10-1.2 1.2l1.93 1.93a.85.85 0 001.2 0l3.93-3.93a.85.85 0 000-1.2z"/>' +
+            "</svg>" +
             "<h1>" + global.Dom.esc(t("Signed out.")) + "</h1>" +
             "<p>" + global.Dom.esc(t("This tab can be closed safely.")) + "</p>";
         document.body.appendChild(screen);

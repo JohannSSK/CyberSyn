@@ -145,14 +145,13 @@
     /* Surfaces, darkest to lightest */
     --code-bg:       #181614;
     --bg:            #1c1917;
-    --field-deep:    #1f1e1c;
-    --surface:       #242220;
+    --surface:       #232120;
     --surface-2:     #2a2926;
-    --surface-3:     #33322f;
-    --surface-4:     #3b3936;
-    --border-soft:   #2e2c29;
-    --border:        #3f3d39;
-    --border-strong: #46443f;
+    --surface-3:     #302e2b;
+    --surface-4:     #383630;
+    --border-soft:   #2c2a27;
+    --border:        #3a3835;
+    --border-strong: #4a4844;
     --ink:           #1c1917;
 
     /* Text & neutral chart steps — --text-muted clears 4.5:1 on every surface */
@@ -165,20 +164,15 @@
 
     /* Warm-neutral emphasis — contrast, never a brand colour */
     --accent:        #d9d5cd;
-    --accent-deep:   #b0aba2;
-    --accent-soft:   rgba(236, 235, 231, 0.07);
-    --accent-line:   rgba(236, 235, 231, 0.16);
+    --accent-deep:   #c4c0b7;
 
     /* Status: muted semantic earth tones — reserved strictly for meaning
        (all-active/improved, caution/override, blocked/refused). */
     --success:       #97ab91;
-    --success-soft:  rgba(151, 171, 145, 0.13);
     --success-line:  rgba(151, 171, 145, 0.36);
     --warn:          #bfa273;
-    --warn-soft:     rgba(191, 162, 115, 0.13);
     --warn-line:     rgba(191, 162, 115, 0.36);
     --danger:        #bd8a80;
-    --danger-soft:   rgba(189, 138, 128, 0.13);
     --danger-line:   rgba(189, 138, 128, 0.36);
 
     /* Functional tints — flat warm grey and charcoal, never frosted */
@@ -186,7 +180,7 @@
     --code-inline-bg:    rgba(24, 22, 20, 0.55);
     --spinner-track:     rgba(236, 235, 231, 0.28);
     --spinner-track-ink: rgba(28, 25, 23, 0.26);
-    --selection-bg:      rgba(236, 235, 231, 0.18);
+    --selection-bg:      rgba(236, 235, 231, 0.16);
     --mark-bg:           rgba(236, 235, 231, 0.18);
 
     /* Deterministic per-member avatar tones — 8 strictly warm-neutral pairs
@@ -215,17 +209,11 @@
     --print-muted: #4a4742;
     --print-rule:  #cfccc5;
 
-    /* Geometry — strictly 8 / 12 / 16 / 22 + pill */
-    --r-sm: 8px;
-    --r-md: 12px;
-    --r-lg: 16px;
-    --r-xl: 22px;
+    /* Geometry — strictly 6 / 8 / 10 + pill (circles/avatars only) */
+    --r-sm: 6px;
+    --r-md: 8px;
+    --r-lg: 10px;
     --r-pill: 999px;
-
-    /* Elevation — strictly three steps */
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-    --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.36);
-    --shadow-lg: 0 24px 64px rgba(0, 0, 0, 0.55);
 
     /* Type */
     --font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -253,10 +241,11 @@
     --slow: 420ms;
 
     --sidebar-w: 268px;
-    --topbar-h: 66px;
+    --topbar-h: 64px;
 
     /* The default theme is always warm charcoal. */
     color-scheme: dark;
+    accent-color: var(--accent);
 }
 
 /* --------------------------------------------------------------------------
@@ -273,6 +262,7 @@ html {
     height: 100%;
     overflow-x: hidden;
     -webkit-tap-highlight-color: transparent;
+    font-synthesis: none;
 }
 
 body {
@@ -309,7 +299,7 @@ button:disabled, input:disabled, select:disabled, textarea:disabled {
 a {
     color: var(--text);
     text-decoration: underline;
-    text-decoration-color: var(--accent-line);
+    text-decoration-color: var(--text-muted);
     text-underline-offset: 3px;
     transition: color var(--fast) var(--ease);
 }
@@ -394,7 +384,7 @@ h4 { font-size: var(--text-md); }
 }
 
 .stack       { display: flex; flex-direction: column; gap: 16px; }
-.row         { display: flex; align-items: center; gap: 10px; }
+.row         { display: flex; align-items: center; gap: 8px; }
 .row-between { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .wrap        { flex-wrap: wrap; }
 .grow        { flex: 1; min-width: 0; }
@@ -425,31 +415,28 @@ h4 { font-size: var(--text-md); }
 
 * { scrollbar-width: thin; scrollbar-color: var(--surface-3) transparent; }
 
-::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
 
 ::-webkit-scrollbar-track { background: transparent; }
 
 ::-webkit-scrollbar-thumb {
     background: var(--surface-3);
-    border: 3px solid transparent;
-    border-radius: var(--r-pill);
+    border: 2px solid transparent;
+    border-radius: var(--r-sm);
     background-clip: content-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: var(--surface-4);
+    background: var(--border-strong);
     background-clip: content-box;
 }
 
 /* --------------------------------------------------------------------------
-   Motion — all new transitions sit on 140 / 240 / 420ms; reduced motion
+   Motion — all transitions sit on 140 / 240 / 420ms; reduced motion
    turns every animation and transition off cleanly.
    -------------------------------------------------------------------------- */
 
-@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
-@keyframes spin    { to { transform: rotate(360deg); } }
-
-.fade-in { animation: fade-in var(--med) var(--ease) both; }
+@keyframes spin { to { transform: rotate(360deg); } }
 
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {

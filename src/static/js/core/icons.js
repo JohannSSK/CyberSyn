@@ -1,56 +1,20 @@
 /* ==========================================================================
    icons.js — one registry for every icon in the app.
 
-   Icons ship as PNGs under /assets/icons (see tools/build_icons.py, which
-   normalises them to transparent single-colour 72px files). Where a PNG is
-   not available yet, an inline SVG of the same design is used, so a missing
-   asset degrades to a crisp icon instead of a broken image.
+   Every UI icon renders as inline SVG from the path table below using
+   `currentColor`, so icons adapt cleanly across surfaces without raster files.
+   Pre-rendered PNGs remain untouched on disk as intentionally unused legacy
+   artifacts verified by tools/build_icons.py --check.
 
    Usage:  Icons.el("settings")            -> an element
            Icons.html("edit", "icon")      -> markup string
+           Icons.svg("send", "icon")       -> inline SVG string
    ========================================================================== */
 
 (function (global) {
     "use strict";
 
-    var BASE = "/assets/icons/";
-
-    /* Icons that ship as PNGs. Every name here must exist under
-       assets/icons/ — tools/build_icons.py renders one per entry of the SVG
-       table below, and `tools/build_icons.py --check` fails if they drift.
-       A PNG carries its own colour, so it cannot follow `currentColor`;
-       anywhere the colour must change, dim it with opacity instead. */
-    var PNG = {
-        chat: "chat.png",
-        check: "check.png",
-        chevron: "chevron.png",
-        clock: "clock.png",
-        close: "close.png",
-        copy: "copy.png",
-        delete: "delete.png",
-        download: "download.png",
-        edit: "edit.png",
-        filter: "filter.png",
-        help: "help.png",
-        history: "history.png",
-        key: "key.png",
-        lock: "lock.png",
-        logout: "logout.png",
-        menu: "menu.png",
-        plus: "plus.png",
-        profile: "profile.png",
-        regenerate: "regenerate.png",
-        search: "search.png",
-        send: "send.png",
-        settings: "settings.png",
-        shield: "shield.png",
-        spark: "spark.png",
-        stats: "stats.png",
-        team: "team.png",
-        warning: "warning.png"
-    };
-
-    /* Fallback vector paths, drawn on a 24x24 grid with 1.8 stroke. */
+    /* Vector paths, drawn on a 24x24 grid with 1.8 stroke. */
     var SVG = {
         shield: '<path d="M12 3l7 3v5.5c0 4.6-3.1 8.4-7 9.5-3.9-1.1-7-4.9-7-9.5V6l7-3z"/><path d="M9 12l2 2 4-4"/>',
         chat: '<path d="M21 12a8 8 0 01-8 8H8l-5 3 1.2-4.2A8 8 0 1121 12z"/>',
@@ -81,8 +45,6 @@
         filter: '<path d="M22 3H2l8 9.5V19l4 2v-8.5L22 3z"/>'
     };
 
-    var failed = {};
-
     function svgMarkup(name, cls) {
         var body = SVG[name] || SVG.help;
         return '<svg class="' + (cls || "icon") + '" viewBox="0 0 24 24" fill="none" ' +
@@ -90,17 +52,7 @@
             'stroke-linejoin="round" aria-hidden="true">' + body + "</svg>";
     }
 
-    function pngMarkup(name, cls) {
-        return '<img class="' + (cls || "icon") + '" src="' + BASE + PNG[name] +
-            '" alt="" aria-hidden="true" data-icon="' + name + '">';
-    }
-
-    /* PNGs carry their own colour, so they cannot follow `currentColor`.
-       A missing file switches to the SVG for the rest of the page load. */
     function html(name, cls) {
-        if (PNG[name] && !failed[name]) {
-            return pngMarkup(name, cls);
-        }
         return svgMarkup(name, cls);
     }
 
@@ -111,26 +63,10 @@
         return wrap.firstElementChild;
     }
 
-    /* Swap in the SVG if a PNG 404s, so one missing file cannot leave a
-       broken-image box in the UI. */
-    document.addEventListener(
-        "error",
-        function (event) {
-            var img = event.target;
-            if (!img || img.tagName !== "IMG" || !img.dataset || !img.dataset.icon) return;
-            failed[img.dataset.icon] = true;
-            var name = img.dataset.icon;
-            var holder = document.createElement("span");
-            holder.innerHTML = svgMarkup(name, img.className);
-            if (img.parentNode) img.parentNode.replaceChild(holder.firstElementChild, img);
-        },
-        true
-    );
-
     global.Icons = {
         html: html,
         el: el,
         svg: svgMarkup,
-        has: function (name) { return !!(SVG[name] || PNG[name]); }
+        has: function (name) { return !!SVG[name]; }
     };
 })(window);
