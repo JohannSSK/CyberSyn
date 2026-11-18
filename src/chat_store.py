@@ -11,6 +11,7 @@ lowers the team numbers.
 
 import json
 import secrets
+from contextlib import closing
 from datetime import datetime, timezone
 
 from auth import _connect
@@ -96,6 +97,7 @@ def normalise(messages):
 
 def migrate_legacy(db_file):
     con = _connect(db_file)
+    con.execute("BEGIN IMMEDIATE")
     moved = 0
     for emp in con.execute("SELECT id, Parent_id, CHAT_LOGS FROM EMPLOYEES").fetchall():
         logs = _load(emp["CHAT_LOGS"])
@@ -160,6 +162,7 @@ def list_chats(db_file, parent_id, employee_id):
 
 def get_chat(db_file, parent_id, employee_id, chat_id):
     con = _connect(db_file)
+    con.execute("BEGIN IMMEDIATE")  # legacy message-id normalization may write
     row = con.execute(
         "SELECT id, title, messages FROM CHATS WHERE id = ? AND Parent_id = ? "
         "AND Employee_id = ?",
@@ -210,106 +213,72 @@ def bump_answered(db_file, parent_id, employee_id):
 # Writes
 # --------------------------------------------------------------------------
 
-def _write_messages(db_file, parent_id, employee_id, chat_id, messages):
-    con = _connect(db_file)
-    cur = con.execute(
-        "UPDATE CHATS SET messages = ?, updated_at = ? WHERE id = ? AND "
-        "Parent_id = ? AND Employee_id = ?",
-        (_dump(messages), _now(), chat_id, parent_id, employee_id),
-    )
-    con.commit()
-    ok = cur.rowcount > 0
-    con.close()
-    return ok
+def _mutate(db_file, parent_id, employee_id, chat_id, change):
+    """Serialize the complete read/modify/write, including legacy ID assignment."""
+    with closing(_connect(db_file)) as con, con:
+        con.execute("BEGIN IMMEDIATE")
+        ids = (chat_id, parent_id, employee_id)
+        row = con.execute("SELECT messages FROM CHATS WHERE id=? AND Parent_id=? AND Employee_id=?", ids).fetchone()
+        if row is None:
+            con.rollback()
+            return None
+        messages = normalise(_load(row["messages"]))[0]
+        if not change(messages):
+            return None
+        con.execute("UPDATE CHATS SET messages=?, updated_at=? WHERE id=? AND Parent_id=? AND Employee_id=?",
+                    (_dump(messages), _now(), *ids))
+        return messages
 
 
-def save_exchange(db_file, parent_id, employee_id, chat_id, prompt, answer,
-                  blocked=False, block_info=None):
-    """Append one exchange, creating the chat when chat_id is None."""
+def save_exchange(db_file, parent_id, employee_id, chat_id, prompt, answer, blocked=False, block_info=None):
     now = _now()
-    entry = {
-        "id": _new_id(),
-        "prompt": prompt,
-        "answer": answer,
-        "created_at": now,
-        "blocked": bool(blocked),
-        "edited": False,
-    }
+    entry = {"id": _new_id(), "prompt": prompt, "answer": answer, "created_at": now,
+             "blocked": bool(blocked), "edited": False}
     if blocked and block_info:
         entry["block_info"] = block_info
-
-    con = _connect(db_file)
     if chat_id is None:
-        cur = con.execute(
-            "INSERT INTO CHATS (Parent_id, Employee_id, title, messages, "
-            "created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-            (parent_id, employee_id, make_title(prompt), _dump([entry]), now, now),
-        )
-        chat_id = cur.lastrowid
-        messages = [entry]
+        with closing(_connect(db_file)) as con, con:
+            # A member may have been offboarded while the provider was answering.
+            cur = con.execute("INSERT INTO CHATS (Parent_id, Employee_id, title, messages, created_at, updated_at) "
+                              "SELECT Parent_id, id, ?, ?, ?, ? FROM EMPLOYEES WHERE Parent_id=? AND id=?",
+                              (make_title(prompt), _dump([entry]), now, now, parent_id, employee_id))
+            if not cur.rowcount:
+                return None, None
+            chat_id = cur.lastrowid
     else:
-        row = con.execute(
-            "SELECT messages FROM CHATS WHERE id = ? AND Parent_id = ? AND "
-            "Employee_id = ?",
-            (chat_id, parent_id, employee_id),
-        ).fetchone()
-        messages = normalise(_load(row["messages"]))[0] if row else []
-        messages.append(entry)
-        con.execute(
-            "UPDATE CHATS SET messages = ?, updated_at = ? WHERE id = ? AND "
-            "Parent_id = ? AND Employee_id = ?",
-            (_dump(messages), now, chat_id, parent_id, employee_id),
-        )
-    con.commit()
-    con.close()
+        def append(messages):
+            messages.append(entry)
+            return True
+        if _mutate(db_file, parent_id, employee_id, chat_id, append) is None:
+            return None, None
     return chat_id, entry
 
 
+def _change_entry(db_file, parent_id, employee_id, chat_id, message_id, fields=None):
+    def change(messages):
+        for i, entry in enumerate(messages):
+            if entry.get("id") == message_id:
+                if fields is None:
+                    del messages[i]
+                else:
+                    entry.update(fields)
+                return True
+        return False
+    return _mutate(db_file, parent_id, employee_id, chat_id, change)
+
+
 def edit_message(db_file, parent_id, employee_id, chat_id, message_id, text):
-    """Replace the text of one message the member sent."""
-    chat = get_chat(db_file, parent_id, employee_id, chat_id)
-    if chat is None:
-        return None
-    for item in chat["messages"]:
-        if item.get("id") == message_id:
-            item["prompt"] = text
-            item["edited"] = True
-            item["edited_at"] = _now()
-            break
-    else:
-        return None
-    if not _write_messages(db_file, parent_id, employee_id, chat_id, chat["messages"]):
-        return None
-    return chat["messages"]
+    return _change_entry(db_file, parent_id, employee_id, chat_id, message_id,
+                         {"prompt": text, "edited": True, "edited_at": _now()})
 
 
 def delete_message(db_file, parent_id, employee_id, chat_id, message_id):
-    chat = get_chat(db_file, parent_id, employee_id, chat_id)
-    if chat is None:
-        return None
-    remaining = [m for m in chat["messages"] if m.get("id") != message_id]
-    if len(remaining) == len(chat["messages"]):
-        return None
-    if not _write_messages(db_file, parent_id, employee_id, chat_id, remaining):
-        return None
-    return remaining
+    return _change_entry(db_file, parent_id, employee_id, chat_id, message_id)
 
 
 def replace_answer(db_file, parent_id, employee_id, chat_id, message_id, answer):
-    """Store a regenerated answer for one message."""
-    chat = get_chat(db_file, parent_id, employee_id, chat_id)
-    if chat is None:
-        return None
-    for item in chat["messages"]:
-        if item.get("id") == message_id:
-            item["answer"] = answer
-            item["regenerated_at"] = _now()
-            break
-    else:
-        return None
-    if not _write_messages(db_file, parent_id, employee_id, chat_id, chat["messages"]):
-        return None
-    return chat["messages"]
+    return _change_entry(db_file, parent_id, employee_id, chat_id, message_id,
+                         {"answer": answer, "regenerated_at": _now()})
 
 
 def rename_chat(db_file, parent_id, employee_id, chat_id, title):
@@ -359,7 +328,12 @@ def search(db_file, parent_id, employee_id, query, limit=50):
 
     hits = []
     for row in rows:
-        for item in normalise(_load(row["messages"]))[0]:
+        items = _load(row["messages"])
+        if any(isinstance(m, dict) and not m.get("id") for m in items):
+            # A search hit needs the same legacy message ID when opened.
+            chat = get_chat(db_file, parent_id, employee_id, row["id"])
+            items = chat["messages"] if chat else []
+        for item in items:
             if not isinstance(item, dict):
                 continue
             prompt, answer = str(item.get("prompt", "")), str(item.get("answer", ""))

@@ -223,6 +223,24 @@
 .checks-consequence-item { margin: 0; }
 .checks-consequence-item strong { font-weight: 600; }
 
+.check-option {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 44px;
+    font-size: var(--text-sm);
+    color: var(--text-dim);
+    cursor: pointer;
+}
+
+.check-option input {
+    width: 16px;
+    height: 16px;
+    flex: none;
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
 .profile-head {
     display: flex;
     align-items: center;

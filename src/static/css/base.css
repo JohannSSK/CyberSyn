@@ -386,6 +386,7 @@ h4 { font-size: var(--text-md); }
     .grid-2 { grid-template-columns: minmax(0, 1fr); }
 }
 
+[hidden],
 .hidden { display: none !important; }
 
 .sr-only {

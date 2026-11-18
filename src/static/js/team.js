@@ -61,9 +61,9 @@
             : t("no API key yet");
         head.innerHTML =
             Dom.avatarHTML(member.username, "avatar-md") +
-            '<span class="member-id"><strong>' + Dom.esc(member.username) + "</strong>" +
+            '<span class="member-id"><strong data-no-i18n>' + Dom.esc(member.username) + "</strong>" +
             '<span class="member-meta">' +
-            '<span class="mono">' + Dom.esc(member.model || "gpt-4o-mini") + "</span>" +
+            '<span class="mono" data-no-i18n>' + Dom.esc(member.model || "gpt-4o-mini") + "</span>" +
             "<span>·</span><span>" + Dom.esc(keyNote) + "</span>" +
             "<span>·</span><span>" + Dom.esc(t(member.checks_on + " of 3 checks on")) + "</span>" +
             "</span></span>";
@@ -129,7 +129,7 @@
 
     function load(button) {
         var task = function () {
-            return Api.post("/api/admin/team", { token: Api.Session.getAdminToken() },
+            return Api.post("TEAM", {},
                 { member: false, onUnauthorised: false });
         };
         var request = button ? Loading.withButton(button, task) : task();

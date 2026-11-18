@@ -187,7 +187,8 @@
     color: var(--text);
 }
 
-.auth-field input {
+.auth-field input,
+.auth-field select {
     width: 100%;
     min-height: 40px;
     padding: 8px 12px;
@@ -195,18 +196,26 @@
     font-family: inherit;
     color: var(--text);
     caret-color: var(--accent);
-    background: transparent;
+    background-color: transparent;
     border: 1px solid var(--border);
     border-radius: var(--r-md);
     transition: border-color var(--fast) var(--ease);
 }
 
+.auth-field select option {
+    background: var(--surface-2);
+    color: var(--text);
+}
+
 .auth-field input::placeholder { color: var(--text-muted); }
 
 .auth-field input:hover:not(:disabled),
-.auth-field input:focus-visible:not(:disabled) { border-color: var(--border-strong); }
+.auth-field input:focus-visible:not(:disabled),
+.auth-field select:hover:not(:disabled),
+.auth-field select:focus-visible:not(:disabled) { border-color: var(--border-strong); }
 
-.auth-field input:disabled {
+.auth-field input:disabled,
+.auth-field select:disabled {
     opacity: 0.45;
     cursor: not-allowed;
 }

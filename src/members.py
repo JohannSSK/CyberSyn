@@ -6,11 +6,13 @@ administrator can set a team-wide policy and only override per member where
 it matters.
 """
 
-from config import DEFAULT_MODEL
+from config import DEFAULT_MODEL, ROUTES
 from db import get_db
+from errors import ApiError
 from secret_store import encrypt_secret, mask_stored_key
 
-SETTING_FLAGS = ("check1", "check2", "check3")
+SETTING_FLAGS = ("check1", "check2", "check3", "block_code")
+CONNECTION_FIELDS = ("API_KEY", "PROVIDER", "API_BASE", "MODEL_NAME")
 
 
 def employee_row(parent_id, employee_id):
@@ -25,7 +27,7 @@ def employee_row(parent_id, employee_id):
 def not_found_employee_message(parent_id, employee_id):
     return (
         f"Employee_id {employee_id} not found under Parent_id {parent_id}. "
-        "Use the real Employee_id returned by /api/admin/employee/login."
+        f"Use the real Employee_id returned by {ROUTES['EMPLOYEE_LOGIN']}."
     )
 
 
@@ -37,19 +39,19 @@ def list_members(parent_id):
     ).fetchall()
 
 
-def default_settings_values(parent_id):
-    row = get_db().execute(
+def default_settings_values(parent_id=None):
+    row = None if parent_id is None else get_db().execute(
         "SELECT * FROM SETTINGS WHERE Parent_id = ? AND Employee_id = 0",
         (parent_id,),
     ).fetchone()
     if row:
         return {
             "check1": int(row["check1"]), "check2": int(row["check2"]),
-            "check3": int(row["check3"]), "API_KEY": row["API_KEY"] or "",
+            "check3": int(row["check3"]), "block_code": int(row["block_code"]), "API_KEY": row["API_KEY"] or "",
             "MODEL_NAME": row["MODEL_NAME"] or DEFAULT_MODEL,
             "PROVIDER": _provider_of(row), "API_BASE": _base_of(row),
         }
-    return {"check1": 1, "check2": 1, "check3": 1, "API_KEY": "",
+    return {"check1": 1, "check2": 1, "check3": 1, "block_code": 0, "API_KEY": "",
             "MODEL_NAME": DEFAULT_MODEL, "PROVIDER": "auto", "API_BASE": ""}
 
 
@@ -70,8 +72,8 @@ def _base_of(row):
     return _value(row, "API_BASE", "") or ""
 
 
-def create_default_settings(parent_id, employee_id):
-    """Create a SETTINGS row (copy of the workspace default) if absent."""
+def create_default_settings(parent_id, employee_id, *, inherit=False, commit=True):
+    """Snapshot the template at enrolment only. Repair missing rows with app defaults."""
     db = get_db()
     exists = db.execute(
         "SELECT 1 FROM SETTINGS WHERE Parent_id = ? AND Employee_id = ?",
@@ -79,24 +81,30 @@ def create_default_settings(parent_id, employee_id):
     ).fetchone()
     if exists:
         return
-    d = default_settings_values(parent_id)
+    d = default_settings_values(parent_id if inherit else None)
     db.execute(
-        "INSERT INTO SETTINGS (Parent_id, Employee_id, check1, check2, check3, "
+        "INSERT OR IGNORE INTO SETTINGS (Parent_id, Employee_id, check1, check2, check3, block_code, "
         "API_KEY, MODEL_NAME, PROVIDER, API_BASE) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (parent_id, employee_id, d["check1"], d["check2"], d["check3"],
+        "SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE "
+        "(? = 0 AND EXISTS (SELECT 1 FROM ADMINS WHERE id=?)) OR "
+        "EXISTS (SELECT 1 FROM EMPLOYEES WHERE id=? AND Parent_id=?)",
+        (parent_id, employee_id, d["check1"], d["check2"], d["check3"], d["block_code"],
          d["API_KEY"], d["MODEL_NAME"], d.get("PROVIDER", "auto"),
-         d.get("API_BASE", "")),
+         d.get("API_BASE", ""), employee_id, parent_id, employee_id, parent_id),
     )
-    db.commit()
+    if commit:
+        db.commit()
 
 
 def get_settings(parent_id, employee_id):
     create_default_settings(parent_id, employee_id)
-    return get_db().execute(
+    row = get_db().execute(
         "SELECT * FROM SETTINGS WHERE Parent_id = ? AND Employee_id = ?",
         (parent_id, employee_id),
     ).fetchone()
+    if row is None:
+        raise ApiError("That account no longer exists.", 404)
+    return row
 
 
 def settings_payload(parent_id, employee_id, row):
@@ -111,6 +119,7 @@ def settings_payload(parent_id, employee_id, row):
         "check1": bool(row["check1"]),
         "check2": bool(row["check2"]),
         "check3": bool(row["check3"]),
+        "block_code": bool(row["block_code"]),
         "API_KEY": "",
         "API_KEY_MASK": mask_stored_key(row["API_KEY"]),
         "MODEL_NAME": row["MODEL_NAME"] or DEFAULT_MODEL,
@@ -122,10 +131,8 @@ def settings_payload(parent_id, employee_id, row):
 def settings_updates(data):
     """Validate the fields a caller is allowed to change.
 
-    Returns a dict of column -> value. An unknown or malformed field is a
-    400 rather than a silent ignore, so a typo never looks like success.
+    Return only approved column names and values. Invalid settings raise a 400.
     """
-    from errors import ApiError
     from web import non_empty_str
 
     updates = {}
@@ -139,6 +146,11 @@ def settings_updates(data):
             raise ApiError("'API_KEY' must be a string.", 400)
         if data["API_KEY"].strip():
             updates["API_KEY"] = encrypt_secret(data["API_KEY"].strip())
+    if "CLEAR_API_KEY" in data:
+        if not isinstance(data["CLEAR_API_KEY"], bool):
+            raise ApiError("'CLEAR_API_KEY' must be true or false.", 400)
+        if data["CLEAR_API_KEY"]:
+            updates["API_KEY"] = ""
     if "MODEL_NAME" in data:
         if not non_empty_str(data["MODEL_NAME"]):
             raise ApiError("'MODEL_NAME' must be a non-empty string.", 400)
@@ -152,14 +164,13 @@ def settings_updates(data):
 
 def _clean_provider(value):
     """A provider is one of the registry's keys, or 'auto'."""
-    from errors import ApiError
     from providers import get
 
     text = str(value or "").strip().lower()
     if text == "auto":
         return "auto"
     if get(text) is None:
-        raise ApiError(f"'{text}' is not a provider this gateway supports.", 400)
+        raise ApiError("Select a provider supported by this gateway.", 400)
     return text
 
 
@@ -170,7 +181,6 @@ def _clean_base(value):
     would fetch it, so an unchecked value turns the gateway into a way to
     reach things inside the network.
     """
-    from errors import ApiError
     from providers import ProviderError, validate_base_url
 
     text = str(value or "").strip()
@@ -184,14 +194,13 @@ def _clean_base(value):
 
 def save_settings(parent_id, employee_id, updates):
     db = get_db()
+    create_default_settings(parent_id, employee_id, commit=False)
     if updates:
         sets = ", ".join(f"{k} = ?" for k in updates)
         db.execute(
             f"UPDATE SETTINGS SET {sets} WHERE Parent_id = ? AND Employee_id = ?",
             (*updates.values(), parent_id, employee_id),
         )
-        db.commit()
-    return get_settings(parent_id, employee_id)
 
 
 def provider_and_base(settings_row):

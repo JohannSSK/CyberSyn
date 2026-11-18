@@ -83,13 +83,14 @@
         var username = $("#new-admin-username");
         var password = $("#new-admin-password");
         var confirmField = $("#new-admin-confirm");
+        var signupToken = $("#signup-token");
         var msg = "#create-admin-msg";
 
         $("#admin-password-rule").textContent = t(
             "At least 8 characters, with at least one letter and one number."
         );
 
-        onSubmit(button, [username, password, confirmField], function () {
+        onSubmit(button, [username, password, confirmField, signupToken], function () {
             message(msg, "");
             var name = username.value.trim();
             if (!name) {
@@ -99,8 +100,9 @@
             }
             if (!passwordsMatch(password, confirmField, msg)) return Promise.resolve();
 
-            return Api.post("/api/admin",
-                { method: "add", username: name, password: password.value },
+            return Api.post("ADMIN",
+                { method: "add", username: name, password: password.value,
+                  signup_token: signupToken ? signupToken.value : "" },
                 { member: false, onUnauthorised: false }
             ).then(function () {
                 Loading.toast("Administrator account created. You can sign in now.", "success");
@@ -144,7 +146,7 @@
             }).then(function (accepted) {
                 if (!accepted) return null;
                 return Loading.withButton(button, function () {
-                    return Api.post("/api/admin",
+                    return Api.post("ADMIN",
                         { method: "remove", username: name, password: password.value },
                         { member: false, onUnauthorised: false });
                 }).then(function () {
@@ -171,10 +173,9 @@
 
     function adminContext() {
         var meta = Session.getAdmin() || {};
-        var token = Session.getAdminToken();
         var parentId = parseInt(meta.parentId, 10);
-        if (!token || !parentId) return null;
-        return { token: token, parentId: parentId, username: meta.username };
+        if (!parentId) return null;
+        return { parentId: parentId, username: meta.username };
     }
 
     function requireAdmin() {
@@ -209,10 +210,9 @@
             }
             if (!passwordsMatch(password, confirmField, msg)) return Promise.resolve();
 
-            return Api.post("/api/admin/employee",
+            return Api.post("EMPLOYEE",
                 { method: "add", Parent_id: context.parentId,
-                  username: name, password: password.value,
-                  token: context.token },
+                  username: name, password: password.value },
                 { member: false, onUnauthorised: false }
             ).then(function () {
                 Loading.toast(name + " added — they can sign in now.", "success");
@@ -229,12 +229,22 @@
 
         var username = $("#del-member-username");
         var password = $("#del-member-password");
+        var picker = $("#member-picker");
         var msg = "#delete-member-msg";
 
         var context = requireAdmin();
         if (!context) return;
         var label = $("#active-admin-label");
         if (label && context.username) label.textContent = context.username;
+
+        if (picker) {
+            Api.post("TEAM_LIST", {}, { member: false, onUnauthorised: false }).then(function (data) {
+                (data.members || []).forEach(function (m) {
+                    picker.add(new Option(m.username, m.username));
+                });
+                Dom.on(picker, "change", function () { username.value = picker.value; });
+            }).catch(function (err) { message(msg, err.message); });
+        }
 
         Dom.on(button, "click", function () {
             message(msg, "");
@@ -245,7 +255,7 @@
                 return;
             }
             if (!password.value) {
-                message(msg, "Type that member's password to confirm.");
+                message(msg, "Enter the administrator password.");
                 password.focus();
                 return;
             }
@@ -261,10 +271,9 @@
             }).then(function (accepted) {
                 if (!accepted) return null;
                 return Loading.withButton(button, function () {
-                    return Api.post("/api/admin/employee",
+                    return Api.post("EMPLOYEE",
                         { method: "remove", Parent_id: context.parentId,
-                          username: name, password: password.value,
-                          token: context.token },
+                          username: name, admin_password: password.value },
                         { member: false, onUnauthorised: false });
                 }).then(function () {
                     Loading.toast(name + " removed from this workspace.", "success");

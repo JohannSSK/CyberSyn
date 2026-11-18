@@ -17,15 +17,17 @@ const fs = require("fs");
 const path = require("path");
 
 const ROOT = path.resolve(__dirname, "..");
+const ROUTES = require("../includes/constants.json").ROUTES;
 
-let JSDOM = null;
+let JSDOM = null, VirtualConsole;
 for (const candidate of [
-    process.env.CYBERSYN_JSDOM,
+    process.env.CYBERSYN_JSDOM, "jsdom",
     path.join(ROOT, "node_modules", "jsdom"),
     "/tmp/jsdomtest/node_modules/jsdom",
 ].filter(Boolean)) {
     try {
         const mod = require(candidate);
+        VirtualConsole = mod.VirtualConsole;
         JSDOM = mod.JSDOM || mod.default || mod;
         if (typeof JSDOM === "function") break;
         JSDOM = null;
@@ -86,25 +88,32 @@ const BASE = baseUrl();
 
 function makePage(file, options) {
     const opts = options || {};
+    const virtualConsole = new VirtualConsole();
+    virtualConsole.on("jsdomError", err => {
+        // jsdom cannot navigate after a successful form submission.
+        if (!err.message.startsWith("Not implemented: navigation")) throw err;
+    });
     const dom = new JSDOM(
         `<!doctype html><html><body><div id="toast-container"></div>${
             renderTemplate(file)}</body></html>`,
         { url: BASE + (opts.url || "/" + file.replace(".html", "")),
-          runScripts: "outside-only" }
+          runScripts: "outside-only", virtualConsole }
     );
     const win = dom.window;
-    for (const f of ["core/dom.js", "core/icons.js"]) win.eval(read(f));
+    for (const f of ["core/dom.js", "core/icons.js", "core/i18n.js"]) win.eval(read(f));
 
     const posted = [];
     win.Api = {
         Session: {
             getAdmin: () => opts.admin || null,
-            getAdminToken: () => (opts.admin ? "admin-token" : null),
             setAdmin: () => {},
             clearAll: () => { win.__cleared = true; },
-            getMember: () => null, getMemberToken: () => null, ready: () => false,
+            getMember: () => null, ready: () => false,
         },
-        post: (p, body) => { posted.push({ path: p, body }); return Promise.resolve({}); },
+        post: (key, body) => {
+            posted.push({ path: ROUTES[key], body });
+            return Promise.resolve(key === "TEAM_LIST" ? {members: [{username:"mia"}]} : {});
+        },
     };
     win.Loading = {
         toast: () => {},
@@ -166,7 +175,7 @@ async function createAdmin() {
     page.fill("#new-admin-confirm", "Admin-Pw-123");
     await page.click("#btn-create-admin");
     check("a valid form posts once", page.posted.length === 1, page.posted.length);
-    check("it posts to /api/admin", page.posted[0] && page.posted[0].path === "/api/admin");
+    check("it posts to /api/admin", page.posted[0] && page.posted[0].path === ROUTES.ADMIN);
     check("it asks to add", page.posted[0] && page.posted[0].body.method === "add");
     check("it sends the chosen credentials",
         page.posted[0] && page.posted[0].body.username === "boss" &&
@@ -237,13 +246,13 @@ async function memberPages() {
     await page.click("#btn-create-member");
     check("adding posts once", page.posted.length === 1, page.posted.length);
     check("it posts to /api/admin/employee",
-        page.posted[0] && page.posted[0].path === "/api/admin/employee");
+        page.posted[0] && page.posted[0].path === ROUTES.EMPLOYEE);
     check("it acts on the administrator's workspace",
         page.posted[0] && page.posted[0].body.Parent_id === 7,
         page.posted[0] && page.posted[0].body.Parent_id);
     check("it asks to add", page.posted[0] && page.posted[0].body.method === "add");
-    check("it carries the administrator's token",
-        page.posted[0] && page.posted[0].body.token === "admin-token",
+    check("it uses the administrator cookie, not a body token",
+        page.posted[0] && !("token" in page.posted[0].body),
         page.posted[0] && page.posted[0].body.token);
 
     const del = makePage("delete_member.html", {
@@ -252,13 +261,17 @@ async function memberPages() {
     check("the remove page says what is lost",
         /deleted|chats/i.test((del.doc.querySelector(".auth-warning") || {}).textContent || ""));
     del.win.confirm = () => true;
-    del.fill("#del-member-username", "mia");
-    del.fill("#del-member-password", "Member-Pw-123");
+    await Promise.resolve();
+    check("the member picker loads the workspace roster", del.posted[0].path === ROUTES.TEAM_LIST);
+    del.posted.shift();
+    del.fill("#member-picker", "mia");
+    del.doc.querySelector("#member-picker").dispatchEvent(new del.win.Event("change"));
+    del.fill("#del-member-password", "Admin-Pw-123");
     await del.click("#btn-delete-member");
     check("removing posts once", del.posted.length === 1, del.posted.length);
     check("it asks to remove", del.posted[0] && del.posted[0].body.method === "remove");
-    check("it carries the administrator's token",
-        del.posted[0] && del.posted[0].body.token === "admin-token",
+    check("it uses the administrator cookie, not a body token",
+        del.posted[0] && !("token" in del.posted[0].body) && del.posted[0].body.admin_password === "Admin-Pw-123" && !("password" in del.posted[0].body),
         del.posted[0] && del.posted[0].body.token);
     check("it names the member",
         del.posted[0] && del.posted[0].body.username === "mia");

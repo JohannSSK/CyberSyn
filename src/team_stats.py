@@ -56,8 +56,8 @@ def member_stats(db_file, parent_id, employee_id, username, settings,
     blocked = len(stopped)
     overrides = len(blocks) - blocked
     sent = answered + blocked
-    checks_on = sum(int(settings[k]) for k in ("check1", "check2", "check3")) \
-        if settings else 3
+    checks_on = sum(bool(v) for v in (settings["check1"], settings["check2"] or settings["block_code"],
+                                      settings["check3"])) if settings else 3
 
     return {
         "id": employee_id,
@@ -156,7 +156,7 @@ def team():
     from web import get_json_dict
 
     data = get_json_dict() or {}
-    admin = admin_from_token(DB_FILE, data.get("token"))
+    admin = admin_from_token(DB_FILE, data.get("token"), page=True)
     if admin is None:
         return {"error": True, "error_message": "Your session has ended. Sign in again."}, 401
 

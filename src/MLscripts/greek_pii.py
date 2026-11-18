@@ -1,14 +1,13 @@
 import json
 import re
 import sys
-import warnings
-
-warnings.filterwarnings("ignore")
 
 try:
-    from model_cache import DETAIL_CHARS, get_taggers
+    from identifiers import CARD, GREEK_ID, IBAN, credential_matches, iban_score, id_score, is_valid_luhn, valid_amka
+    from model_cache import DETAIL_CHARS, run_ner
 except ImportError:  # pragma: no cover - standalone use from another cwd
-    from .model_cache import DETAIL_CHARS, get_taggers
+    from .identifiers import CARD, GREEK_ID, IBAN, credential_matches, iban_score, id_score, is_valid_luhn, valid_amka
+    from .model_cache import DETAIL_CHARS, run_ner
 
 PATTERNS = {
     "GREEK_AFM": r"\b\d{9}\b",
@@ -22,10 +21,10 @@ PATTERNS = {
         r"|6[\s.-]*9(?:[\s.-]*\d){8})"
         r"\b(?![ \t.-]*\d)"
     ),
-    "GREEK_ID": r"\b[ABEZHIKMNOPTYXΑΒΕΖΗΙΚΜΝΟΡΤΥΧ][\s-]?\d{8}\b",
-    "IBAN": r"\b[A-Z]{2}\d{2}(?:[\s-]?[A-Za-z0-9]){11,30}\b",
+    "GREEK_ID": GREEK_ID,
+    "IBAN": IBAN,
     "EMAIL": r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b",
-    "API_KEY": r"\b(sk-[a-zA-Z0-9]{10,}|AKIA[0-9A-Z]{16})\b",
+    "CARD": CARD,
     "COMPANY": r"\b[Α-ΩΆΈΉΊΌΎΏA-Z][α-ωάέήίόύώa-zA-Z0-9\s\-&]{2,35}\s+(?:Ε\.?Π\.?Ε\.?|Α\.?Ε\.?|Ι\.?Κ\.?Ε\.?|Ο\.?Ε\.?|Ε\.?Ε\.?|Ltd\.?|Inc\.?|Corp\.?|LLC)",
 }
 
@@ -77,6 +76,7 @@ BLOCKING_CAUSES = (
     "GREEK_IBAN",
     "EMAIL",
     "API_KEY",
+    "CARD",
     "COMPANY",
     "PERSON",
 )
@@ -93,13 +93,7 @@ GREEK_SURNAME_REGEX = re.compile(
     r"ίδης|ίδου|ιδης|ιδου|"
     r"άδης|άδου|αδης|αδου|"
     r"άκης|άκη|ακης|ακη|"
-    r"έλης|έλη|ελης|ελη|"
-    r"έας|έα|εας|εα|"
-    r"άκος|άκου|ακος|ακου|"
-    r"ίτης|ίτη|ιτης|ιτη|"
-    r"ιώτης|ιώτη|ιωτης|ιωτη|"
-    r"όγλου|ογλου|"
-    r"άτος|άτου|ατος|ατου"
+    r"άκος|άκου|ακος|ακου|όγλου|ογλου"
     r")\b"
 )
 
@@ -113,7 +107,18 @@ def is_blocking(cause, score):
     return cause in BLOCKING_CAUSES and score >= BLOCK_SCORE
 
 
-def analyze(raw_text):
+_COMMON = set("Αριστοτέλης Θουκυδίδης Ευριπίδης Σωκράτης Αλκιβιάδης Πολίτης Φορέας Τομέας Συγγραφέας "
+              "Γραμματέας Εισαγγελέας Τραπεζίτης Στρατιώτης Ιδιώτης Μεσίτης Διαβήτης Πλανήτης Μαγνήτης "
+              "Αθηναίος Κρητικός Γιατρός".casefold().split())
+_PUBLIC = {"albert einstein", "alan turing", "isaac newton", "marie curie"}
+
+
+def _not_private_name(name, text):
+    return (name.casefold() in _COMMON or
+            (name.casefold() in _PUBLIC and re.search(r"\b(who (was|is)|explain|describe|biography)\b", text, re.I)))
+
+
+def analyze(raw_text, stop=None):
     if not raw_text.strip():
         return {
             "blocked": False,
@@ -123,7 +128,11 @@ def analyze(raw_text):
             "classifier_ran": False,
         }
 
-    matches = []
+    matches = [
+        {"cause": "API_KEY", "score": 0.95, "line": get_line_number(raw_text, hit.start()),
+         "start_offset": hit.start(), "end_offset": hit.end(), "snippet": hit[0]}
+        for hit in credential_matches(raw_text)
+    ]
 
     # 1. Check Regex + Greek Math & Context Rules
     for label, pattern in PATTERNS.items():
@@ -138,6 +147,20 @@ def analyze(raw_text):
                     score = 0.90
                 else:
                     score = 0.50
+            elif label == "IBAN":
+                score = iban_score(raw_text, match)
+                if not score:
+                    continue
+            elif label == "GREEK_ID":
+                score = id_score(raw_text, match)
+            elif label == "CARD":
+                if not is_valid_luhn(val):
+                    continue
+                score = 0.95
+            elif label == "GREEK_AMKA":
+                if not valid_amka(val):
+                    continue
+                score = 0.98 if re.search("αμκα|amka", raw_text[max(0,start-80):end+80], re.I) else 0.85
             else:
                 score = 0.95
 
@@ -163,7 +186,7 @@ def analyze(raw_text):
             not (end <= s or start >= e)
             for s, e in seen_spans
         )
-        if not overlaps:
+        if not overlaps and not _not_private_name(val, raw_text):
             seen_spans.add(span)
             matches.append(
                 {
@@ -184,7 +207,7 @@ def analyze(raw_text):
             not (end <= s or start >= e)
             for s, e in seen_spans
         )
-        if not overlaps:
+        if not overlaps and not _not_private_name(val, raw_text):
             seen_spans.add(span)
             matches.append(
                 {
@@ -215,17 +238,18 @@ def analyze(raw_text):
     )
     classifier_ran = False
     if not settled:
-        classifier_ran = True
-        nlp_en, nlp_el = get_taggers()
-        for nlp, script_regex in [
-            (nlp_en, r"^[A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)+$"),
+        for model, script_regex in [
+            ("en_core_web_sm", r"^[A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)+$"),
             (
-                nlp_el,
+                "el_core_news_sm",
                 r"^[Α-ΩΆΈΉΊΌΎΏ][α-ωάέήίόύώϊϋΐΰ]+(?:\s+[Α-ΩΆΈΉΊΌΎΏ][α-ωάέήίόύώϊϋΐΰ]+)+$",
             ),
         ]:
-            for ent in nlp(raw_text).ents:
-                if ent.label_ == "PERSON":
+            if stop is not None and stop():
+                break
+            classifier_ran = True
+            for ent in run_ner(model, raw_text).ents:
+                if ent.label_ in ("PERSON", "PER"):
                     raw_name = ent.text.strip()
                     start_char = ent.start_char
                     end_char = ent.end_char
@@ -238,7 +262,7 @@ def analyze(raw_text):
                         name = raw_name
                     span = (start_char, end_char)
                     overlaps = any(
-                        not (end <= s or start >= e)
+                        not (end_char <= s or start_char >= e)
                         for s, e in seen_spans
                     )
                     is_full_name = (
@@ -249,7 +273,7 @@ def analyze(raw_text):
                         len(name.split()) == 1
                         and (tm is not None or GREEK_SURNAME_REGEX.match(name))
                     )
-                    if not overlaps and (is_full_name or is_surname):
+                    if not overlaps and (is_full_name or is_surname) and not _not_private_name(name, raw_text):
                         seen_spans.add(span)
                         matches.append(
                             {
@@ -294,6 +318,7 @@ def analyze(raw_text):
 
     if is_blocking(response["main_cause"], response["score"]):
         response["blocked"] = True
+        response["matches"] = [m for m in matches if is_blocking(m["cause"], m["score"])]
 
     return response
 

@@ -7,7 +7,7 @@ indistinguishable and nothing could be fixed from the message.
 
     python3 tools/test_provider_errors.py
 """
-import json, sys, threading, tempfile, os
+import json, sys, threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 sys.path.insert(0, "src")
@@ -32,9 +32,9 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(Handler.body)
     def log_message(self, *a): pass
 
-srv = HTTPServer(("127.0.0.1", 8123), Handler)
+srv = HTTPServer(("127.0.0.1", 0), Handler)
 threading.Thread(target=srv.serve_forever, daemon=True).start()
-URL = "http://127.0.0.1:8123/models"
+URL = f"http://127.0.0.1:{srv.server_port}/models"
 
 # 1. A rejected key: OpenAI's real 401 body shape.
 Handler.code, Handler.body = 401, json.dumps(
@@ -46,7 +46,7 @@ try:
     check("401 raises", False, "no exception")
 except ProviderError as e:
     check("401 carries the status", e.status == 401, e.status)
-    check("401 repeats the provider's reason", "Incorrect API key provided" in e.detail, e.detail)
+    check("401 gives an actionable reason", "Incorrect API key provided" in e.detail, e.detail)
 
 # 2. Quota exhausted.
 Handler.code, Handler.body = 429, json.dumps(
@@ -78,7 +78,7 @@ Handler.code, Handler.body = 401, json.dumps(
 try:
     providers.fetch_json(URL, {}, providers.get("openai"))
 except ProviderError as e:
-    check("detail is truncated, not unbounded", len(e.detail) <= 400, len(e.detail))
+    check("a provider echo is never returned", "sk-SECRET" not in e.detail and len(e.detail) <= 400)
 
 # 6. The happy path still parses.
 Handler.code, Handler.body = 200, json.dumps(

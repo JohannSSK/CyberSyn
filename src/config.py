@@ -73,6 +73,9 @@ if not _env_flag("CYBERSYN_LITELLM_NETWORK"):
 HOST = os.environ.get("CYBERSYN_HOST") or CONSTANTS.get("HOST", "127.0.0.1")
 PORT = int(os.environ.get("CYBERSYN_PORT") or CONSTANTS.get("PORT", 5000))
 DEBUG = _env_flag("CYBERSYN_DEBUG")
+LOG_PROMPT_PREVIEW = _env_flag("CYBERSYN_LOG_PROMPT_PREVIEW", False)
+MAX_PROMPT_CHARS = int(os.environ.get("CYBERSYN_MAX_PROMPT_CHARS", 16000))
+ALLOW_PRIVATE_BASE = _env_flag("CYBERSYN_ALLOW_PRIVATE_BASE", True)
 
 # Tests (and a container with a mounted volume) point this somewhere else.
 DB_FILE = Path(os.environ.get("CYBERSYN_DB_FILE") or repo_path("DB_FILE"))

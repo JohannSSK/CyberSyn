@@ -37,16 +37,33 @@ def upgrade_password(db, table, row_id, stored, given):
         f"UPDATE {table} SET password = ? WHERE id = ?",
         (generate_password_hash(given), row_id),
     )
-    db.commit()
     return True
 
 
-def admin_password_problem(password):
-    """Return a message if the password is too weak, else None."""
-    if len(password) < 8:
-        return "Admin password must be at least 8 characters."
+# Unknown usernames still perform the same expensive password verification.
+_DUMMY_HASH = hash_password("unused-timing-padding")
+
+
+def credentials_match(row, password):
+    valid = verify_password(row["password"] if row else _DUMMY_HASH, password)
+    return row is not None and valid
+
+
+def password_problem(password, role):
+    if not isinstance(password, str) or len(password) < 8:
+        return f"{role} password must be at least 8 characters."
+    if len(password) > 256:
+        return f"{role} password must be at most 256 characters."
     if not any(c.isdigit() for c in password):
-        return "Admin password must include at least one number."
+        return f"{role} password must include at least one number."
     if not any(c.isalpha() for c in password):
-        return "Admin password must include at least one letter."
+        return f"{role} password must include at least one letter."
     return None
+
+
+def admin_password_problem(password):
+    return password_problem(password, "Admin")
+
+
+def member_password_problem(password):
+    return password_problem(password, "Member")
