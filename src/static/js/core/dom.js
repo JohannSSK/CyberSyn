@@ -10,8 +10,8 @@
     "use strict";
 
     var AVATAR_TONES = [
-        "sage", "clay", "sand", "moss",
-        "terracotta", "umber", "olive", "rust"
+        "stone", "taupe", "sand", "walnut",
+        "umber", "clay", "sienna", "rust"
     ];
 
     function isGreek() {
@@ -62,8 +62,8 @@
     }
 
     /* ------------------------------------------------------------------
-       Deterministic per-member avatars — same username, same earth tone
-       and two-letter initials on every screen.
+       Deterministic per-member avatars — same username, same warm-neutral
+       tone and two-letter initials on every screen.
        ------------------------------------------------------------------ */
 
     function avatarTone(username) {

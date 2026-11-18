@@ -58,8 +58,8 @@
             return data[k] !== false;
         }).length;
         nodes.checks.innerHTML = "";
-        var cls = on === 3 ? "badge-accent" : (on === 0 ? "badge-warn" : "badge-success");
-        nodes.checks.appendChild(Dom.el("span", "badge " + cls, t(on + " of 3 active")));
+        var cls = on === 0 ? "badge badge-warn" : (on === 3 ? "badge badge-accent" : "badge");
+        nodes.checks.appendChild(Dom.el("span", cls, t(on + " of 3 active")));
         nodes.model.textContent = data.MODEL_NAME || "gpt-4o-mini";
         nodes.key.textContent = data.API_KEY_MASK || t("No key saved");
     }

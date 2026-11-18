@@ -115,46 +115,16 @@
        ------------------------------------------------------------------ */
 
     function buildTracker(outcome) {
-        var order = ["check1", "check2", "check3"];
-        var tracker = Dom.el("div", "stage-tracker");
-        tracker.setAttribute("role", "list");
-        tracker.setAttribute("aria-label", t("Local safety checks"));
-
-        var blockedIndex = outcome && outcome.blockedStage
-            ? order.indexOf(outcome.blockedStage)
-            : -1;
-
-        order.forEach(function (id, index) {
-            var enabled = state.settings[id] !== false;
-            var step = Dom.el("span", "stage-step");
-            step.setAttribute("role", "listitem");
-            step.dataset.stage = id;
-
-            if (!enabled) {
-                step.classList.add("is-off");
-            } else if (outcome && outcome.passedAll) {
-                step.classList.add("is-passed");
-            } else if (blockedIndex !== -1) {
-                if (index < blockedIndex) step.classList.add("is-passed");
-                else if (index === blockedIndex) step.classList.add("is-blocked");
-            }
-
-            step.innerHTML =
-                '<span class="stage-dot" aria-hidden="true"></span>' +
-                '<span class="stage-name">' + Dom.esc(Stages.shortName(id)) + "</span>";
-            tracker.appendChild(step);
-        });
-
-        return tracker;
+        return Stages.tracker(state.settings, outcome);
     }
 
     /* ------------------------------------------------------------------
-       Live in-flight indicator (D2)
+       In-flight screening receipt (D2)
 
-       Shows the real three stages in configured order (personal data ->
-       context -> injection). Driven off the request lifecycle: steps across
-       enabled checks while the request is open, snaps to resolved the moment
-       the server answers, and sits still when reduced motion is requested.
+       Shows the three checks in configured order (personal data -> context
+       -> injection) with neutral warm-grey dots while the request is open,
+       and resolves straight from the server verdict (--danger on the
+       blocking stage, --success on clean completion) with no fake timers.
        ------------------------------------------------------------------ */
 
     var pending = null;
@@ -179,70 +149,37 @@
 
         var tracker = null;
         if (!bypass && enabled.length) {
-            tracker = buildTracker(null);
+            tracker = buildTracker({ checking: true });
             note.appendChild(tracker);
         }
 
         var label = Dom.el("span", "pending-text");
+        if (bypass) {
+            label.textContent = t("Sending once with administrator approval…");
+        } else if (!enabled.length) {
+            label.textContent = t("Waiting for the AI reply…");
+        } else {
+            label.textContent = t("Checking locally before sending…");
+        }
         note.appendChild(label);
         wrap.appendChild(note);
         nodes.stream.appendChild(wrap);
         scrollToEnd(true);
 
-        var tick = null;
-
-        function paintStep(activeIndex) {
-            if (!tracker) return;
-            enabled.forEach(function (id, idx) {
-                var node = tracker.querySelector('[data-stage="' + id + '"]');
-                if (!node) return;
-                node.classList.toggle("is-passed", idx < activeIndex);
-                node.classList.toggle("is-current", idx === activeIndex);
-            });
-        }
-
-        if (bypass) {
-            label.textContent = t("Sending once with administrator approval…");
-        } else if (!enabled.length) {
-            label.textContent = t("Waiting for the AI reply…");
-        } else if (reducedMotion()) {
-            // Reduced motion: static state, no sweep across the dots.
-            enabled.forEach(function (id) {
-                var node = tracker.querySelector('[data-stage="' + id + '"]');
-                if (node) node.classList.add("is-current");
-            });
-            label.textContent = t("Checking locally before sending…");
-        } else {
-            var cursor = 0;
-            paintStep(0);
-            label.textContent = Stages.checking(enabled[0]) + "…";
-            tick = setInterval(function () {
-                cursor += 1;
-                if (cursor < enabled.length) {
-                    paintStep(cursor);
-                    label.textContent = Stages.checking(enabled[cursor]) + "…";
-                } else {
-                    paintStep(enabled.length);
-                    label.textContent = t("All checks run — waiting for the AI reply…");
-                    clearInterval(tick);
-                    tick = null;
-                }
-            }, 420);
-        }
-
         pending = {
             wrap: wrap,
             resolve: function (blockedStage) {
-                if (tick) { clearInterval(tick); tick = null; }
                 if (!tracker) return;
                 var replacement = buildTracker(
                     blockedStage ? { blockedStage: blockedStage } : { passedAll: true }
                 );
                 tracker.replaceWith(replacement);
                 tracker = replacement;
+                if (!blockedStage) {
+                    label.textContent = t("All checks passed.");
+                }
             },
             stop: function () {
-                if (tick) { clearInterval(tick); tick = null; }
                 if (wrap.parentNode) wrap.remove();
             }
         };
@@ -794,7 +731,6 @@
                 }
 
                 waiting.resolve(null);
-                hidePending();
 
                 var nextChatId = data.chat_id || state.chatId;
                 var nextKey = nextChatId ? String(nextChatId) : preSendKey;
@@ -821,6 +757,7 @@
                         edited: false
                     });
                     return loadChats().then(function () {
+                        hidePending();
                         var current = state.chats.filter(function (c) {
                             return c.id === state.chatId;
                         })[0];
@@ -829,7 +766,10 @@
                     });
                 }
 
-                return openChat(state.chatId).then(loadChats);
+                return openChat(state.chatId).then(function () {
+                    hidePending();
+                    return loadChats();
+                });
             })
             .catch(function (err) {
                 waiting.stop();

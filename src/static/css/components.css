@@ -73,40 +73,17 @@
 .btn-outline:hover:not(:disabled),
 .btn-outline:focus-visible:not(:disabled) { background: var(--surface-2); }
 
+/* Destructive actions stay restrained: neutral fill, semantic border and text. */
 .btn-danger {
-    color: var(--ink);
-    background: var(--danger);
-    border-color: transparent;
+    color: var(--danger);
+    background: var(--surface-2);
+    border-color: var(--danger-line);
 }
 
 .btn-danger:hover:not(:disabled),
 .btn-danger:focus-visible:not(:disabled) {
-    background: var(--danger-deep);
-    border-color: transparent;
-}
-
-.btn-outline-danger {
-    color: var(--danger);
-    background: transparent;
-    border-color: var(--border);
-}
-
-.btn-outline-danger:hover:not(:disabled),
-.btn-outline-danger:focus-visible:not(:disabled) {
     background: var(--danger-soft);
     border-color: var(--danger);
-}
-
-.btn-warning {
-    color: var(--ink);
-    background: var(--warn);
-    border-color: transparent;
-}
-
-.btn-warning:hover:not(:disabled),
-.btn-warning:focus-visible:not(:disabled) {
-    background: var(--warn-deep);
-    border-color: transparent;
 }
 
 .btn-sm {
@@ -115,31 +92,6 @@
     font-size: var(--text-sm);
     border-radius: var(--r-sm);
 }
-
-.btn-lg {
-    min-height: 48px;
-    padding: 12px 24px;
-    font-size: var(--text-md);
-}
-
-.btn-block { width: 100%; }
-
-.btn-link {
-    display: inline-flex;
-    align-items: center;
-    min-height: 44px;
-    padding: 0 2px;
-    background: none;
-    border: none;
-    color: var(--accent);
-    font-size: var(--text-sm);
-    font-weight: 600;
-}
-
-.btn-link:hover,
-.btn-link:focus-visible { text-decoration: underline; }
-
-.btn-link.danger { color: var(--danger); }
 
 .btn .icon { width: var(--icon-sm); height: var(--icon-sm); flex: none; }
 
@@ -183,8 +135,7 @@
 }
 
 .btn-primary.is-loading .btn-spinner::after,
-.btn-danger.is-loading .btn-spinner::after,
-.btn-warning.is-loading .btn-spinner::after {
+.auth-btn-primary.is-loading .btn-spinner::after {
     border-color: var(--spinner-track-ink);
     border-top-color: var(--ink);
 }
@@ -223,15 +174,10 @@
 
 .input:hover:not(:disabled),
 .select:hover:not(:disabled),
-.textarea:hover:not(:disabled) { border-color: var(--border-strong); }
-
+.textarea:hover:not(:disabled),
 .input:focus-visible,
 .select:focus-visible,
-.textarea:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-    border-color: var(--accent);
-}
+.textarea:focus-visible { border-color: var(--border-strong); }
 
 .textarea { resize: vertical; min-height: 88px; }
 
@@ -247,25 +193,9 @@
 
 .select option { background: var(--surface-2); color: var(--text); }
 
-.hint,
-.field-hint { font-size: var(--text-sm); color: var(--text-muted); line-height: 1.5; margin: 0; }
-.hint.is-ok { color: var(--success); }
+.hint { font-size: var(--text-sm); color: var(--text-muted); line-height: 1.5; margin: 0; }
+.hint.is-ok { color: var(--text-dim); }
 .hint.is-error { color: var(--danger); }
-
-.label-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 8px;
-}
-
-.row-end {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 10px;
-}
 
 .kbd {
     display: inline-block;
@@ -384,16 +314,18 @@
 
 .switch:hover .switch-track { border-color: var(--border-strong); }
 
+/* Enabled switch uses warm-grey luminance step-up, never a coloured fill. */
 .switch input:checked + .switch-track {
-    background: var(--success-soft);
-    border-color: var(--success-line);
+    background: var(--surface-4);
+    border-color: var(--accent);
 }
 
 .switch input:checked + .switch-track::after {
     transform: translateX(20px);
-    background: var(--success);
+    background: var(--accent);
 }
 
+/* Native input is visually hidden, so forward the single focus ring to track. */
 .switch input:focus-visible + .switch-track {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
@@ -448,14 +380,13 @@
 }
 
 .badge-accent  { background: var(--accent-soft);  border-color: var(--accent-line);  color: var(--accent); }
-.badge-success { background: var(--success-soft); border-color: var(--success-line); color: var(--success); }
 .badge-warn    { background: var(--warn-soft);    border-color: var(--warn-line);    color: var(--warn); }
-.badge-danger  { background: var(--danger-soft);  border-color: var(--danger-line);  color: var(--danger); }
+.badge-danger  { background: var(--surface-2);    border-color: var(--danger-line);  color: var(--text-strong); }
 
 .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; }
 
 /* --------------------------------------------------------------------------
-   Deterministic member avatars (8 warm earth tones, never photos)
+   Deterministic member avatars — 8 strictly warm-neutral pairs, never photos
    -------------------------------------------------------------------------- */
 
 .avatar {
@@ -477,14 +408,14 @@
 .avatar-md { width: 40px; height: 40px; font-size: var(--text-sm); }
 .avatar-lg { width: 52px; height: 52px; font-size: var(--text-lg); }
 
-.avatar[data-tone="sage"]       { background: var(--avatar-sage-bg);       color: var(--avatar-sage-fg); }
-.avatar[data-tone="clay"]       { background: var(--avatar-clay-bg);       color: var(--avatar-clay-fg); }
-.avatar[data-tone="sand"]       { background: var(--avatar-sand-bg);       color: var(--avatar-sand-fg); }
-.avatar[data-tone="moss"]       { background: var(--avatar-moss-bg);       color: var(--avatar-moss-fg); }
-.avatar[data-tone="terracotta"] { background: var(--avatar-terracotta-bg); color: var(--avatar-terracotta-fg); }
-.avatar[data-tone="umber"]      { background: var(--avatar-umber-bg);      color: var(--avatar-umber-fg); }
-.avatar[data-tone="olive"]      { background: var(--avatar-olive-bg);      color: var(--avatar-olive-fg); }
-.avatar[data-tone="rust"]       { background: var(--avatar-rust-bg);       color: var(--avatar-rust-fg); }
+.avatar[data-tone="stone"]  { background: var(--avatar-stone-bg);  color: var(--avatar-stone-fg); }
+.avatar[data-tone="taupe"]  { background: var(--avatar-taupe-bg);  color: var(--avatar-taupe-fg); }
+.avatar[data-tone="sand"]   { background: var(--avatar-sand-bg);   color: var(--avatar-sand-fg); }
+.avatar[data-tone="walnut"] { background: var(--avatar-walnut-bg); color: var(--avatar-walnut-fg); }
+.avatar[data-tone="umber"]  { background: var(--avatar-umber-bg);  color: var(--avatar-umber-fg); }
+.avatar[data-tone="clay"]   { background: var(--avatar-clay-bg);   color: var(--avatar-clay-fg); }
+.avatar[data-tone="sienna"] { background: var(--avatar-sienna-bg); color: var(--avatar-sienna-fg); }
+.avatar[data-tone="rust"]   { background: var(--avatar-rust-bg);   color: var(--avatar-rust-fg); }
 
 /* --------------------------------------------------------------------------
    Icon buttons — 44x44 effective hit area, crisp 16px optical glyph
@@ -570,7 +501,7 @@
 .toast-success { border-color: var(--success-line); } .toast-success .icon { color: var(--success); }
 .toast-error   { border-color: var(--danger-line); }  .toast-error   .icon { color: var(--danger); }
 .toast-warn    { border-color: var(--warn-line); }    .toast-warn    .icon { color: var(--warn); }
-.toast-info .icon { color: var(--accent); }
+.toast-info .icon { color: var(--text-dim); }
 
 /* --------------------------------------------------------------------------
    Modal / overlay — opaque surfaces, flat warm charcoal scrim
@@ -636,7 +567,7 @@
 }
 
 .modal-note-danger {
-    background: var(--danger-soft);
+    background: var(--surface-2);
     border-color: var(--danger-line);
 }
 
@@ -649,27 +580,6 @@
     gap: 10px;
     padding: 16px 24px;
     border-top: 1px solid var(--border-soft);
-}
-
-.btn-close {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex: none;
-    width: 44px;
-    height: 44px;
-    border-radius: var(--r-sm);
-    font-size: var(--text-xl);
-    line-height: 1;
-    color: var(--text-muted);
-    background: transparent;
-    transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
-}
-
-.btn-close:hover,
-.btn-close:focus-visible {
-    color: var(--text);
-    background: var(--surface-2);
 }
 
 /* --------------------------------------------------------------------------
@@ -803,8 +713,8 @@
 .lang-btn::before {
     content: "";
     position: absolute;
-    top: -9px;
-    bottom: -9px;
+    top: -10px;
+    bottom: -10px;
     left: 0;
     right: 0;
 }

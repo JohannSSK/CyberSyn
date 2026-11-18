@@ -206,13 +206,8 @@
 
 .auth-field input::placeholder { color: var(--text-muted); }
 
-.auth-field input:hover:not(:disabled) { border-color: var(--text-muted); }
-
-.auth-field input:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-    border-color: var(--accent);
-}
+.auth-field input:hover:not(:disabled),
+.auth-field input:focus-visible { border-color: var(--text-muted); }
 
 .auth-inline-msg {
     min-height: 1em;
@@ -222,7 +217,7 @@
     color: var(--danger);
 }
 
-/* Primary CTA: sage fill paired with warm near-black ink. */
+/* Primary CTA: warm-grey fill paired with near-black ink (no brand hue). */
 .auth-btn-primary {
     position: relative;
     display: inline-flex;
@@ -310,9 +305,6 @@
 .auth-link:hover::after,
 .auth-link:focus-visible::after { transform: scaleX(1); }
 
-.auth-link-danger:hover,
-.auth-link-danger:focus-visible { color: var(--danger); }
-
 .auth-context {
     display: flex;
     flex-wrap: wrap;
@@ -386,11 +378,12 @@
     text-align: center;
     font-family: inherit;
     color: var(--danger);
-    background: transparent;
-    border: 1px solid var(--danger);
+    background: var(--field-deep);
+    border: 1px solid var(--danger-line);
     border-radius: var(--r-md);
     cursor: pointer;
     transition: background var(--fast) var(--ease),
+                border-color var(--fast) var(--ease),
                 color var(--fast) var(--ease),
                 transform var(--fast) var(--ease);
 }
@@ -398,6 +391,7 @@
 .auth-btn-danger:hover:not(:disabled),
 .auth-btn-danger:focus-visible:not(:disabled) {
     background: var(--danger-soft);
+    border-color: var(--danger);
     color: var(--text-strong);
 }
 
@@ -427,7 +421,7 @@
     padding: 12px 14px;
     border-radius: var(--r-sm);
     border: 1px solid var(--danger-line);
-    background: var(--danger-soft);
+    background: var(--field-deep);
     font-size: var(--text-sm);
     line-height: 1.55;
     color: var(--text);

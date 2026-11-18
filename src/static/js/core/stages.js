@@ -136,6 +136,58 @@
             (parts.length > 2 ? ", " + parts[2] : "");
     }
 
+    /**
+     * Build the three-stage screening receipt (personal data -> context ->
+     * injection). Mid-flight enabled checks sit in neutral grey (`checking:
+     * true`); when the server answers, a block stops on `--danger`
+     * (`blockedStage`) and a clean finish settles on `--success` (`passedAll`).
+     */
+    function tracker(settings, outcome) {
+        var order = ["check1", "check2", "check3"];
+        var cfg = settings || {};
+        var state = outcome || {};
+        var node = document.createElement("div");
+        node.className = "stage-tracker";
+        node.setAttribute("role", "list");
+        node.setAttribute("aria-label", t("Local safety checks"));
+
+        var blockedIndex = state.blockedStage
+            ? order.indexOf(state.blockedStage)
+            : -1;
+
+        order.forEach(function (id, index) {
+            var enabled = cfg[id] !== false;
+            var step = document.createElement("span");
+            step.className = "stage-step";
+            step.setAttribute("role", "listitem");
+            step.setAttribute("data-stage", id);
+
+            if (!enabled) {
+                step.classList.add("is-off");
+            } else if (state.passedAll) {
+                step.classList.add("is-complete");
+            } else if (blockedIndex !== -1) {
+                if (index < blockedIndex) step.classList.add("is-passed");
+                else if (index === blockedIndex) step.classList.add("is-blocked");
+            } else if (state.checking) {
+                step.classList.add("is-current");
+            }
+
+            var dot = document.createElement("span");
+            dot.className = "stage-dot";
+            dot.setAttribute("aria-hidden", "true");
+            var labelNode = document.createElement("span");
+            labelNode.className = "stage-name";
+            labelNode.textContent = shortName(id);
+
+            step.appendChild(dot);
+            step.appendChild(labelNode);
+            node.appendChild(step);
+        });
+
+        return node;
+    }
+
     global.Stages = {
         keys: Object.keys(STAGES),
         has: function (stage) { return !!entry(stage); },
@@ -145,6 +197,7 @@
         checking: checking,
         verdict: verdict,
         detailLine: detailLine,
+        tracker: tracker,
         why: function (stage) {
             var found = entry(stage);
             return found ? t(found.why) : "";

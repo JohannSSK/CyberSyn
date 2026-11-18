@@ -121,11 +121,6 @@
 .tile-delta.is-good { color: var(--success); }
 .tile-delta.is-bad  { color: var(--danger); }
 
-.tile-accent  .tile-value { color: var(--accent); }
-.tile-success .tile-value { color: var(--success); }
-.tile-warn    .tile-value { color: var(--warn); }
-.tile-danger  .tile-value { color: var(--danger); }
-
 /* --------------------------------------------------------------------------
    Definition rows
    -------------------------------------------------------------------------- */
@@ -182,7 +177,7 @@
 }
 
 .form-msg:empty { margin-top: 0; }
-.form-msg.ok { color: var(--success); }
+.form-msg.ok { color: var(--text-dim); }
 
 /* --------------------------------------------------------------------------
    Shared page bar — matches the chat topbar height so the menu toggle sits
@@ -217,10 +212,7 @@
     .row-item .row-value { text-align: left; }
 }
 
-.settings-intro        { margin-bottom: 6px; }
-.settings-callout      { margin-top: 14px; }
-.profile-row           { padding: 3px 0; }
-.profile-signout-title { font-size: var(--text-md); font-weight: 600; color: var(--text-strong); }
+.settings-intro { margin-bottom: 6px; }
 
 .profile-head {
     display: flex;

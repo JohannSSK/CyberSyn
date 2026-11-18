@@ -93,14 +93,14 @@
 
 .topbar-status .dot { color: var(--success); }
 
-/* All three checks enabled: one of the six authorised sage placements. */
+/* All three checks enabled: low-tint semantic --success (status, not brand). */
 .topbar-status.is-all-on {
-    color: var(--accent);
-    background: var(--accent-soft);
-    border-color: var(--accent-line);
+    color: var(--success);
+    background: var(--success-soft);
+    border-color: var(--success-line);
 }
 
-.topbar-status.is-all-on .dot { color: var(--accent); }
+.topbar-status.is-all-on .dot { color: var(--success); }
 
 .topbar-status.off {
     color: var(--warn);
@@ -156,9 +156,7 @@
 .search-box input:hover { border-color: var(--border); }
 
 .search-box input:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-    border-color: var(--accent);
+    border-color: var(--border-strong);
     background: var(--surface-2);
 }
 
@@ -445,17 +443,14 @@ html[lang="el"] .bubble { line-height: 1.74; }
     resize: vertical;
 }
 
-.msg-edit textarea:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-    border-color: var(--accent);
-}
+.msg-edit textarea:focus-visible { border-color: var(--text-muted); }
 
 .msg-edit-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 
 /* --------------------------------------------------------------------------
-   Live three-stage screening tracker — reflects enabled checks in order
-   (personal data -> context -> injection) and resolves to accent or danger.
+   Three-stage screening receipt — neutral warm-grey dots in flight (personal
+   data -> context -> injection), resolving to --danger on a blocking stage
+   or --success on clean completion.
    -------------------------------------------------------------------------- */
 
 .msg-pending {
@@ -500,11 +495,11 @@ html[lang="el"] .bubble { line-height: 1.74; }
 }
 
 .stage-step.is-current {
-    color: var(--text-strong);
+    color: var(--text);
 }
 
 .stage-step.is-current .stage-dot {
-    border-color: var(--accent);
+    border-color: var(--text-dim);
     background: var(--accent-soft);
 }
 
@@ -515,6 +510,15 @@ html[lang="el"] .bubble { line-height: 1.74; }
 .stage-step.is-passed .stage-dot {
     border-color: var(--accent);
     background: var(--accent);
+}
+
+.stage-step.is-complete {
+    color: var(--text);
+}
+
+.stage-step.is-complete .stage-dot {
+    border-color: var(--success);
+    background: var(--success);
 }
 
 .stage-step.is-blocked {
@@ -546,13 +550,13 @@ html[lang="el"] .bubble { line-height: 1.74; }
     padding: 18px 20px;
     border-radius: var(--r-lg);
     border: 1px solid var(--danger-line);
-    background: var(--danger-soft);
+    background: var(--surface-2);
 }
 
 .blocked-tracker {
     margin-bottom: 12px;
     padding-bottom: 10px;
-    border-bottom: 1px solid var(--danger-line);
+    border-bottom: 1px solid var(--border);
 }
 
 .blocked-head {
@@ -603,7 +607,8 @@ html[lang="el"] .bubble { line-height: 1.74; }
     gap: 8px;
     padding: 8px 10px;
     border-radius: var(--r-sm);
-    background: var(--code-inline-bg);
+    background: var(--surface);
+    border: 1px solid var(--border-soft);
     font-size: var(--text-sm);
     font-variant-numeric: tabular-nums;
 }
@@ -679,7 +684,7 @@ html[lang="el"] .bubble { line-height: 1.74; }
 .override-panel {
     margin-top: 12px;
     padding-top: 12px;
-    border-top: 1px solid var(--danger-line);
+    border-top: 1px solid var(--border);
 }
 
 .blocked-next {
@@ -755,7 +760,7 @@ mark {
 .composer-box:focus-within {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
-    border-color: var(--accent);
+    border-color: var(--border-strong);
 }
 
 .composer-box textarea {
