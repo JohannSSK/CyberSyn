@@ -2,7 +2,7 @@
 #
 # Install everything CyberSyn needs and create its virtual environment.
 #
-#   ./setup.sh          then  ./run.sh
+#   ./setup.sh          then  cybersyn -p 8000
 #
 # Works on glibc Linux and on Apple Silicon macOS. Windows
 # is not supported: use WSL, or Docker (docker compose up --build).
@@ -18,12 +18,12 @@ if [ -z "${BASH_VERSION:-}" ]; then
     exit 1
 fi
 
-set -e
-
 if [ "${BASH_SOURCE[0]}" != "$0" ]; then
     echo "setup.sh must be executed, not sourced. Use: ./setup.sh" >&2
-    return 1 2>/dev/null || exit 1
+    return 1
 fi
+
+set -e
 
 # Resolve this script's own directory, following symlinks. `readlink -f` is
 # a GNU extension and macOS does not have it, so walk the links by hand;
@@ -64,6 +64,7 @@ esac
 # system Python. In particular, Arch's current `python` may be too new.
 # ---------------------------------------------------------------------------
 
+# shellcheck source=tools/local_python.sh disable=SC1091
 . "$ROOT/tools/local_python.sh"
 
 say "==> 1. Looking for Python 3.11–3.13..."
@@ -121,7 +122,7 @@ HINT
 fi
 
 # ---------------------------------------------------------------------------
-# 4. Verify imports, model weights and CPU inference together. A dependency
+# 5. Verify imports, model weights and CPU inference together. A dependency
 #    resolver or a downloaded config alone cannot tell if the models work.
 # ---------------------------------------------------------------------------
 
@@ -130,14 +131,46 @@ say "==> 5. Preparing the project model cache and verifying CPU inference..."
 "$VENV_PY" src/MLscripts/model_cache.py --download || die "model verification failed; check the weights, dependencies and network, then rerun ./setup.sh"
 
 # ---------------------------------------------------------------------------
-# Where to go next.
+# Install the standalone entry point, baking in the resolved checkout path.
 # ---------------------------------------------------------------------------
 
-cat <<'NEXT'
+install_system_launcher() {
+    command -v sudo >/dev/null 2>&1 || return 1
+    sudo -n install -m 0755 "$1" "$2" 2>/dev/null && return 0
+    # Only offer a password prompt for an attended setup at a terminal.
+    [[ "$3" != 1 && -t 0 && -t 2 ]] || return 1
+    sudo install -m 0755 "$1" "$2"
+}
 
-==> Setup complete.
+install_launcher() (
+    launcher=$(mktemp "${TMPDIR:-/tmp}/cybersyn.XXXXXX") || die "could not stage the cybersyn launcher"
+    trap 'rm -f "$launcher"' EXIT
+    {
+        printf '#!/usr/bin/env bash\nDEFAULT_CYBERSYN_HOME=%q\n' "$ROOT"
+        cat "$ROOT/tools/cybersyn.sh"
+    } > "$launcher"
 
-    ./run.sh
+    unattended=${CYBERSYN_UNATTENDED:-0}
+    case "${CI:-}" in true|TRUE|1) unattended=1 ;; esac
+    system_launcher=/usr/local/bin/cybersyn
+    start='cybersyn -p 8000'
+    if install_system_launcher "$launcher" "$system_launcher" "$unattended"; then
+        say "==> Installed the cybersyn launcher at $system_launcher"
+    elif [ "$unattended" = 1 ]; then
+        printf 'Warning: skipping the cybersyn launcher in unattended setup (sudo unavailable).\n' >&2
+        start='CYBERSYN_PORT=8000 ./run.sh'
+    elif [ -n "${HOME:-}" ] && mkdir -p "$HOME/.local/bin" &&
+            install -m 0755 "$launcher" "$HOME/.local/bin/cybersyn"; then
+        say "==> Installed the cybersyn launcher at $HOME/.local/bin/cybersyn"
+        say 'Add this to your shell profile (or run it in this shell):'
+        # Print the command for the user's shell, not our expanded PATH.
+        # shellcheck disable=SC2016
+        say '    export PATH="$HOME/.local/bin:$PATH"'
+    else
+        printf 'Warning: could not install the cybersyn launcher. Use ./run.sh from the checkout.\n' >&2
+        start='CYBERSYN_PORT=8000 ./run.sh'
+    fi
+    printf '\n==> Setup complete. Start CyberSyn with:\n\n%s\n' "$start"
+)
 
-No activation is needed in this terminal or any later one.
-NEXT
+install_launcher

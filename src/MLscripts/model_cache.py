@@ -82,7 +82,7 @@ def _configured_cache():
     return str(MODEL_CACHE)
 
 
-def _load_zero_shot(*, download=False):
+def _load_zero_shot(*, download=False, allow_legacy_cache=True):
     from huggingface_hub import snapshot_download
     from transformers import logging, pipeline
 
@@ -107,9 +107,9 @@ def _load_zero_shot(*, download=False):
                 "*.json", "merges.txt", "*.safetensors", "pytorch_model*.bin",
             ])
             return load_local(cache)
-        if not os.environ.get("CYBERSYN_MODEL_CACHE"):
-            # Existing native installs may still have the model in HF's
-            # original cache. Use it if present, never download into it.
+        if allow_legacy_cache and not os.environ.get("CYBERSYN_MODEL_CACHE"):
+            # Keep the runtime fallback for older installs. Setup and the
+            # startup probe require a complete snapshot in the project cache.
             try:
                 return load_local(None)
             except (OSError, ValueError):
@@ -206,14 +206,33 @@ def verify(*, download=False):
         if "ner" not in get_spacy(name).pipe_names:
             raise RuntimeError(f"{name}: missing NER pipeline")
         run_ner(name, "A short model check.")
-    classifier = _load_zero_shot(download=True) if download else get_zero_shot()
+    classifier = _load_zero_shot(download=download, allow_legacy_cache=False)
     result = classifier("A friendly greeting.", candidate_labels=["greeting", "question"])
     if len(result["scores"]) != 2:
         raise RuntimeError("DistilBART did not return classification scores.")
     print(f"Verified CPU inference: {_EN}, {_EL}, {ZERO_SHOT_MODEL}")
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser(description="Verify local scanner models.")
-    parser.add_argument("--download", action="store_true", help="prepare missing weights for setup")
-    verify(download=parser.parse_args().download)
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--download", action="store_true", help="prepare missing weights for setup")
+    mode.add_argument("--verify", action="store_true", help="test the project cache without downloading")
+    if parser.parse_args().download:
+        verify(download=True)
+        return 0
+
+    # Set these before importing torch/Transformers. A one-sentence probe
+    # does not benefit from spawning a worker per CPU on large machines.
+    os.environ.update(HF_HUB_OFFLINE="1", OMP_NUM_THREADS="2", MKL_NUM_THREADS="2")
+    try:
+        verify(download=False)
+    except Exception as exc:
+        reason = next((line.strip() for line in str(exc).splitlines() if line.strip()), "no details")
+        print(f"Model verification failed ({type(exc).__name__}): {reason[:300]}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

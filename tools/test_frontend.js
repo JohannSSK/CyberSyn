@@ -1218,6 +1218,9 @@ async function testDraftRecovery() {
     win.I18n.set("el");
     check("screening diagnostics translate without losing the timeout or failed checks", /Δεν στάλθηκε/.test(notice.textContent) &&
         /λείπουν εξαρτήσεις/.test(notice.textContent) && /180 δευτ\./.test(notice.textContent) && /χωρίς έγκυρο αποτέλεσμα/.test(notice.textContent));
+    const broken = win.I18n.t("Not sent — a check could not run (check1: scanner installation is broken — ask your administrator to run ./setup.sh).");
+    check("the broken installation message translates and keeps the repair command",
+        broken.includes("η εγκατάσταση των ελέγχων δεν λειτουργεί") && broken.includes("./setup.sh"));
     win.I18n.set("en");
 
     send(raw);

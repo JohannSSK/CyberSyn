@@ -5,8 +5,8 @@ This module builds the application and nothing else: configuration, schema,
 blueprints, error handling. Every route lives in `src/routes/`, every piece
 of domain logic in its own module, so this file stays readable top to bottom.
 
-Run:    python3 src/app.py
-Seed:   python3 src/app.py seed
+Run:    ./setup.sh, then cybersyn -p 8000
+Seed:   cybersyn seed
 Docker: docker compose up --build
 """
 

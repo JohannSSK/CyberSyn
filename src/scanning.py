@@ -2,8 +2,7 @@
 
 The fast path calls each scanner in this process, so the models stay loaded
 between prompts. The subprocess protocol survives as a fallback for when a
-scanner cannot be imported — slower, but it keeps the app working on a
-checkout whose models are missing.
+scanner can run standalone but cannot be imported in-process.
 
 Two rules hold everything else up:
 
@@ -19,11 +18,13 @@ check could not be run.
 """
 
 import json
+import logging
 import os
 import subprocess
 import sys
 import threading
 import time
+from queue import Empty, SimpleQueue
 
 import scanners as registry
 
@@ -48,12 +49,13 @@ def screening_budget(prompt):
 class _ScannerFailure(ChatError):
     """A runner failure with a reason authored here, never copied from a scanner."""
 
-    def __init__(self, stage, reason):
+    def __init__(self, stage, reason, *, dependency_error=None):
         super().__init__(f"{stage}: {reason}", 503)
         self.reason = reason
+        self.dependency_error = dependency_error
 
 
-_DEPENDENCIES = "missing dependencies — ask your administrator to check the scanner installation"
+_DEPENDENCIES = "scanner installation is broken — ask your administrator to run ./setup.sh"
 _SETUP = "ask your administrator to check the gateway setup"
 
 
@@ -75,15 +77,13 @@ def build_block_info(stage, result):
     }
 
 
-def _missing_dependencies(text):
-    return any(kind + ":" in (text or "") for kind in ("ModuleNotFoundError", "ImportError"))
-
-
-def _why(text):
-    """Explain a subprocess failure without copying arbitrary scanner output."""
-    if _missing_dependencies(text):
-        return _DEPENDENCIES
-    return f"scanner exited without a usable verdict — {_SETUP}"
+def _import_error_type(text):
+    """Recognise an import failure without copying scanner output."""
+    for line in reversed((text or "").splitlines()):
+        kind = line.partition(":")[0].strip()
+        if kind in ("ModuleNotFoundError", "ImportError"):
+            return kind
+    return None
 
 
 def find_result_json(text):
@@ -166,13 +166,17 @@ def _spawn(stage, prompt, timeout, policy):
     except UnicodeError:
         raise _ScannerFailure(stage, f"scanner exited without a usable verdict — {_SETUP}") from None
 
-    result = find_result_json(proc.stdout or "")
-    if result is None or proc.returncode:
-        # Fail closed: no verdict means no permission to send. The reason is
-        # carried through so the message says what to fix rather than just
-        # that something broke.
-        raise _ScannerFailure(stage, _why(proc.stderr or proc.stdout))
-    return result
+    if not proc.returncode:
+        result = find_result_json(proc.stdout or "")
+        if result is not None:
+            return result
+
+    # Fail closed. Do not attach stderr (or other raw scanner output) to
+    # the exception or the log; it could contain parts of the prompt.
+    kind = _import_error_type(proc.stderr) or _import_error_type(proc.stdout)
+    if kind:
+        raise _ScannerFailure(stage, _DEPENDENCIES, dependency_error=kind)
+    raise _ScannerFailure(stage, f"scanner exited without a usable verdict — {_SETUP}")
 
 
 def run_check(stage, prompt, timeout=CHECK_TIMEOUT, stop=None, **policy):
@@ -192,13 +196,15 @@ def run_check(stage, prompt, timeout=CHECK_TIMEOUT, stop=None, **policy):
     if not available:
         if SCANNER_FALLBACK:
             return _run_subprocess(stage, prompt, remaining, **policy)
-        reason = _DEPENDENCIES if _missing_dependencies(registry.disabled_reason(stage)) else (
-            f"scanner could not be loaded — {_SETUP}")
-        raise _ScannerFailure(stage, reason)
+        kind = _import_error_type(registry.disabled_reason(stage))
+        if kind:
+            raise _ScannerFailure(stage, _DEPENDENCIES, dependency_error=kind)
+        raise _ScannerFailure(stage, f"scanner could not be loaded — {_SETUP}")
     try:
         return registry.run(stage, prompt, stop=stop, **policy)
-    except ImportError:
-        raise _ScannerFailure(stage, _DEPENDENCIES) from None
+    except ImportError as exc:
+        kind = "ModuleNotFoundError" if isinstance(exc, ModuleNotFoundError) else "ImportError"
+        raise _ScannerFailure(stage, _DEPENDENCIES, dependency_error=kind) from None
     except OSError:
         raise _ScannerFailure(stage, f"scanner could not load its model files — {_SETUP}") from None
     except Exception:
@@ -262,6 +268,12 @@ def _hits(stage, prompt, result, actions, *, legacy=False):
     return verdicts
 
 
+def _screening_error(failures):
+    detail = "; ".join(f"{stage}: {reason}" for stage, reason in failures.items())
+    prefix = "a check could not run" if len(failures) == 1 else "checks could not run"
+    return ChatError(f"Not sent — {prefix} ({detail}).", 503, error_code="screening_failed")
+
+
 def screen(prompt, flags):
     """Run the enabled scanners in parallel against one deadline.
 
@@ -281,17 +293,17 @@ def screen(prompt, flags):
 
     budget = screening_budget(prompt)
     deadline = time.monotonic() + budget
-    outcomes = {}
-    blocked = threading.Event()
+    completed = SimpleQueue()
+    stop_detail = threading.Event()
 
     def stopped():
-        return blocked.is_set() or time.monotonic() >= deadline
+        return stop_detail.is_set() or time.monotonic() >= deadline
 
     def work(stage):
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             return
-        hits = failure = None
+        hits = failure = dependency_error = None
         try:
             policy = {}
             stage_actions = {actions[stage]}
@@ -304,33 +316,44 @@ def screen(prompt, flags):
             hits = _hits(stage, prompt, result, actions, legacy=legacy)
         except _ScannerFailure as exc:
             failure = exc.reason
+            dependency_error = exc.dependency_error
         except Exception:
             # Don't echo prompt snippets, scanner output or arbitrary exceptions.
             failure = f"scanner returned an invalid result — {_SETUP}"
         finished = time.monotonic()
-        outcomes[stage] = (finished, hits, failure)
-        # A successful block can cut short extra detail. A check failure does
-        # not cancel its peers: let them report any failures of their own.
-        if finished < deadline and hits and "block" in hits:
-            blocked.set()
+        # A block or a confirmed broken installation can cut short extra
+        # detail. For other failures, still let peers report their outcomes.
+        if finished < deadline and (dependency_error or (hits and "block" in hits)):
+            stop_detail.set()
+        completed.put((stage, finished, hits, failure, dependency_error))
 
-    threads = []
     for stage in enabled:
         thread = threading.Thread(target=work, args=(stage,), daemon=True, name=f"cybersyn-{stage}")
         try:
             thread.start()
         except RuntimeError:
-            outcomes[stage] = (time.monotonic(), None, "scanner worker could not be started — try again")
-        else:
-            threads.append(thread)
-    for thread in threads:
-        thread.join(max(0.0, deadline - time.monotonic()))
+            completed.put((stage, time.monotonic(), None, "scanner worker could not be started — try again", None))
+
+    # Receive outcomes as they arrive so an import failure never waits for
+    # an earlier, busy scanner. Normal verdict precedence is still decided
+    # in configured order below, not by the order workers finish.
+    outcomes = {}
+    for _ in enabled:
+        try:
+            stage, finished, hits, failure, dependency_error = completed.get(
+                timeout=max(0.0, deadline - time.monotonic()))
+        except Empty:
+            break
+        if finished < deadline and dependency_error:
+            logging.getLogger(__name__).warning("Scanner dependency failure (%s)", dependency_error)
+            raise _screening_error({stage: failure})
+        outcomes[stage] = (finished, hits, failure)
 
     results, failures = {}, {}
     for stage in enabled:
         outcome = outcomes.get(stage)
-        # A scanner can return a partial result on cancellation. Accept that
-        # only after a block, never if it stopped because the clock ran out.
+        # A scanner can return a partial result on cancellation. We already
+        # refused on dependency failure above; never accept a late verdict.
         if outcome is None or outcome[0] >= deadline:
             failures[stage] = _timeout_reason(budget)
         elif outcome[2]:
@@ -339,9 +362,7 @@ def screen(prompt, flags):
             results[stage] = outcome[1]
 
     if failures:
-        detail = "; ".join(f"{stage}: {reason}" for stage, reason in failures.items())
-        prefix = "a check could not run" if len(failures) == 1 else "checks could not run"
-        raise ChatError(f"Not sent — {prefix} ({detail}).", 503, error_code="screening_failed")
+        raise _screening_error(failures)
 
     # Scanner order, not completion order, determines the primary finding.
     ordered = [results[stage] for stage in enabled]
