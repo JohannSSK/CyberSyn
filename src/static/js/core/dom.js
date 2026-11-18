@@ -127,7 +127,7 @@
     function timeAgo(iso) {
         if (!iso) return "";
         var raw = String(iso);
-        // SQLite datetime('now') writes bare UTC without a trailing Z.
+        // SQLite datetime('now') writes bare UTC with no Z suffix.
         if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(raw)) {
             raw = raw.replace(" ", "T") + "Z";
         }
@@ -173,7 +173,7 @@
         return isNaN(d.getTime()) ? null : d;
     }
 
-    /** Absolute UTC time for transcripts and audit trails. */
+    /** Absolute UTC time for transcripts and audit logs. */
     function stamp(iso) {
         if (!iso) return "";
         var d = parseUTC(iso);
@@ -202,6 +202,30 @@
         } catch (err) {
             return d.toISOString().slice(11, 16) + " UTC";
         }
+    }
+
+    /** The calendar day of a message, as the stream's divider prints it.
+     *  English uses the short month ("18 Nov 2024"); Greek takes the full
+     *  genitive month ("18 Νοεμβρίου 2024") straight from the runtime. */
+    function dayStamp(iso) {
+        var d = parseUTC(iso);
+        if (!d) return "";
+        try {
+            return new Intl.DateTimeFormat(locale(), {
+                day: "numeric",
+                month: isGreek() ? "long" : "short",
+                year: "numeric",
+                timeZone: "UTC"
+            }).format(d);
+        } catch (err) {
+            return d.toISOString().slice(0, 10);
+        }
+    }
+
+    /** UTC day key used to decide where a date divider belongs. */
+    function dayKey(iso) {
+        var d = parseUTC(iso);
+        return d ? d.toISOString().slice(0, 10) : "";
     }
 
     function plural(n, one, many) {
@@ -288,6 +312,7 @@
         paintAvatar: paintAvatar, avatarHTML: avatarHTML,
         formatNumber: formatNumber, formatPercent: formatPercent,
         timeAgo: timeAgo, stamp: stamp, clockTime: clockTime,
+        dayStamp: dayStamp, dayKey: dayKey, parseUTC: parseUTC,
         plural: plural, debounce: debounce, copyText: copyText,
         highlightText: highlightText
     };

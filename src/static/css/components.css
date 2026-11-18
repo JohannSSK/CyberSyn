@@ -230,7 +230,7 @@
     cursor: not-allowed;
 }
 
-/* Neutralise browser autofill plates so filled fields stay warm charcoal. */
+/* Neutralise browser autofill plates so filled fields stay on the slate step. */
 input:-webkit-autofill,
 input:-webkit-autofill:hover,
 input:-webkit-autofill:focus,
@@ -243,10 +243,10 @@ input:-webkit-autofill:active {
 
 .textarea { resize: vertical; min-height: 88px; }
 
-/* Chevron stroke uses --text-muted (#a8a298), URL-encoded for SVG data URI. */
+/* Chevron stroke uses --text-muted (#8d93a1), URL-encoded for SVG data URI. */
 .select {
     appearance: none;
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23a8a298' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M6 9l6 6 6-6'/></svg>");
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238d93a1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M6 9l6 6 6-6'/></svg>");
     background-repeat: no-repeat;
     background-position: right 12px center;
     padding-right: 40px;
@@ -381,7 +381,7 @@ input:-webkit-autofill:active {
     cursor: not-allowed;
 }
 
-/* Enabled switch uses warm-grey luminance step-up, never a coloured fill. */
+/* Enabled switch uses a luminance step-up, never a coloured fill. */
 .switch input:checked + .switch-track {
     background: var(--surface-4);
     border-color: var(--accent);

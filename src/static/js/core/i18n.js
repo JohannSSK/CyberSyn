@@ -473,6 +473,10 @@
         "Write a message (Enter to send, Shift+Enter for a new line)":
             "Γράψτε ένα μήνυμα (Enter για αποστολή, Shift+Enter για νέα γραμμή)",
         "Send message": "Αποστολή μηνύματος",
+        "A conversation with CyberSyn": "Μια συζήτηση με το CyberSyn",
+        "Type a message…": "Γράψτε ένα μήνυμα…",
+        "Shift + Enter for a new line": "Shift + Enter για νέα γραμμή",
+        "Chat actions": "Ενέργειες συνομιλίας",
         "Checked on this computer before anything reaches the AI.":
             "Ελέγχεται σε αυτόν τον υπολογιστή πριν φτάσει οτιδήποτε στην ΤΝ.",
         "No AI is wired up for this workspace yet — ask your administrator to add a provider in":
@@ -1322,6 +1326,9 @@
             pending = true;
             (global.requestAnimationFrame || setTimeout)(function () {
                 pending = false;
+                /* The document can be gone by the time a queued frame runs
+                   (teardown, or a page closed mid-frame). */
+                if (!global.document || !global.document.body) return;
                 applyRoot(document.body);
             }, 0);
         });
