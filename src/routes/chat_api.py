@@ -9,7 +9,7 @@ from chat_store import bump_answered, get_chat, normalise_title, replace_answer,
 from config import DB_FILE, DEFAULT_MODEL, MAX_PROMPT_CHARS, ROUTES
 from db import get_db
 from errors import ApiError, ChatError
-from members import employee_row, get_settings, not_found_employee_message, provider_and_base
+from members import context_messages, employee_row, get_settings, not_found_employee_message, provider_and_base
 from policy import action_settings, redaction_only
 from providers import get as get_provider
 from redaction import TAGS, TAG_ALIASES, restore, retained_redactions
@@ -19,6 +19,9 @@ from shadow_ai import resolved_provider, unapproved_destination
 from web import activity_detail, chat_response, get_json_dict, non_empty_str, to_int
 
 chat_api = Blueprint("chat_api", __name__)
+# An outbound request stays bounded even when the saved context is large:
+# whole earlier messages are dropped, oldest first, past this budget.
+CONTEXT_MAX_CHARS = 24000
 AUDIT_CAUSES = TAGS | TAG_ALIASES.keys() | {
     "PROMPT_INJECTION", "legal contract or NDA", "internal company financial data",
     "confidential HR, payroll, or customer records", "leaked internal company document or confidential record",
@@ -60,7 +63,44 @@ def _bool(data, field):
     return value
 
 
-def _exchange(data, pid, eid, prompt, chat_id, entry, title):
+def _history(chat, entry, limit):
+    """Earlier messages from this chat, oldest first, for the next request.
+
+    Only exchanges that were actually sent are kept in the chat store, so a
+    blocked prompt can never travel to the provider this way. The stored
+    prompt is already the sanitized text that went out and the answer is the
+    reply that came back, so replaying them reveals nothing new. The limit is
+    applied in whole exchanges, so an odd number rounds down.
+    """
+    if not chat or limit <= 0:
+        return []
+    items = chat.get("messages") or []
+    if entry is not None:
+        index = next((i for i, item in enumerate(items)
+                      if item.get("id") == entry.get("id")), None)
+        if index is None:
+            return []
+        items = items[:index]
+
+    history = []
+    budget = 0
+    for item in reversed(items):
+        prompt, answer = item.get("prompt"), item.get("answer")
+        if not isinstance(prompt, str) or not isinstance(answer, str):
+            continue
+        if not prompt or not answer:
+            continue
+        pair = [{"role": "user", "content": prompt},
+                {"role": "assistant", "content": answer}]
+        size = len(prompt) + len(answer)
+        if len(history) + 2 > limit or budget + size > CONTEXT_MAX_CHARS:
+            break
+        history[:0] = pair
+        budget += size
+    return history
+
+
+def _exchange(data, pid, eid, prompt, chat_id, entry, title, chat=None):
     confirm_warn = _bool(data, "confirm_warn")
     bypass = _bool(data, "bypass")
     admin = _authorise_override(data, pid) if bypass else None
@@ -112,7 +152,9 @@ def _exchange(data, pid, eid, prompt, chat_id, entry, title):
 
     # Bracketed tokens are sent verbatim. No reverse map or original value
     # is given to the provider (not even an instruction containing one).
-    answer = complete(api_key, model, sent, api_base=base, provider=provider)
+    history = _history(chat, entry, context_messages(saved))
+    answer = complete(api_key, model, sent, api_base=base, provider=provider,
+                      history=history)
     stored_answer = redaction.un_restored_reply(answer) if redaction else answer
     reply = stored_answer
     if redaction and saved["restore_redactions"]:
@@ -195,7 +237,7 @@ def _handle(*, regenerate=False):
             title = normalise_title(data["title"])
             if not title:
                 raise ChatError("Title must be non-empty, valid UTF-8 text.", 400)
-        return _exchange(data, pid, eid, prompt, chat_id, entry, title)
+        return _exchange(data, pid, eid, prompt, chat_id, entry, title, chat)
     except ApiError as exc:
         return chat_response(True, message=exc.message, status=exc.status, **exc.payload)
 

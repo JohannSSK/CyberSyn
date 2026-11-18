@@ -127,6 +127,10 @@
                                 <p>Sent messages and replies are stored in the local database for your account. For redacted exchanges, only the sanitized prompt and unrestored reply are saved. Administrator screens do not load your conversations.</p>
                             </div>
                             <div class="privacy-row">
+                                <strong>How much context is sent</strong>
+                                <p>Each message is sent to the provider on its own unless an administrator raises the conversation context in <a href="/settings">Settings</a>. When it is raised, the chosen number of earlier questions and answers travels with the new message. Only the new message is screened again; the earlier ones were already screened and redacted before they were first sent. Blocked prompts are never saved, so they can never be replayed.</p>
+                            </div>
+                            <div class="privacy-row">
                                 <strong>What administrators can see</strong>
                                 <p>Administrator pages show counts, rule categories and timestamps. Prompt previews are off by default. If enabled, only ordinary messages may leave a preview in the local audit log; blocked, warned, redacted and overridden text never does.</p>
                             </div>

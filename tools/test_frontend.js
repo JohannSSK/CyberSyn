@@ -1512,7 +1512,8 @@ async function testSignedInScreens() {
             return {
                 action_check1: body.action_check1 || "block", action_check2: body.action_check2 || "allow", action_check3: "warn",
                 action_code: records[body.Employee_id], restore_redactions: !!body.restore_redactions, MODEL_NAME: "Settings",
-                API_KEY_MASK: body.CLEAR_API_KEY ? "" : "****1234", PROVIDER: "openai", API_BASE: base
+                API_KEY_MASK: body.CLEAR_API_KEY ? "" : "****1234", PROVIDER: "openai", API_BASE: base,
+                CONTEXT_MESSAGES: body.CONTEXT_MESSAGES === undefined ? 0 : body.CONTEXT_MESSAGES
             };
         }
         if (key === "PROVIDERS") return { providers: ["auto", "openai", "custom"].map((k) => ({ key: k, label: k })) };
@@ -1568,6 +1569,25 @@ async function testSignedInScreens() {
     check("removing the saved key sends an approved clear operation", first.posted.some((r) => r.body.CLEAR_API_KEY && r.body.admin_token === "test-grant-4"));
     check("saving the connection and removing its key leave unsaved policy intact", first.$("#setting-check2").value === "warn" &&
         first.$("#checks-state").textContent === "Unsaved changes" && !("action_check2" in connection));
+
+    check("conversation context starts singular with four wider choices", first.$("#setting-context").value === "0" &&
+        first.win.document.querySelectorAll("#setting-context option").length === 5 &&
+        first.$("#context-state").textContent === "");
+    first.win.I18n.set("el");
+    check("the context choices are translated without changing their values", first.$("#setting-context option:checked").textContent !== "This message only" &&
+        first.$("#setting-context").value === "0");
+    first.win.I18n.set("en");
+    first.change("#setting-context", "6");
+    check("context has its own unsaved state", first.$("#context-state").textContent === "Unsaved changes" &&
+        first.$("#checks-state").textContent === "Unsaved changes");
+    first.$("#context-also-default").checked = true;
+    first.$("#btn-save-context").click();
+    await tick();
+    const context = first.posted.filter((r) => r.key === "SETTINGS" && "CONTEXT_MESSAGES" in r.body).pop().body;
+    check("saving the context is approved, sent on its own and echoed back", context.CONTEXT_MESSAGES === 6 &&
+        context.also_default === true && !!context.admin_token && first.approvals.at(-1).fresh &&
+        !("action_check2" in context) && first.$("#setting-context").value === "6" &&
+        first.$("#context-state").textContent === "Saved." && !first.$("#context-also-default").checked);
     first.win.close(); other.win.close();
 
     const workspace = screenFixture("workspace", (key, body) => {

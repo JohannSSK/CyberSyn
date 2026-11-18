@@ -183,6 +183,7 @@ docker compose down -v            # stop and delete BOTH volumes (irreversible)
 2. Sign in on the **Administrator** tab to open Shadow AI, Statistics or Team, or to add and remove members. The browser restores a valid administrator session on reload.
 3. Members can sign in directly from **Team member** on their own devices. Enter the administrator username as **Workspace** when multiple workspaces exist. **Switch to member sign-in** pre-fills it; a successful member login revokes the browser's admin session and page grant.
 4. In **Settings** from Chat, choose the provider/model, save the key with administrator approval, and set each rule's action. Both “also save” options affect future members only. Saving a default connection includes its key.
+5. **Conversation context** in Settings decides how much of a chat travels with the next message. It starts at *this message only*, one message per request. Raising it replays whole earlier exchanges that were already sent and screened; the new message is the only one screened again, and blocked prompts are never stored or replayed.
 
 Docker runs **Gunicorn**, one worker with eight threads by default; spaCy and DistilBART are loaded once
 per worker. The first build needs network access to the CPU wheel index, PyPI, GitHub and Hugging Face.

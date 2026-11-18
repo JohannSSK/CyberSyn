@@ -31,6 +31,7 @@
     var rules = Object.keys(Dom.policyFields);
     var savedMask = "";
     var dirty = false;
+    var contextDirty = false;
     var connectionDirty = false;
     var savedConnection = { provider: "auto", base: "", hasKey: false };
     var discoveryVersion = 0;
@@ -42,6 +43,10 @@
         block_code: $("#setting-block-code"),
         restore: $("#setting-restore-redactions"),
         alsoDefault: $("#also-default"),
+        context: $("#setting-context"),
+        contextDefault: $("#context-also-default"),
+        saveContext: $("#btn-save-context"),
+        contextState: $("#context-state"),
         connectionDefault: $("#connection-also-default"),
         clearKey: $("#btn-clear-key"),
         consequence: $("#checks-consequence"),
@@ -108,6 +113,7 @@
 
     var SAVED_FLASH_MS = 1500;
     var checksSavedTimer = null;
+    var contextSavedTimer = null;
     var connectionSavedTimer = null;
 
     function clearChecksSaved() {
@@ -125,6 +131,30 @@
             checksSavedTimer = null;
             if (!dirty && nodes.checksState) nodes.checksState.textContent = "";
         }, SAVED_FLASH_MS);
+    }
+
+    function clearContextSaved() {
+        if (contextSavedTimer) {
+            clearTimeout(contextSavedTimer);
+            contextSavedTimer = null;
+        }
+    }
+
+    function flashContextSaved() {
+        if (!nodes.contextState) return;
+        clearContextSaved();
+        contextDirty = false;
+        nodes.contextState.textContent = t("Saved.");
+        contextSavedTimer = setTimeout(function () {
+            contextSavedTimer = null;
+            if (nodes.contextState) nodes.contextState.textContent = "";
+        }, SAVED_FLASH_MS);
+    }
+
+    function markContextDirty() {
+        clearContextSaved();
+        contextDirty = true;
+        if (nodes.contextState) nodes.contextState.textContent = t("Unsaved changes");
     }
 
     function flashConnectionSaved() {
@@ -175,6 +205,20 @@
         nodes.checksState.textContent = "";
     }
 
+    function applyContext(data) {
+        if (!nodes.context) return;
+        var wanted = String(Number(data.CONTEXT_MESSAGES) || 0);
+        if (!Array.from(nodes.context.options).some(function (o) { return o.value === wanted; })) {
+            var extra = Dom.el("option", "", wanted + " " + t("previous messages"));
+            extra.value = wanted;
+            nodes.context.appendChild(extra);
+        }
+        nodes.context.value = wanted;
+        clearContextSaved();
+        contextDirty = false;
+        if (nodes.contextState) nodes.contextState.textContent = "";
+    }
+
     function applyConnection(data) {
         if (data.MODEL_NAME && !Array.from(nodes.model.options).some(function (o) {
             return o.value === data.MODEL_NAME;
@@ -201,6 +245,7 @@
     function load() {
         return Api.post("SETTINGS", {}).then(function (data) {
             applyChecks(data);
+            applyContext(data);
             applyConnection(data);
             return data;
         });
@@ -239,6 +284,31 @@
                 nodes.alsoDefault.checked = false;
                 flashChecksSaved();
                 Loading.toast("Safety checks saved.", "success");
+            }).catch(function (err) {
+                Loading.toast(err.message, "error");
+            });
+        }).catch(function () { });
+    }
+
+    /* How many earlier messages travel with the next prompt. The choice is
+       per member, can be copied to the workspace default, and is audited
+       like every other setting. */
+    function saveContext() {
+        approveChange(
+            "Conversation context",
+            "Changing how much of the conversation is sent to the AI requires the administrator password and is recorded in the audit log."
+        ).then(function (token) {
+            return Loading.withButton(nodes.saveContext, function () {
+                return Api.post("SETTINGS", {
+                    CONTEXT_MESSAGES: Number(nodes.context.value),
+                    also_default: nodes.contextDefault.checked,
+                    admin_token: token
+                });
+            }).then(function (data) {
+                applyContext(data);
+                nodes.contextDefault.checked = false;
+                flashContextSaved();
+                Loading.toast("Conversation context saved.", "success");
             }).catch(function (err) {
                 Loading.toast(err.message, "error");
             });
@@ -437,6 +507,8 @@
 
     Dom.on(nodes.restore, "change", markDirty);
     Dom.on(nodes.saveChecks, "click", saveChecks);
+    if (nodes.context) Dom.on(nodes.context, "change", markContextDirty);
+    Dom.on(nodes.saveContext, "click", saveContext);
     Dom.on(nodes.saveConnection, "click", saveConnection);
     Dom.on(nodes.refresh, "click", function () { refreshModels({ button: true }); });
     Dom.on(nodes.model, "change", markConnectionDirty);
@@ -461,6 +533,10 @@
             nodes.checksState.textContent = t("Unsaved changes");
         } else if (checksSavedTimer && nodes.checksState) {
             nodes.checksState.textContent = t("Saved.");
+        }
+        if (nodes.contextState) {
+            if (contextDirty) nodes.contextState.textContent = t("Unsaved changes");
+            else if (contextSavedTimer) nodes.contextState.textContent = t("Saved.");
         }
         if (nodes.connectionState) {
             if (connectionDirty) nodes.connectionState.textContent = t("Unsaved changes");
