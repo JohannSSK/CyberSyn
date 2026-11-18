@@ -94,10 +94,22 @@
                             <label for="input-password-new">New password</label>
                             <input type="password" id="input-password-new" class="input"
                                    autocomplete="new-password" required>
+                            <span class="hint">At least 8 characters, including a letter and a number.</span>
                         </div>
                         <button type="submit" class="btn btn-primary" id="btn-save-password">Save</button>
                     </form>
                     <div class="form-msg" id="msg-password"></div>
+                </section>
+
+                <section class="card">
+                    <div class="card-title"><span data-icon="lock"></span> Administrator password</div>
+                    <form class="inline-form" id="form-admin-password">
+                        <label class="field">Administrator username<input name="username" class="input" autocomplete="username" required></label>
+                        <label class="field">Current password<input name="current_password" class="input" type="password" autocomplete="current-password" required></label>
+                        <label class="field">New password<input name="new_password" class="input" type="password" autocomplete="new-password" minlength="8" maxlength="256" required></label>
+                        <button type="submit" class="btn btn-primary">Change administrator password</button>
+                    </form>
+                    <div class="form-msg" id="msg-admin-password"></div>
                 </section>
 
             </div>

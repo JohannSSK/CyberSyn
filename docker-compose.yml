@@ -16,13 +16,22 @@ services:
       CYBERSYN_PORT: "5000"
       # Keep the Werkzeug debugger off. Set to 1 only for local development.
       CYBERSYN_DEBUG: "0"
+      CYBERSYN_SCANNER_FALLBACK: "0"
+      CYBERSYN_THREADS: "${CYBERSYN_THREADS:-8}"
+      CYBERSYN_LOG_PROMPT_PREVIEW: "${CYBERSYN_LOG_PROMPT_PREVIEW:-0}"
+      CYBERSYN_KEY_FILE: /app/secrets/secret.key
+      CYBERSYN_ADMIN_SIGNUP_TOKEN: "${CYBERSYN_ADMIN_SIGNUP_TOKEN:-}"
+      CYBERSYN_ALLOW_PRIVATE_BASE: "${CYBERSYN_ALLOW_PRIVATE_BASE:-1}"
+      CYBERSYN_COOKIE_SECURE: "${CYBERSYN_COOKIE_SECURE:-0}"
       # Optional: supply a Fernet key to decrypt API keys from another machine
       # (e.g. from your .env file). Leave empty to let CyberSyn generate one.
       CYBERSYN_KEY: "${CYBERSYN_KEY:-}"
 
     volumes:
-      # Persists app.db (accounts, chats, block log) and the generated secret.key.
+      # Store the database and its encryption key in separate backups.
       - cybersyn-data:/app/src/backend
+      - cybersyn-secrets:/app/secrets
 
 volumes:
   cybersyn-data:
+  cybersyn-secrets:

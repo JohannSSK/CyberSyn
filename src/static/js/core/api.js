@@ -5,16 +5,20 @@
    which member) and the same fetch wrapper. Putting them here means a page
    script never touches localStorage or builds a request body by hand.
 
-   Two different tokens exist, and confusing them is a security bug:
-     session_token — the team member's own session
-     admin_token   — an administrator's, needed only to approve an override
+   Only UI metadata is stored here. Session credentials are HttpOnly cookies;
+   a one-time approval is passed directly to the request it authorises.
    ========================================================================== */
 
 (function (global) {
     "use strict";
 
-    var ADMIN_KEY = "cybersyn_admin_token";
-    var MEMBER_KEY = "cybersyn_member_token";
+    var routes = JSON.parse(document.body.dataset.routes || "{}");
+    // Purge credentials left behind by earlier browser builds.
+    try {
+        localStorage.removeItem("cybersyn_admin_token");
+        localStorage.removeItem("cybersyn_member_token");
+        sessionStorage.removeItem("cybersyn_admin_unlock");
+    } catch (err) { /* storage unavailable */ }
     var ADMIN_META = "cybersyn_admin_meta";
     var MEMBER_META = "cybersyn_member_meta";
 
@@ -37,47 +41,29 @@
     var Session = {
         /* ---- administrator ---- */
         getAdmin: function () { return read(ADMIN_META, null); },
-        getAdminToken: function () { return localStorage.getItem(ADMIN_KEY) || null; },
-        setAdmin: function (token, meta) {
-            localStorage.setItem(ADMIN_KEY, token);
-            write(ADMIN_META, meta || null);
+        setAdmin: function (meta) {
+            write(ADMIN_META, { parentId: meta.parentId, username: meta.username });
         },
-        clearAdmin: function () {
-            localStorage.removeItem(ADMIN_KEY);
-            write(ADMIN_META, null);
-        },
-
-        /* ---- team member ---- */
+        clearAdmin: function () { write(ADMIN_META, null); },
         getMember: function () { return read(MEMBER_META, null); },
-        getMemberToken: function () { return localStorage.getItem(MEMBER_KEY) || null; },
-        setMember: function (token, meta) {
-            localStorage.setItem(MEMBER_KEY, token);
-            write(MEMBER_META, meta || null);
+        setMember: function (meta) {
+            write(MEMBER_META, { parentId: meta.parentId, employeeId: meta.employeeId, username: meta.username });
         },
-        clearMember: function () {
-            localStorage.removeItem(MEMBER_KEY);
-            write(MEMBER_META, null);
-        },
-
-        clearAll: function () {
-            [ADMIN_KEY, MEMBER_KEY, ADMIN_META, MEMBER_META].forEach(function (k) {
-                localStorage.removeItem(k);
-            });
-        },
+        clearMember: function () { write(MEMBER_META, null); },
+        clearAll: function () { Session.clearAdmin(); Session.clearMember(); },
 
         /* Convenience: the identifiers every request body carries. */
         ids: function () {
             var m = Session.getMember() || {};
             return {
                 Parent_id: m.parentId || null,
-                Employee_id: m.employeeId || null,
-                session_token: Session.getMemberToken()
+                Employee_id: m.employeeId || null
             };
         },
 
         ready: function () {
             var m = Session.getMember() || {};
-            return !!(m.parentId && m.employeeId && Session.getMemberToken());
+            return !!(m.parentId && m.employeeId);
         }
     };
 
@@ -86,7 +72,7 @@
      * Rejects with an Error carrying `.status` and `.body` so callers can
      * tell "your session ended" (401) from "the server is unhappy" (500).
      */
-    function post(path, body, options) {
+    function post(route, body, options) {
         var opts = options || {};
         var payload = Object.assign({}, body || {});
         if (opts.member !== false && Session.ready()) {
@@ -100,9 +86,10 @@
             timer = setTimeout(function () { controller.abort(); }, opts.timeout);
         }
 
-        return fetch(path, {
+        return fetch(routes[route], {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json", "X-CyberSyn-Request": "1", "X-CyberSyn-Session": "cookie" },
             body: JSON.stringify(payload),
             signal: controller ? controller.signal : undefined
         })

@@ -1,17 +1,17 @@
 """Database connection, schema creation and seed data.
 
-The connection is per-request (stored on Flask's `g`), the schema is created
-with CREATE TABLE IF NOT EXISTS only — existing team data is never touched —
-and a schema mismatch is a hard stop rather than a confusing runtime error.
+The connection is per-request (stored on Flask's `g`), additive schema migrations preserve team accounts,
+and old prompt previews are removed from the live audit trail on upgrade.
 """
 
+import logging
 import sqlite3
 import sys
 
 from flask import g
 
 from config import DB_FILE
-from passwords import hash_password
+from passwords import admin_password_problem, hash_password
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS ADMINS (
@@ -25,7 +25,8 @@ CREATE TABLE IF NOT EXISTS EMPLOYEES (
     username   TEXT NOT NULL,
     password   TEXT NOT NULL,
     CHAT_LOGS  TEXT DEFAULT '[]',
-    created_at TEXT
+    created_at TEXT,
+    UNIQUE (Parent_id, username)
 );
 CREATE TABLE IF NOT EXISTS SETTINGS (
     Parent_id   INTEGER NOT NULL,
@@ -33,6 +34,7 @@ CREATE TABLE IF NOT EXISTS SETTINGS (
     check1      INTEGER NOT NULL DEFAULT 1,
     check2      INTEGER NOT NULL DEFAULT 1,
     check3      INTEGER NOT NULL DEFAULT 1,
+    block_code  INTEGER NOT NULL DEFAULT 0,
     API_KEY     TEXT NOT NULL DEFAULT '',
     MODEL_NAME  TEXT NOT NULL DEFAULT 'gpt-4o-mini',
     PROVIDER    TEXT NOT NULL DEFAULT 'auto',
@@ -45,14 +47,13 @@ EXPECTED_COLUMNS = {
     "ADMINS": {"id", "username", "password"},
     "EMPLOYEES": {"id", "Parent_id", "username", "password", "CHAT_LOGS"},
     "SETTINGS": {"Parent_id", "Employee_id", "check1", "check2", "check3",
-                 "API_KEY", "MODEL_NAME", "PROVIDER", "API_BASE"},
+                 "block_code", "API_KEY", "MODEL_NAME", "PROVIDER", "API_BASE"},
 }
 
 
 def get_db():
     if "db" not in g:
-        g.db = sqlite3.connect(DB_FILE)
-        g.db.row_factory = sqlite3.Row
+        g.db = connect()
     return g.db
 
 
@@ -62,22 +63,39 @@ def close_db(_exc=None):
         db.close()
 
 
-def connect():
+def connect(db_file=None):
     """A standalone connection, for code that runs outside a request."""
-    con = sqlite3.connect(DB_FILE)
+    con = sqlite3.connect(db_file or DB_FILE, timeout=10.0)
     con.row_factory = sqlite3.Row
+    con.execute("PRAGMA busy_timeout = 10000")
+    con.execute("PRAGMA foreign_keys = ON")
+    con.execute("PRAGMA synchronous = NORMAL")
     return con
 
 
 def init_db():
-    """Create missing tables only. Never touches existing team tables."""
+    """Initialize the database and migrate older installations in place."""
     con = connect()
+    con.execute("PRAGMA journal_mode = WAL")
     con.executescript(SCHEMA_SQL)
+    con.execute("BEGIN IMMEDIATE")
     # created_at was added after the first release; add it to live databases.
     cols = {r[1] for r in con.execute("PRAGMA table_info(EMPLOYEES)")}
     if "created_at" not in cols:
         con.execute("ALTER TABLE EMPLOYEES ADD COLUMN created_at TEXT")
     _add_settings_columns(con)
+    try:
+        con.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_employees_parent_username "
+                    "ON EMPLOYEES (Parent_id, username)")
+    except sqlite3.IntegrityError:
+        logging.getLogger(__name__).warning("Duplicate legacy member names; resolve duplicates to enable unique index.")
+    # Old releases stored prompt prefixes in the activity timeline. Remove
+    # those details on upgrade, without deleting events or future safe metadata.
+    if con.execute("PRAGMA user_version").fetchone()[0] == 0:
+        if con.execute("SELECT 1 FROM sqlite_master WHERE name='ACTIVITY_LOG'").fetchone():
+            con.execute("UPDATE ACTIVITY_LOG SET detail=NULL WHERE kind IN "
+                        "('blocked','override','prompt','regenerated','message_edited')")
+        con.execute("PRAGMA user_version = 1")
     con.commit()
     con.close()
 
@@ -85,6 +103,7 @@ def init_db():
 # Columns added after the first release. CREATE TABLE IF NOT EXISTS never
 # touches a table that exists, so live databases need the ALTER.
 SETTINGS_MIGRATIONS = {
+    "block_code": "INTEGER NOT NULL DEFAULT 0",
     "PROVIDER": "TEXT NOT NULL DEFAULT 'auto'",
     "API_BASE": "TEXT NOT NULL DEFAULT ''",
 }
@@ -126,7 +145,7 @@ def seed(username=None, password=None):
     import secrets
 
     username = username or os.environ.get("CYBERSYN_SEED_USERNAME")
-    password = password or os.environ.get("CYBERSYN_SEED_PASSWORD")
+    password = os.environ.get("CYBERSYN_SEED_PASSWORD") if password is None else password
     if not username:
         print(
             "Refusing to create an account with a default username.\n"
@@ -137,27 +156,32 @@ def seed(username=None, password=None):
         )
         return 1
 
-    generated = False
-    if not password:
-        password = secrets.token_urlsafe(18)
-        generated = True
+    username = username.strip()
+    if not username or len(username) > 64:
+        print("Username must contain 1 to 64 characters.", file=sys.stderr)
+        return 1
+    generated = password is None
+    if generated:
+        password = "A1" + secrets.token_urlsafe(18)
+    problem = admin_password_problem(password)
+    if problem:
+        print(problem, file=sys.stderr)
+        return 1
 
     con = connect()
-    row = con.execute(
-        "SELECT id FROM ADMINS WHERE username = ?", (username,)
-    ).fetchone()
-    if row is None:
-        con.execute(
-            "INSERT INTO ADMINS (username, password) VALUES (?, ?)",
-            (username, hash_password(password)),
-        )
-        con.commit()
-        print(f"Created admin '{username}'.")
-    else:
-        print(f"Admin '{username}' already exists.")
+    try:
+        with con:
+            con.execute("BEGIN IMMEDIATE")
+            row = con.execute("SELECT id FROM ADMINS WHERE username = ?", (username,)).fetchone()
+            if row is None:
+                pid = con.execute("INSERT INTO ADMINS (username, password) VALUES (?, ?)",
+                                  (username, hash_password(password))).lastrowid
+            else:
+                pid = row["id"]
+            con.execute("INSERT OR IGNORE INTO SETTINGS (Parent_id, Employee_id) VALUES (?, 0)", (pid,))
+    finally:
         con.close()
-        return 0
-    con.close()
-    if generated:
+    print(f"Admin '{username}' already exists." if row else f"Created admin '{username}'.")
+    if generated and row is None:
         print(f"Generated password (shown once): {password}")
     return 0

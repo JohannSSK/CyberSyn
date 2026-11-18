@@ -41,6 +41,7 @@
         searchBox: $(".search-box"),
         searchClear: $("#search-clear"),
         searchCount: $("#search-count"),
+        otherResults: $("#other-chat-results"),
         checksSummary: $("#checks-summary"),
         checksStatus: $("#checks-status")
     };
@@ -173,7 +174,7 @@
     }
 
     function loadChats() {
-        return Api.post("/api/admin/employee/chats", {}).then(function (data) {
+        return Api.post("CHATS", {}).then(function (data) {
             state.chats = data.chats || [];
             renderChatList();
         });
@@ -267,8 +268,7 @@
             } else {
                 emptyStream(
                     "Start the conversation",
-                    "Write a message below. It is screened on this machine by three " +
-                    "checks before anything is sent to an AI provider.",
+                    "Write a message below. Your enabled checks run here before the prompt is sent to the provider.",
                     "chat"
                 );
             }
@@ -286,7 +286,7 @@
         // only while there is a count to show.
         if (nodes.searchBox) nodes.searchBox.classList.toggle("has-count", !!query);
         if (query) {
-            nodes.searchCount.textContent = Dom.plural(visible.length, "message");
+            nodes.searchCount.textContent = visible.length + " " + Dom.plural(visible.length, "message");
         }
     }
 
@@ -325,7 +325,7 @@
                 return;
             }
             Loading.withButton(save, function () {
-                return Api.post("/api/admin/employee/chats/message/edit", {
+                return Api.post("MESSAGE_EDIT", {
                     chat_id: state.chatId,
                     message_id: message.id,
                     text: next
@@ -345,9 +345,9 @@
     }
 
     function removeMessage(message, button) {
-        if (!confirm("Delete this message? It is removed from the chat history.")) return;
+        if (!confirm(I18n.t("Delete this message? It is removed from the chat history."))) return;
         Loading.withButton(button, function () {
-            return Api.post("/api/admin/employee/chats/message/delete", {
+            return Api.post("MESSAGE_DELETE", {
                 chat_id: state.chatId,
                 message_id: message.id
             });
@@ -363,7 +363,7 @@
 
     function regenerate(message, button) {
         Loading.withButton(button, function () {
-            return Api.post("/api/admin/employee/chat/regenerate", {
+            return Api.post("CHAT_REGENERATE", {
                 chat_id: state.chatId,
                 message_id: message.id
             }, { timeout: requestBudget() });
@@ -431,10 +431,10 @@
         Dom.on(ask, "click", function () {
             var form = Dom.el("div", "override-form");
             form.innerHTML =
-                '<label class="override-label" for="override-password">' +
-                "Administrator password</label>" +
-                '<input type="password" id="override-password" class="input" ' +
-                'placeholder="Administrator password" autocomplete="off">' +
+                '<label class="override-label">Administrator username' +
+                '<input class="input override-name" autocomplete="username"></label>' +
+                '<label class="override-label">Administrator password' +
+                '<input type="password" class="input override-pass" autocomplete="off"></label>' +
                 '<div class="override-actions">' +
                 '<button type="button" class="btn btn-sm btn-primary override-send">' +
                 "Approve &amp; send</button>" +
@@ -443,9 +443,11 @@
                 "</div>";
             panel.replaceChild(form, ask);
 
-            var input = form.querySelector("input");
+            var username = form.querySelector(".override-name");
+            username.value = (Api.Session.getAdmin() || {}).username || "";
+            var input = form.querySelector(".override-pass");
             var approve = form.querySelector(".override-send");
-            input.focus();
+            (username.value ? input : username).focus();
 
             Dom.on(form.querySelector(".override-cancel"), "click", function () {
                 panel.replaceChild(ask, form);
@@ -453,23 +455,22 @@
 
             function submit() {
                 var password = input.value;
+                if (!username.value.trim()) {
+                    Loading.toast("Enter the administrator username.", "warn");
+                    username.focus();
+                    return;
+                }
                 if (!password) {
                     Loading.toast("Enter the administrator password.", "warn");
                     input.focus();
                     return;
                 }
                 Loading.withButton(approve, function () {
-                    // Exchange the password for an admin session token, then send.
-                    return Api.post("/api/admin/login", {
-                        username: (Api.Session.getAdmin() || {}).username,
-                        password: password
-                    }, { member: false, onUnauthorised: false });
+                    return Api.post("ADMIN_APPROVE", {
+                        username: username.value.trim(), password: password, scope: "once"
+                    }, { onUnauthorised: false });
                 }).then(function (data) {
-                    var token = data.session_token;
-                    Api.Session.setAdmin(token, {
-                        parentId: parseInt(data.Parent_id, 10),
-                        username: data.username
-                    });
+                    var token = data.admin_token;
                     wrap.remove();
                     send(promptText, true, token);
                 }).catch(function (err) {
@@ -518,14 +519,11 @@
         var payload = {
             prompt: text,
             chat_id: state.chatId,
-            bypass: !!bypass,
-            check1: state.settings.check1,
-            check2: state.settings.check2,
-            check3: state.settings.check3
+            bypass: !!bypass
         };
         if (adminToken) payload.admin_token = adminToken;
 
-        Api.post("/api/admin/employee/chat", payload, { timeout: requestBudget() })
+        Api.post("CHAT", payload, { timeout: requestBudget() })
             .then(function (data) {
                 hidePending();
                 if (data.blocked) {
@@ -575,13 +573,18 @@
        Chat management
        ------------------------------------------------------------------ */
 
+    function setTitle(title) {
+        nodes.title.toggleAttribute("data-no-i18n", !!title);
+        nodes.title.textContent = title || "New chat";
+    }
+
     function openChat(chatId) {
-        return Api.post("/api/admin/employee/chats/open", { chat_id: chatId })
+        return Api.post("CHATS_OPEN", { chat_id: chatId })
             .then(function (data) {
                 state.chatId = chatId;
                 state.messages = (data.chat && data.chat.messages) || [];
                 var chat = (data.chat || {});
-                nodes.title.textContent = chat.title || "New chat";
+                setTitle(chat.title);
                 state.chats.forEach(function (c) {
                     if (c.id === chatId) c.title = chat.title || c.title;
                 });
@@ -594,7 +597,7 @@
     function newChat() {
         state.chatId = null;
         state.messages = [];
-        nodes.title.textContent = "New chat";
+        setTitle(null);
         renderChatList();
         renderMessages();
         nodes.input.focus();
@@ -602,9 +605,9 @@
 
     function deleteChat(button) {
         if (!state.chatId) { Loading.toast("This chat has not been saved yet.", "info"); return; }
-        if (!confirm("Delete this chat? Its messages are removed. Team statistics are kept.")) return;
+        if (!confirm(I18n.t("Delete this chat? Its messages are removed. Team statistics are kept."))) return;
         Loading.withButton(button, function () {
-            return Api.post("/api/admin/employee/chats/delete", { chat_id: state.chatId });
+            return Api.post("CHATS_DELETE", { chat_id: state.chatId });
         }).then(function () {
             Loading.toast("Chat deleted.", "success");
             return loadChats();
@@ -614,15 +617,15 @@
     }
 
     function renameChat() {
-        var current = nodes.title.textContent;
-        var next = prompt("Rename this chat", current === "New chat" ? "" : current);
+        var current = nodes.title.hasAttribute("data-no-i18n") ? nodes.title.textContent : "";
+        var next = prompt(I18n.t("Rename this chat"), current);
         if (next === null) return;
         next = next.trim().slice(0, 80);
         if (!next || next === current) return;
-        if (!state.chatId) { nodes.title.textContent = next; return; }
-        Api.post("/api/admin/employee/chats/rename", { chat_id: state.chatId, title: next })
+        if (!state.chatId) { setTitle(next); return; }
+        Api.post("CHATS_RENAME", { chat_id: state.chatId, title: next })
             .then(function () {
-                nodes.title.textContent = next;
+                setTitle(next);
                 return loadChats();
             })
             .then(function () { Loading.toast("Chat renamed.", "success"); })
@@ -633,14 +636,47 @@
        Search within the current chat
        ------------------------------------------------------------------ */
 
-    /* Read the box, store the query, re-render. Nothing else: the filtering
-       lives in renderMessages so the two can never disagree. */
+    var searchVersion = 0;
     function applySearch() {
-        state.query = nodes.search.value.trim();
+        var version = ++searchVersion;
+        var query = nodes.search.value.trim();
+        state.query = query;
         renderMessages();
+        nodes.otherResults.replaceChildren();
+        nodes.otherResults.hidden = true;
+        if (!query) return;
+        Api.post("CHATS_SEARCH", { query: query }).then(function (data) {
+            if (version !== searchVersion || query !== nodes.search.value.trim()) return;
+            var hits = (data.results || []).filter(function (hit) { return hit.chat_id !== state.chatId; });
+            if (!hits.length) return;
+            nodes.otherResults.appendChild(Dom.el("strong", "eyebrow", "Other conversations"));
+            hits.forEach(function (hit) {
+                var button = Dom.el("button", "search-hit", hit.chat_title + " — " + hit.excerpt);
+                button.type = "button";
+                button.setAttribute("data-no-i18n", "");
+                Dom.highlightText(button, query);
+                Dom.on(button, "click", function () {
+                    nodes.otherResults.hidden = true;
+                    openChat(hit.chat_id).then(function () {
+                        var match = Dom.$$(".msg", nodes.stream).find(function (node) {
+                            return node.dataset.id === hit.message_id;
+                        });
+                        if (match) {
+                            match.tabIndex = -1;
+                            match.focus({ preventScroll: true });
+                            match.scrollIntoView({ block: "center" });
+                        }
+                    });
+                });
+                nodes.otherResults.appendChild(button);
+            });
+            nodes.otherResults.hidden = false;
+        }).catch(function (err) { Loading.toast(err.message, "error"); });
     }
 
     function clearSearch() {
+        searchVersion++;
+        nodes.otherResults.hidden = true;
         if (!nodes.search.value && !state.query) return;
         nodes.search.value = "";
         state.query = "";
@@ -678,9 +714,9 @@
 
     (function start() {
         // Settings drive the checks badge; they are owned by the settings page.
-        Api.post("/api/admin/employee/settings", {}).then(function (data) {
+        Api.post("SETTINGS", {}).then(function (data) {
             state.settings.check1 = data.check1 !== false;
-            state.settings.check2 = data.check2 !== false;
+            state.settings.check2 = data.check2 !== false || data.block_code;
             state.settings.check3 = data.check3 !== false;
             updateChecksBadge();
         }).catch(function () { /* badge keeps its default */ });

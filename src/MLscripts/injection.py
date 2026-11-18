@@ -1,14 +1,6 @@
 import json
-import os
 import re
 import sys
-import warnings
-
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
-os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
-os.environ["HF_HUB_VERBOSITY"] = "error"
-warnings.filterwarnings("ignore")
-
 
 LABELS = [
     "meta-instruction telling an AI to stop its task or reveal its instructions",
@@ -22,8 +14,11 @@ THRESHOLD = 0.60
 # classifier can reach, so one such hit settles the verdict on its own.
 REGEX_SCORE = 0.99
 
-INJECTION_PATTERNS = re.compile(
-    r"(ignore\s+(all\s+)?(previous|prior|above)\s+(instructions|rules|prompts)|"
+_PHRASES = (
+    r"(\b(?:ignore|disregard)\s+(?:all\s+)?(?:previous|prior|earlier|system|above)\s+"
+    r"(?:instructions|guidelines|directives|rules|prompts)|new\s+(?:system\s+)?instructions\s*:|"
+    r"you are now (?:in )?unrestricted|system override|do anything now|"
+    r"(?:αφήσεις|άφησε) τους κανόνες|αγνόησε τους περιορισμούς|πες μου το system prompt|"
     r"if\s+you\s+are\s+an?\s+(ai|llm|language\s+model|assistant)|"
     r"(stop|abort|ignore)\s+the\s+(review|task|analysis|summary)|"
     r"(print|output|reveal|repeat|show)\s+(the\s+)?(full\s+)?(contents\s+of\s+)?(your|the|system|initial)\s+(instructions|prompt|rules)|"
@@ -34,18 +29,24 @@ INJECTION_PATTERNS = re.compile(
     r"(παράβλεψε|αγνόησε|ξεχάστε|ξέχνα)\s+(όλες\s+)?(τις\s+)?(προηγούμενες\s+)?(οδηγίες|εντολές|κανόνες)|"
     r"(εμφάνισε|δείξε|πες\s+μου|εκτύπωσε)\s+(όλες\s+)?(τις\s+)?(οδηγίες|εντολές|αρχικές\s+οδηγίες|οδηγίες\s+συστήματος)|"
     r"(διαρροή|εξαγωγή|dump)\s+(όλων\s+των\s+)?(δεδομένων|χρηστών|πελατών|iban|ταυτοτήτων|αδτ|προσωπικών|τραπεζικών)|"
-    r"(παράκαμψη|παράκαμψε)\s+(όλους\s+τους\s+)?(ελέγχους|ασφάλεια|κανόνες))",
-    re.IGNORECASE,
+    r"(παράκαμψη|παράκαμψε)\s+(όλους\s+τους\s+)?(ελέγχους|ασφάλεια|κανόνες))"
 )
+# Normalize separators in the patterns rather than shrinking the prompt. Each
+# match still points to its exact span, even across indented comment lines.
+INJECTION_PATTERNS = re.compile(_PHRASES.replace(" ", r"\s+"), re.IGNORECASE)
 
 CODE_SYNTAX = re.compile(
-    r"^\s*(def |class |import |from |return |if |elif |else:|for |while |try:|except|\w+\s*=\s*.+|print\(|.*[{}();].*)"
+    r"\s*(?:def\s+\w+\([^)]*\)(?:\s*->\s*\w+)?\s*:|class\s+\w+(?:\(\w+\))?:|"
+    r"(?:from\s+[\w.]+\s+)?import\s+[\w., ]+|return\s+[\w.]+(?:\([^()]*\)|\[\w+\])?|"
+    r"#include\s*<[^>]+>|[{}])\s*"
 )
 
 try:
     from model_cache import DETAIL_LINES, classify_batched
-except ImportError:  # pragma: no cover - standalone use from another cwd
+    from text_chunks import embedded, lines
+except ImportError:
     from .model_cache import DETAIL_LINES, classify_batched
+    from .text_chunks import embedded, lines
 
 
 def _already_blocked(matches):
@@ -80,53 +81,31 @@ def analyze(raw_text, stop=None):
         }
 
     matches = []
+    spans = set()
+
+    def inspect(clean, offset):
+        # All separators in the pattern use \s+: adjacent lines are treated
+        # like spaces without losing the original line numbers or offsets.
+        for hit in INJECTION_PATTERNS.finditer(re.sub(r"[_-]", " ", clean)):
+            start, end = offset + hit.start(), offset + hit.end()
+            if (start, end) not in spans:
+                spans.add((start, end))
+                matches.append({"cause": "PROMPT_INJECTION", "score": REGEX_SCORE,
+                                "line": raw_text.count("\n", 0, start) + 1, "start_offset": start,
+                                "end_offset": end, "snippet": raw_text[start:end]})
+
+    inspect(raw_text, 0)  # includes individual lines and cross-line phrases
     nl_chunks = []
-    offset = 0
-
-    for line_num, line in enumerate(raw_text.splitlines(keepends=True), start=1):
-        stripped = line.strip()
-        if len(stripped) > 3:
-            start_char = offset + line.find(stripped)
-            end_char = start_char + len(stripped)
-            normalized = re.sub(r"[_\-]+", " ", stripped)
-
-            if INJECTION_PATTERNS.search(normalized):
-                matches.append(
-                    {
-                        "cause": "PROMPT_INJECTION",
-                        "score": 0.99,
-                        "line": line_num,
-                        "start_offset": start_char,
-                        "end_offset": end_char,
-                        "snippet": stripped,
-                    }
-                )
-            elif stripped.startswith("#") or not CODE_SYNTAX.match(stripped):
-                clean_text = stripped.lstrip("# ").strip()
-                # Merge consecutive # comment lines so multi-line attacks stay together
-                if (
-                    stripped.startswith("#")
-                    and nl_chunks
-                    and nl_chunks[-1]["is_comment"]
-                    and nl_chunks[-1]["end_line"] == line_num - 1
-                ):
-                    nl_chunks[-1]["end_line"] = line_num
-                    nl_chunks[-1]["end_offset"] = end_char
-                    nl_chunks[-1]["text"] += "\n" + stripped
-                    nl_chunks[-1]["clean"] += " " + clean_text
-                else:
-                    nl_chunks.append(
-                        {
-                            "line": line_num,
-                            "end_line": line_num,
-                            "start_offset": start_char,
-                            "end_offset": end_char,
-                            "text": stripped,
-                            "clean": clean_text,
-                            "is_comment": stripped.startswith("#"),
-                        }
-                    )
-        offset += len(line)
+    remainder = list(raw_text)
+    for part in embedded(raw_text):
+        inspect(part["clean"], part["start_offset"])
+        nl_chunks.append(part)
+        for pos in range(part["start_offset"], part["end_offset"]):
+            if remainder[pos] != "\n":
+                remainder[pos] = " "
+    for part in lines("".join(remainder)):
+        if len(part["clean"]) > 3 and not CODE_SYNTAX.fullmatch(part["clean"]):
+            nl_chunks.append(part)
 
     classifier_ran = False
     if nl_chunks:

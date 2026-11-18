@@ -29,7 +29,7 @@
         head.innerHTML =
             '<span class="avatar">' + Dom.esc(member.username.charAt(0).toUpperCase()) + "</span>" +
             '<span class="member-id"><strong>' + Dom.esc(member.username) + "</strong>" +
-            "<small>" + Dom.esc(member.model || "gpt-4o-mini") +
+            '<small><span data-no-i18n>' + Dom.esc(member.model || "gpt-4o-mini") + "</span>" +
             (member.has_key ? "" : " · no API key yet") +
             " · " + member.checks_on + " of 3 checks on</small></span>";
 
@@ -58,7 +58,7 @@
 
     function load(button) {
         var task = function () {
-            return Api.post("/api/admin/team", { token: Api.Session.getAdminToken() },
+            return Api.post("TEAM", {},
                 { member: false, onUnauthorised: false });
         };
         var request = button ? Loading.withButton(button, task) : task();

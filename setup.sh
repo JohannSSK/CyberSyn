@@ -4,7 +4,7 @@
 #
 #   ./setup.sh          then  ./run.sh
 #
-# Works on Linux (Debian/Ubuntu, Fedora, Arch, Alpine) and on macOS. Windows
+# Works on glibc Linux and on Apple Silicon macOS. Windows
 # is not supported: use WSL, or Docker (docker compose up --build).
 #
 # Safe to run twice: an existing .venv is reused, not destroyed.
@@ -66,10 +66,10 @@ esac
 say "==> 1. Looking for Python 3..."
 
 PYTHON=""
-for candidate in python3 python3.13 python3.12 python3.11 python3.10 python; do
+for candidate in python3 python3.13 python3.12 python3.11 python; do
     if command -v "$candidate" >/dev/null 2>&1; then
         # `python` is Python 2 on older systems; skip it unless it is 3.x.
-        if "$candidate" -c 'import sys; sys.exit(0 if sys.version_info[0] == 3 else 1)' \
+        if "$candidate" -c 'import sys; sys.exit(0 if (3, 11) <= sys.version_info < (3, 14) else 1)' \
            >/dev/null 2>&1; then
             PYTHON="$candidate"
             break
@@ -77,16 +77,16 @@ for candidate in python3 python3.13 python3.12 python3.11 python3.10 python; do
     fi
 done
 
-[ -n "$PYTHON" ] || die "no Python 3 found on PATH.
+[ -n "$PYTHON" ] || die "no supported Python (3.11–3.13) found on PATH.
    Debian/Ubuntu:  sudo apt install python3 python3-venv python3-pip
    Fedora:         sudo dnf install python3 python3-pip
    Arch:           sudo pacman -S python python-pip
    Alpine:         apk add python3 py3-pip py3-virtualenv
    macOS:          xcode-select --install   (or: brew install python3)"
 
-if ! "$PYTHON" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' \
+if ! "$PYTHON" -c 'import sys; sys.exit(0 if (3, 11) <= sys.version_info < (3, 14) else 1)' \
    >/dev/null 2>&1; then
-    die "Python 3.10 or newer is required, but $PYTHON is $("$PYTHON" -c 'import sys; print("%d.%d" % sys.version_info[:2])').
+    die "Python 3.11–3.13 is required, but $PYTHON is $("$PYTHON" -c 'import sys; print("%d.%d" % sys.version_info[:2])').
    Install a newer Python 3 and run this script again."
 fi
 
@@ -115,6 +115,8 @@ fi
 
 VENV_PY="$ROOT/.venv/bin/python"
 [ -x "$VENV_PY" ] || die "the virtual environment was created but has no interpreter at .venv/bin/python."
+"$VENV_PY" -c 'import sys; sys.exit(not (3, 11) <= sys.version_info < (3, 14))' \
+    || die "the existing .venv needs Python 3.11–3.13. Recreate it with the supported interpreter."
 
 # ---------------------------------------------------------------------------
 # 3. Dependencies.
@@ -125,6 +127,14 @@ say "==> 3. Upgrading pip..."
 
 say "==> 4. Installing dependencies from requirements.txt..."
 say "    (torch is large; this is the slow step.)"
+if [ "$(uname -s)" = Linux ]; then
+    # pip can otherwise keep an already-installed CUDA wheel at the same pin.
+    if "$VENV_PY" -c 'import torch, sys; sys.exit(torch.version.cuda is None)' 2>/dev/null; then
+        "$VENV_PY" -m pip uninstall -y torch
+    fi
+    "$VENV_PY" -m pip install --index-url https://download.pytorch.org/whl/cpu "$(grep '^torch==' requirements.txt)" \
+        || die "could not install the CPU build of PyTorch"
+fi
 if ! "$VENV_PY" -m pip install -r requirements.txt; then
     cat >&2 <<'HINT'
 
@@ -140,19 +150,13 @@ HINT
 fi
 
 # ---------------------------------------------------------------------------
-# 4. The model. Wanted, not required: without it the app still runs and
-#    fetches the weights on first use, so a network failure here must not
-#    undo the install that just succeeded.
+# 4. Verify imports, model weights and CPU inference together. A dependency
+#    resolver or a downloaded config alone cannot tell if the models work.
 # ---------------------------------------------------------------------------
 
-say "==> 5. Pre-downloading the zero-shot model..."
-if "$VENV_PY" -c "from transformers import pipeline; pipeline('zero-shot-classification', model='valhalla/distilbart-mnli-12-1')" \
-   >/dev/null 2>&1; then
-    say "    model ready."
-else
-    say "    skipped (no network, or transformers is not installed yet)."
-    say "    The app will fetch it the first time a prompt is screened."
-fi
+"$VENV_PY" -m pip check || die "incompatible packages in the virtual environment"
+say "==> 5. Loading the local models and verifying CPU inference..."
+"$VENV_PY" src/MLscripts/model_cache.py || die "model verification failed; check the weights, dependencies and network, then rerun ./setup.sh"
 
 # ---------------------------------------------------------------------------
 # Where to go next.

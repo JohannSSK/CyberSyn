@@ -77,12 +77,13 @@ if [ -z "$PY" ]; then
     for candidate in python3 python; do
         if command -v "$candidate" >/dev/null 2>&1; then PY="$candidate"; break; fi
     done
-    [ -n "$PY" ] || die "no Python found. Install Python 3.10 or newer."
+    [ -n "$PY" ] || die "no Python found. Install Python 3.11–3.13."
     say "==> No virtual environment found."
     say "==> Run ./setup.sh first, or the app will start without its dependencies."
     say ""
 fi
 
+"$PY" -c 'import sys; sys.exit(not (3, 11) <= sys.version_info < (3, 14))' || die "Python 3.11–3.13 is required."
 say "==> Using $("$PY" -c 'import sys; print("Python %d.%d" % sys.version_info[:2])') at $PY"
 
 # ---------------------------------------------------------------------------

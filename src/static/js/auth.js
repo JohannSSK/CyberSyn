@@ -58,12 +58,12 @@
         }
 
         Loading.withButton(admin.login, function () {
-            return window.Api.post("/api/admin/login",
+            return window.Api.post("ADMIN_LOGIN",
                 { username: username, password: password },
                 { member: false, onUnauthorised: false });
         }).then(function (data) {
             parentId = parseInt(data.Parent_id, 10);
-            Session.setAdmin(data.session_token, {
+            Session.setAdmin({
                 parentId: parentId,
                 username: data.username || username
             });
@@ -84,6 +84,7 @@
     }
 
     function backToAdmin() {
+        window.Api.post("ADMIN_LOGOUT", {}, { member: false, onUnauthorised: false });
         Session.clearAdmin();
         Session.clearMember();
         parentId = null;
@@ -109,11 +110,11 @@
         }
 
         Loading.withButton(employee.login, function () {
-            return window.Api.post("/api/admin/employee/login",
+            return window.Api.post("EMPLOYEE_LOGIN",
                 { Parent_id: parentId, username: username, password: password },
                 { member: false, onUnauthorised: false });
         }).then(function (data) {
-            Session.setMember(data.session_token, {
+            Session.setMember({
                 parentId: parentId,
                 employeeId: parseInt(data.Employee_id, 10),
                 username: data.username || username
@@ -148,15 +149,14 @@
 
     /* A remembered administrator skips straight to step 2. */
     (function restore() {
-        var token = Session.getAdminToken();
         var meta = Session.getAdmin();
-        if (!token || !meta || !meta.parentId) return;
-        window.Api.post("/api/admin/session", { token: token },
+        if (!meta || !meta.parentId) return;
+        window.Api.post("ADMIN_SESSION", {},
             { member: false, onUnauthorised: false })
             .then(function (data) {
                 if (!data.success) { Session.clearAdmin(); return; }
                 parentId = parseInt(data.Parent_id, 10);
-                Session.setAdmin(token, { parentId: parentId, username: data.username });
+                Session.setAdmin({ parentId: parentId, username: data.username });
                 revealMemberStep(data.username || "administrator");
             })
             .catch(function () { Session.clearAdmin(); });
