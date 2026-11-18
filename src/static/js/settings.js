@@ -275,10 +275,10 @@
 
         return request.then(function (data) {
             if (!data.models || !data.models.length) {
-                setModelState(
-                    t(data.message || "That key returned no usable models. Check the provider and key."),
-                    "is-error"
-                );
+                var emptyMsg = data.message
+                    ? Api.withRemedy(data.message)
+                    : "That key returned no usable models. Check the provider and key.";
+                setModelState(t(emptyMsg), "is-error");
                 return null;
             }
             showModels(data.models, data.provider_label);
@@ -288,7 +288,10 @@
             }
             return data.models;
         }).catch(function (err) {
-            setModelState(err.message, "is-error");
+            setModelState(
+                t(err.message || "Could not load models. Check the key and try again."),
+                "is-error"
+            );
             return null;
         });
     }

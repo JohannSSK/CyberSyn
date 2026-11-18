@@ -831,7 +831,7 @@
             function submit() {
                 var password = input.value;
                 if (!password) {
-                    Loading.toast("Enter the administrator password.", "warn");
+                    Loading.toast("Enter the administrator password to continue.", "warn");
                     input.focus();
                     return;
                 }

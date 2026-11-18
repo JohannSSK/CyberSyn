@@ -489,14 +489,14 @@
         function submit() {
             var password = input.value;
             if (!password) {
-                message.textContent = t("Enter the administrator password.");
+                message.textContent = t("Enter the administrator password to continue.");
                 input.focus();
                 return;
             }
             message.textContent = "";
             var username = known ? admin.username : usernameField.value.trim();
             if (!username) {
-                message.textContent = t("Enter the administrator username.");
+                message.textContent = t("Enter the administrator username to continue.");
                 usernameField.focus();
                 return;
             }
