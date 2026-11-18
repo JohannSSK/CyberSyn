@@ -259,6 +259,10 @@
             "Ελέγχεται σε αυτόν τον υπολογιστή πριν φτάσει οτιδήποτε στην ΤΝ.",
         "Local safety checks": "Τοπικοί έλεγχοι ασφάλειας",
         "Checking locally before sending…": "Τοπικός έλεγχος πριν την αποστολή…",
+        "Still checking — normal on a long paste.":
+            "Ο έλεγχος συνεχίζεται — φυσιολογικό σε μεγάλο κείμενο.",
+        "Still waiting — normal on a long paste.":
+            "Η αναμονή συνεχίζεται — φυσιολογικό σε μεγάλο κείμενο.",
         "Checking the message": "Έλεγχος μηνύματος",
         "All checks passed.": "Όλοι οι έλεγχοι ολοκληρώθηκαν.",
         "Waiting for the AI reply…": "Αναμονή απάντησης από την ΤΝ…",

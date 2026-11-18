@@ -127,6 +127,7 @@
        blocking stage, --success on clean completion) with no fake timers.
        ------------------------------------------------------------------ */
 
+    var LONG_WAIT_MS = 8000;
     var pending = null;
 
     function showPending(promptText, bypass) {
@@ -135,6 +136,7 @@
         var enabled = ["check1", "check2", "check3"].filter(function (id) {
             return state.settings[id] !== false;
         });
+        var checking = !bypass && enabled.length > 0;
 
         var wrap = Dom.el("div", "msg");
         var head = Dom.el("div", "msg-head");
@@ -144,31 +146,73 @@
         wrap.appendChild(Dom.el("div", "bubble bubble-user", promptText));
 
         var note = Dom.el("div", "msg-pending");
-        note.setAttribute("role", "status");
-        note.setAttribute("aria-live", "polite");
 
         var tracker = null;
-        if (!bypass && enabled.length) {
+        if (checking) {
             tracker = buildTracker({ checking: true });
             note.appendChild(tracker);
         }
 
+        var line = Dom.el("div", "pending-line");
         var label = Dom.el("span", "pending-text");
-        if (bypass) {
-            label.textContent = t("Sending once with administrator approval…");
-        } else if (!enabled.length) {
-            label.textContent = t("Waiting for the AI reply…");
-        } else {
-            label.textContent = t("Checking locally before sending…");
-        }
-        note.appendChild(label);
+        label.setAttribute("role", "status");
+        label.setAttribute("aria-live", "polite");
+
+        var labelKey = bypass
+            ? "Sending once with administrator approval…"
+            : (!enabled.length
+                ? "Waiting for the AI reply…"
+                : "Checking locally before sending…");
+        var slowKey = checking
+            ? "Still checking — normal on a long paste."
+            : "Still waiting — normal on a long paste.";
+        var resolvedClean = false;
+
+        label.textContent = t(labelKey);
+        line.appendChild(label);
+
+        var elapsed = Dom.el("span", "pending-elapsed", "0.0s");
+        elapsed.setAttribute("aria-hidden", "true");
+        elapsed.setAttribute("data-no-i18n", "");
+        line.appendChild(elapsed);
+
+        var slow = Dom.el("span", "pending-slow hidden");
+        slow.setAttribute("aria-hidden", "true");
+        line.appendChild(slow);
+
+        note.appendChild(line);
         wrap.appendChild(note);
         nodes.stream.appendChild(wrap);
         scrollToEnd(true);
 
+        var startedAt = Date.now();
+        var slowShown = false;
+        var elapsedTimer = setInterval(function () {
+            var ms = Math.max(0, Date.now() - startedAt);
+            elapsed.textContent = (ms / 1000).toFixed(1) + "s";
+            if (!slowShown && ms >= LONG_WAIT_MS) {
+                slowShown = true;
+                slow.textContent = t(slowKey);
+                slow.classList.remove("hidden");
+            }
+        }, 100);
+
+        function stopTimer() {
+            if (elapsedTimer !== null) {
+                clearInterval(elapsedTimer);
+                elapsedTimer = null;
+            }
+        }
+
         pending = {
             wrap: wrap,
+            relocalise: function () {
+                label.textContent = t(resolvedClean ? "All checks passed." : labelKey);
+                if (slowShown) slow.textContent = t(slowKey);
+            },
             resolve: function (blockedStage) {
+                stopTimer();
+                slow.classList.add("hidden");
                 if (!tracker) return;
                 var replacement = buildTracker(
                     blockedStage ? { blockedStage: blockedStage } : { passedAll: true }
@@ -176,10 +220,12 @@
                 tracker.replaceWith(replacement);
                 tracker = replacement;
                 if (!blockedStage) {
+                    resolvedClean = true;
                     label.textContent = t("All checks passed.");
                 }
             },
             stop: function () {
+                stopTimer();
                 if (wrap.parentNode) wrap.remove();
             }
         };
@@ -926,6 +972,7 @@
     Dom.on(document, "cybersyn:lang", function () {
         updateChecksBadge();
         renderChatList();
+        if (pending && pending.relocalise) pending.relocalise();
         if (!state.busy) renderMessages();
     });
 
