@@ -64,33 +64,6 @@
 }
 
 @font-face {
-    font-family: "Instrument Serif";
-    font-style: normal;
-    font-weight: 400;
-    font-display: swap;
-    src: url("../fonts/instrument-serif-latin-400-normal.woff2") format("woff2");
-    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-
-@font-face {
-    font-family: "Noto Serif Display";
-    font-style: normal;
-    font-weight: 400;
-    font-display: swap;
-    src: url("../fonts/noto-serif-display-greek-400-normal.woff2") format("woff2");
-    unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
-}
-
-@font-face {
-    font-family: "Noto Serif Display";
-    font-style: normal;
-    font-weight: 400;
-    font-display: swap;
-    src: url("../fonts/noto-serif-display-greek-ext-400-normal.woff2") format("woff2");
-    unicode-range: U+1F00-1FFF;
-}
-
-@font-face {
     font-family: "JetBrains Mono";
     font-style: normal;
     font-weight: 400;
@@ -206,15 +179,21 @@
     --r-lg: 10px;
     --r-pill: 999px;
 
-    /* Type */
+    /* Type — one family for every heading and paragraph, in both languages.
+       Inter's Latin and Greek cuts share the same geometry, stroke weight and
+       proportions, so an English and a Greek screen read identically.
+       JetBrains Mono is reserved for code, IDs, timestamps and tabular
+       numbers. Nothing is set in a serif. */
     --font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-    --font-display: "Instrument Serif", "Noto Serif Display", Georgia, "Times New Roman", serif;
+    --font-display: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
     --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+    --tracking-display: -0.02em;
+    --tracking-heading: -0.015em;
 
-    /* Modular type scale — 30 / 23 / 18 / 15 / 13 / 11px */
-    --text-2xl: 30px;
-    --text-xl:  23px;
-    --text-lg:  18px;
+    /* Modular type scale — 28 / 21 / 17 / 15 / 13 / 11px */
+    --text-2xl: 28px;
+    --text-xl:  21px;
+    --text-lg:  17px;
     --text-md:  15px;
     --text-sm:  13px;
     --text-xs:  11px;
@@ -270,7 +249,7 @@ body {
 
 /* Greek carries longer words and denser ascenders/tonos marks; extra leading
    keeps paragraphs calm and readable at every width. */
-html[lang="el"] body { line-height: 1.72; }
+html[lang="el"] body { line-height: 1.68; }
 
 img, svg { display: block; max-width: 100%; }
 
@@ -320,9 +299,9 @@ ul, ol { list-style: none; }
 
 h1, .display {
     font-family: var(--font-display);
-    font-weight: 400;
-    line-height: 1.18;
-    letter-spacing: -0.01em;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: var(--tracking-display);
     color: var(--text-strong);
     text-wrap: balance;
 }
@@ -332,8 +311,8 @@ h1 { font-size: var(--text-2xl); }
 h2, h3, h4 {
     font-family: var(--font);
     font-weight: 600;
-    line-height: 1.28;
-    letter-spacing: -0.01em;
+    line-height: 1.3;
+    letter-spacing: var(--tracking-heading);
     color: var(--text-strong);
 }
 

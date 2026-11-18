@@ -4,14 +4,9 @@
 
 {% block title %}Create administrator — CyberSyn{% endblock %}
 
-{% set brand_title = "One administrator per workspace." %}
-{% set brand_lead = "Your administrator account holds this workspace: you add team members, choose which checks run, and approve one-off exceptions." %}
-{% set eyebrow = "New workspace" %}
 {% set title = "Create administrator account" %}
-{% set lead = "Pick a username and a password for this workspace. Store the password somewhere safe — there is no reset link on a local server." %}
 {% set back_href = "/?tab=admin" %}
 {% set back_label = "Back to sign in" %}
-{% set footnote = "Your account lives only on this computer." %}
 
 {% block form %}
 <div class="auth-field">
@@ -24,6 +19,7 @@
     <input type="password" id="new-admin-password" placeholder="Choose a password"
            autocomplete="new-password">
     <span class="auth-hint" id="admin-password-rule"></span>
+    <span class="auth-hint">Store this password somewhere safe — there is no reset link on a local server.</span>
 </div>
 <div class="auth-field">
     <label for="new-admin-confirm">Confirm password</label>

@@ -134,6 +134,39 @@ class Rules(unittest.TestCase):
         with patch.dict(model_cache._spacy, en_core_web_sm=fake_model), ThreadPoolExecutor(4) as pool:
             list(pool.map(lambda _: model_cache.run_ner("en_core_web_sm", "test"), range(8)))
 
+    def test_demo_tiles_trip_their_own_check(self):
+        """The four workspace demo tiles must behave as their labels say.
+
+        Parsed from the shipped template, so the prompt a member actually
+        gets cannot drift away from the check the tile advertises.
+        """
+        import html
+        import re
+
+        template = (Path(__file__).resolve().parents[1] / "src/templates/workspace.html").read_text()
+        tiles = re.findall(
+            r'data-starter data-check="(\w*)">\s*'
+            r'<span class="demo-tile-label">([^<]+)</span>\s*'
+            r'<span class="demo-tile-prompt">([^<]+)</span>',
+            template,
+        )
+        self.assertEqual([rule for rule, _label, _prompt in tiles],
+                         ["", "check1", "check2", "check3"])
+        prompts = {rule: html.unescape(prompt).strip() for rule, _label, prompt in tiles}
+
+        self.assertFalse(greek_pii.analyze(prompts[""])["blocked"])
+        self.assertFalse(context.analyze(prompts[""])["blocked"])
+        self.assertFalse(injection.analyze(prompts[""])["blocked"])
+
+        self.assertTrue(greek_pii.analyze(prompts["check1"])["blocked"])
+        self.assertFalse(injection.analyze(prompts["check1"])["blocked"])
+
+        self.assertTrue(context.analyze(prompts["check2"])["blocked"])
+        self.assertFalse(greek_pii.analyze(prompts["check2"])["blocked"])
+
+        self.assertTrue(injection.analyze(prompts["check3"])["blocked"])
+        self.assertFalse(greek_pii.analyze(prompts["check3"])["blocked"])
+
     def test_invalid_verdict_fails_closed(self):
         for verdict in ({}, {"blocked": None}, {"blocked": "false"}):
             with patch.object(scanning, 'run_check', return_value=verdict), self.assertRaises(scanning.ChatError):

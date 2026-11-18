@@ -746,7 +746,7 @@
 
     /* Called by api.js when the server reports an expired session. */
     global.onSessionExpired = function () {
-        global.Loading.toast("Your session ended. Sign in again to continue.", "warn");
+        global.Loading.toast("Session ended.", "warn");
         setTimeout(function () { location.replace("/"); }, 900);
     };
 

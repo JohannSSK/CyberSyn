@@ -466,6 +466,8 @@ async function finish() {
         card.querySelector("code").textContent === evil);
 
     await runEditInPlace();
+    testDesignOverhaul();
+    await testDemoTiles();
     testBrowserBoundaries();
     await testSignedInScreens();
     await testPortal();
@@ -1141,4 +1143,179 @@ async function testSignedInScreens() {
     check("Profile uses a fresh approval to change the administrator password", profile.posted.some((r) => r.key === "ADMIN_PASSWORD" &&
         r.body.token === "profile-once" && r.body.new_password === "  new 456  " && r.body.current_password === "  old 123  "));
     profile.win.close();
+}
+
+/* --------------------------------------------------------------------------
+   Design overhaul — one type family, compact page headers, flat settings
+   screens, and the four check-gated demo tiles on an empty conversation.
+   -------------------------------------------------------------------------- */
+
+const sheet = (name) => fs.readFileSync(path.join(ROOT, "src", "static", "css", name), "utf8");
+
+function testDesignOverhaul() {
+    console.log("\nOne type family");
+    const base = sheet("base.css");
+    check("no serif display family is left in the design tokens",
+        !/Instrument Serif|Noto Serif Display|Georgia|Times New Roman/.test(base));
+    check("--font-display resolves to Inter", /--font-display:\s*"Inter"/.test(base));
+    check("headings carry the -0.02em display tracking",
+        /--tracking-display:\s*-0\.02em/.test(base) &&
+        /letter-spacing:\s*var\(--tracking-display\)/.test(base));
+    check("headings are set in a semibold weight, not a 400 italic-style serif",
+        /h1, \.display \{[\s\S]*?font-weight:\s*600/.test(base));
+    check("JetBrains Mono stays reserved for code and tabular numbers",
+        /--font-mono:\s*"JetBrains Mono"/.test(base) && /\.mono \{[\s\S]*?font-variant-numeric:\s*tabular-nums/.test(base));
+    const fontFiles = fs.readdirSync(path.join(ROOT, "src", "static", "fonts"));
+    check("unused serif font files are pruned",
+        !fontFiles.some((f) => /instrument|noto-serif/i.test(f)), fontFiles.join(","));
+    for (const name of ["auth.css", "workspace.css", "components.css", "page.css", "help.css"]) {
+        check(`${name} asks for no serif family`,
+            !/Instrument Serif|Noto Serif Display|Georgia/.test(sheet(name)));
+    }
+    check("the bundled licence no longer credits the serif faces",
+        !/Instrument Serif|Noto Serif Display/.test(
+            fs.readFileSync(path.join(ROOT, "src", "static", "fonts", "OFL.txt"), "utf8")));
+
+    console.log("\nCompact page headers");
+    const HEADER_PAGES = ["settings", "profile", "help", "stats", "team", "index", "auth_page"];
+    for (const page of HEADER_PAGES) {
+        const html = template(page + ".html");
+        check(`${page} has no eyebrow line`, !/class="eyebrow"/.test(html));
+        check(`${page} has no muted one-line lead`, !/<p class="dim">/.test(html));
+        check(`${page} still names itself with an h1`, /<h1\b/.test(html));
+    }
+    const indexHtml = template("index.html");
+    check("the sign-in screen has no marketing split pane",
+        !/class="auth-brand"/.test(indexHtml) && !/auth-points/.test(indexHtml) &&
+        !/auth-progress/.test(indexHtml) && !/Self-hosted AI security gateway/.test(indexHtml));
+    check("the sign-in screen has no step eyebrows or privacy footnote",
+        !/Step 1 of 2|Step 2 of 2/.test(indexHtml) && !/auth-footnote/.test(indexHtml));
+    check("the account pages match the single-surface layout",
+        !/class="auth-brand"/.test(template("auth_page.html")) &&
+        !/auth-progress|auth-eyebrow|auth-footnote/.test(template("auth_page.html")));
+    check("no muted lead line repeats the sign-in or account titles",
+        !/auth-lead/.test(indexHtml) && !/auth-lead/.test(template("auth_page.html")) &&
+        ["create_admin", "create_member", "delete_admin", "delete_member"]
+            .every((page) => !/set lead|auth-lead/.test(template(page + ".html"))));
+
+    console.log("\nFlat settings screens");
+    for (const page of ["settings", "profile", "help"]) {
+        const html = template(page + ".html");
+        check(`${page} drops the stacked card containers`, !/class="card|card-title/.test(html));
+        check(`${page} is built from flat sections`, /class="section"/.test(html));
+    }
+    check("help.css no longer boxes its rule list", !/\.check-card \{\s*padding/.test(sheet("help.css")));
+    const pageCss = sheet("page.css");
+    check("a flat section is a labelled two-column block with a hairline",
+        /\.section \{[^}]*grid-template-columns:[^}]*\}/.test(pageCss) &&
+        /\.section \{[^}]*border-top:\s*1px solid var\(--border-soft\)/.test(pageCss));
+    check("sections stack cleanly on narrow viewports",
+        /@media \(max-width: 760px\)[\s\S]*?\.section \{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/.test(pageCss));
+    check("the page label sits in a left column on desktop",
+        /\.section-label h2[\s\S]*?font-weight:\s*600/.test(pageCss));
+
+    console.log("\nChat measure and demo tiles");
+    const wsCss = sheet("workspace.css");
+    check("the chat stream and composer widen to a 940px measure",
+        /#chat-stream \.stream-inner \{ max-width: 940px/.test(wsCss) &&
+        /\.composer-inner \{\s*max-width: 940px/.test(wsCss));
+    check("vertical rhythm is tighter than the old 820px sheet",
+        /\.stream \{[^}]*padding: 18px 0 12px/.test(wsCss) &&
+        /\.bubble \{\s*padding: 14px 18px/.test(wsCss));
+    check("demo tiles form a 2x2 grid", /\.demo-grid \{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/.test(wsCss));
+    check("a tile for a switched-off check is faded and inert",
+        /\.demo-tile:disabled[\s\S]*?opacity:\s*0\.42[\s\S]*?pointer-events:\s*none/.test(wsCss));
+    const wsHtml = template("workspace.html");
+    check("four demo tiles ship in the template", (wsHtml.match(/data-starter/g) || []).length === 4);
+    check("tiles 2-4 each name the check they trip",
+        ["check1", "check2", "check3"].every((rule) => wsHtml.includes(`data-check="${rule}"`)));
+    check("the reassuring composer footer is gone",
+        !/composer-foot|Checked on this computer before anything reaches the AI/.test(wsHtml));
+    check("the coaching prompt and starter caption are gone",
+        !/What are we working on today|Pick a starter|first-run-title|starter-chip/.test(wsHtml));
+    check("the welcome copy no longer explains the checks twice",
+        !/Every message is checked on this computer through three local checks/.test(wsHtml));
+}
+
+async function testDemoTiles() {
+    console.log("\nDemo tiles in the browser");
+    const p = screenFixture("workspace", (key) => {
+        if (key === "SETTINGS") return { check1: false, check2: true, check3: false, API_KEY_MASK: "sk-***" };
+        if (key === "CHATS") return { chats: [] };
+        return {};
+    });
+    await tick();
+    const { $, win } = p;
+    const tiles = () => [...win.document.querySelectorAll(".demo-tile")];
+
+    check("an empty conversation shows four tiles", tiles().length === 4, tiles().length);
+    check("the clean prompt is always available",
+        !!tiles()[0] && !tiles()[0].disabled && !tiles()[0].hasAttribute("aria-disabled"));
+    check("a switched-off check disables its tile completely",
+        tiles()[1].disabled && tiles()[1].getAttribute("aria-disabled") === "true" && tiles()[3].disabled);
+    check("a check that is still on keeps its tile clickable",
+        !tiles()[2].disabled && !tiles()[2].hasAttribute("aria-disabled"));
+
+    tiles()[0].dispatchEvent(new win.MouseEvent("click", { bubbles: true }));
+    const cleanPrompt = tiles()[0].querySelector(".demo-tile-prompt").textContent.trim();
+    check("picking the clean tile fills the composer without sending",
+        $("#prompt-input").value === cleanPrompt &&
+        win.document.activeElement === $("#prompt-input") &&
+        !p.posted.some((r) => r.key === "CHAT"));
+    $("#prompt-input").value = "";
+
+    tiles()[1].dispatchEvent(new win.MouseEvent("click", { bubbles: true }));
+    check("a disabled tile cannot fill the composer", $("#prompt-input").value === "");
+
+    win.I18n.set("el");
+    await tick();
+    check("the four tiles carry Greek labels and prompts",
+        tiles()[0].querySelector(".demo-tile-label").textContent === "Κανονικό αίτημα" &&
+        tiles()[1].querySelector(".demo-tile-label").textContent.includes("Προσωπικά δεδομένα") &&
+        tiles()[1].querySelector(".demo-tile-prompt").textContent.includes("ΑΦΜ"));
+    check("Greek prompts still carry a check-3 trigger",
+        /Αγνόησε/.test(tiles()[3].querySelector(".demo-tile-prompt").textContent));
+    check("disabled tiles stay disabled through the language switch",
+        tiles()[1].disabled && tiles()[3].disabled && !tiles()[2].disabled);
+    tiles()[0].dispatchEvent(new win.MouseEvent("click", { bubbles: true }));
+    check("the Greek prompt is what lands in the composer",
+        $("#prompt-input").value === tiles()[0].querySelector(".demo-tile-prompt").textContent.trim());
+    win.I18n.set("en");
+    await tick();
+
+    $("#btn-new-chat").dispatchEvent(new win.MouseEvent("click", { bubbles: true }));
+    await tick();
+    check("starting a new chat brings the four tiles back", tiles().length === 4);
+    win.close();
+
+    /* Tiles can render before SETTINGS answers; the disabled state must catch up. */
+    const slow = screenFixture("workspace", (key) => {
+        if (key === "SETTINGS") {
+            return new Promise((resolve) => setTimeout(
+                () => resolve({ check1: true, check2: true, check3: false }), 30));
+        }
+        if (key === "CHATS") return { chats: [] };
+        return {};
+    });
+    const slowTiles = () => [...slow.win.document.querySelectorAll(".demo-tile")];
+    await tick();
+    check("tiles render before the settings answer arrives", slowTiles().length === 4);
+    check("nothing is disabled until the checks are known", slowTiles().every((t) => !t.disabled));
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    check("resolved settings disable exactly the tile whose check is off",
+        slowTiles()[3].disabled && !slowTiles()[1].disabled && !slowTiles()[2].disabled);
+    slow.win.close();
+
+    /* A conversation with messages keeps the stream, not the tiles. */
+    const history = screenFixture("workspace", (key) => {
+        if (key === "SETTINGS") return { check1: true, check2: true, check3: true };
+        if (key === "CHATS") return { chats: [{ id: 1, title: "Kept" }] };
+        if (key === "CHATS_OPEN") return { chat: { id: 1, title: "Kept", messages: [
+            { id: 1, prompt: "hello", answer: "hi", created_at: "2026-11-18T09:00:00Z" }] } };
+        return {};
+    });
+    await tick();
+    check("an existing conversation shows no demo tiles",
+        history.win.document.querySelectorAll(".demo-tile").length === 0);
+    history.win.close();
 }
