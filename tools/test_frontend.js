@@ -981,6 +981,13 @@ async function testPortal() {
     check("Left switches back to Team member", active("member") && win.document.activeElement === $("#tab-member"));
     press("member", "End");
     check("End and Home move across the tab group", active("admin") && (press("admin", "Home"), active("member")));
+    const pressKey = (key) => win.document.dispatchEvent(new win.KeyboardEvent("keydown", { key, bubbles: true }));
+    pressKey("2");
+    check("pressing 2 opens the administrator form and its first field",
+        active("admin") && win.document.activeElement === $("#admin-username"));
+    pressKey("1");
+    check("pressing 1 returns to the team member form",
+        active("member") && win.document.activeElement === $("#employee-username"));
     $("#employee-username").value = "member_fixture";
     $("#employee-password").value = "  fixture member pass  ";
     p.submit("#employee-login-form");
@@ -990,7 +997,7 @@ async function testPortal() {
         JSON.stringify(independent) === JSON.stringify({ username: "member_fixture", password: "  fixture member pass  " }));
     check("an ambiguous workspace explains what to enter", $("#employee-msg").textContent === "Enter your workspace name to sign in.");
     win.I18n.set("el");
-    check("translated member tab, hint, placeholder and sign-in error", $("#tab-member").textContent === "Μέλος ομάδας" &&
+    check("translated member tab, hint, placeholder and sign-in error", $("#tab-member .auth-tab-label").textContent === "Μέλος ομάδας" &&
         /χώρο/.test($("#workspace-hint").textContent) && $("#employee-workspace").placeholder !== "Administrator username" &&
         /Πληκτρολογήστε/.test($("#employee-msg").textContent));
     win.I18n.set("en");
@@ -1027,6 +1034,17 @@ async function testPortal() {
     check("hub sign-out revokes the cookie and restores the admin form", restored.posted.some((r) => r.key === "ADMIN_LOGOUT") &&
         !restored.win.Api.Session.getAdmin() && !restored.$("#admin-sign-in").hidden && restored.$("#admin-session-badge").hidden);
     restored.win.close();
+
+    const hub = screenFixture("index", (key) => key === "ADMIN_SESSION" ? VERIFIED : {}, { member: false, realShell: true, query: "?tab=admin" });
+    await tick();
+    let opened = "";
+    hub.win.document.querySelectorAll(".auth-dash-card").forEach((card) => {
+        card.addEventListener("click", (event) => { event.preventDefault(); opened = card.getAttribute("href"); });
+    });
+    hub.win.document.dispatchEvent(new hub.win.KeyboardEvent("keydown", { key: "3", bubbles: true }));
+    check("a digit opens the matching administrator card without touching a form",
+        opened === "/team" && !hub.$("#admin-session-badge").hidden);
+    hub.win.close();
 
     const explicit = screenFixture("index", (key) => key === "ADMIN_SESSION" ? VERIFIED : {}, { member: false, realShell: true, query: "?tab=member" });
     await tick();
@@ -1643,9 +1661,15 @@ function testDesignOverhaul() {
         check(`${page} still names itself with an h1`, /<h1\b/.test(html));
     }
     const indexHtml = template("index.html");
-    check("the sign-in screen has no marketing split pane",
-        !/class="auth-brand"/.test(indexHtml) && !/auth-points/.test(indexHtml) &&
-        !/auth-progress/.test(indexHtml) && !/Self-hosted AI security gateway/.test(indexHtml));
+    check("the sign-in screen gives the introduction one third and the forms two",
+        /class="auth-shell auth-split"/.test(indexHtml) && /class="auth-aside"/.test(indexHtml) &&
+        !/auth-points/.test(indexHtml) && !/auth-progress/.test(indexHtml) &&
+        !/Self-hosted AI security gateway/.test(indexHtml));
+    check("exactly one third of the portal is introduction",
+        /\.auth-shell\.auth-split \{[^}]*grid-template-columns:\s*minmax\(300px, 1fr\) minmax\(0, 2fr\)/.test(sheet("auth.css")));
+    check("the hub draws one card per administrator task",
+        (indexHtml.match(/class="auth-dash-card/g) || []).length === 5 &&
+        /class="auth-dashboard"/.test(indexHtml));
     check("the sign-in screen has no step eyebrows or privacy footnote",
         !/Step 1 of 2|Step 2 of 2/.test(indexHtml) && !/auth-footnote/.test(indexHtml));
     check("the account pages match the single-surface layout",
@@ -1681,6 +1705,13 @@ function testDesignOverhaul() {
         /\.stream \{[^}]*padding: 18px 0 12px/.test(wsCss) &&
         /\.bubble \{\s*padding: 10px 14px/.test(wsCss));
     check("demo tiles form a 2x2 grid", /\.demo-grid \{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/.test(wsCss));
+    check("demo tiles fill an empty screen instead of floating in it",
+        /\.demo-tile \{[^}]*min-height:\s*148px/.test(wsCss) &&
+        /\.stream\.is-first-run \{[^}]*display:\s*flex/.test(wsCss) &&
+        /\.stream\.is-first-run \.stream-inner \{[^}]*margin-top:\s*auto/.test(wsCss));
+    check("keyboard hints stay invisible until their control is hovered",
+        /\.shortcut \{[^}]*opacity:\s*0/.test(sheet("components.css")) &&
+        /button:hover \.shortcut[\s\S]{0,200}opacity:\s*1/.test(sheet("components.css")));
     check("a tile for a switched-off check is faded and inert",
         /\.demo-tile:disabled[\s\S]*?opacity:\s*0\.42[\s\S]*?pointer-events:\s*none/.test(wsCss));
     const wsHtml = template("workspace.html");
@@ -1725,6 +1756,23 @@ async function testDemoTiles() {
 
     tiles()[1].dispatchEvent(new win.MouseEvent("click", { bubbles: true }));
     check("a disabled tile cannot fill the composer", $("#prompt-input").value === "");
+
+    check("an empty conversation marks the stream for its centred tiles",
+        win.document.querySelector("#chat-stream").classList.contains("is-first-run"));
+
+    $("#prompt-input").blur();
+    win.document.dispatchEvent(new win.KeyboardEvent("keydown", { key: "3", bubbles: true }));
+    check("pressing 3 fills the message box from the third tile",
+        $("#prompt-input").value === tiles()[2].querySelector(".demo-tile-prompt").textContent.trim());
+    $("#prompt-input").value = "";
+    $("#prompt-input").dispatchEvent(new win.KeyboardEvent("keydown", { key: "3", bubbles: true }));
+    check("a digit typed inside the message box is left alone", $("#prompt-input").value === "");
+
+    win.document.dispatchEvent(new win.KeyboardEvent("keydown", { key: "/", bubbles: true }));
+    check("slash jumps to the search box", win.document.activeElement === $("#chat-search"));
+    $("#chat-search").dispatchEvent(new win.KeyboardEvent("keydown", { key: "2", bubbles: true }));
+    check("digits typed in search are left alone", $("#prompt-input").value === "");
+    $("#prompt-input").focus();
 
     win.I18n.set("el");
     await tick();

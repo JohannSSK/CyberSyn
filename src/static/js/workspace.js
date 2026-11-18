@@ -605,6 +605,7 @@
             });
         });
         nodes.stream.appendChild(fragment);
+        if (nodes.viewport) nodes.viewport.classList.add("is-first-run");
         applyStarterStates();
         if (window.I18n && typeof window.I18n.apply === "function") {
             window.I18n.apply();
@@ -612,7 +613,16 @@
         return true;
     }
 
+    /* Leaving the first-run view: drop the tiles (or the empty notice) and
+       give the stream its normal top-aligned rhythm back. */
+    function clearEmptyState() {
+        var emptyNode = nodes.stream.querySelector(".demo, .empty");
+        if (emptyNode) emptyNode.remove();
+        if (nodes.viewport) nodes.viewport.classList.remove("is-first-run");
+    }
+
     function emptyStream(title, body, icon) {
+        if (nodes.viewport) nodes.viewport.classList.remove("is-first-run");
         nodes.stream.innerHTML =
             '<div class="empty">' + Icons.html(icon, "icon") +
             "<h2>" + Dom.esc(title) + "</h2><p>" + Dom.esc(body) + "</p></div>";
@@ -622,6 +632,7 @@
         var query = state.query;
         var visible = query ? state.messages.filter(matchesQuery) : state.messages;
         nodes.stream.innerHTML = "";
+        if (nodes.viewport) nodes.viewport.classList.remove("is-first-run");
 
         if (!visible.length) {
             if (query) {
@@ -927,8 +938,7 @@
 
     function renderBlocked(blockInfo, promptText, approveOverride) {
         // Clear any empty-state notice if this was the chat's first attempt.
-        var emptyNode = nodes.stream.querySelector(".demo, .empty");
-        if (emptyNode) emptyNode.remove();
+        clearEmptyState();
 
         var wrap = Dom.el("div", "msg");
 
@@ -1138,8 +1148,7 @@
         if (creating && nodes.rename) nodes.rename.disabled = true;
         clearChatError();
         var paused = false;
-        var emptyNode = nodes.stream.querySelector(".demo, .empty");
-        if (emptyNode) emptyNode.remove();
+        clearEmptyState();
 
         var waiting = showPending(text, bypass);
 
@@ -1530,6 +1539,38 @@
     Dom.on(nodes.searchClear, "click", function () {
         clearSearch();
         nodes.search.focus();
+    });
+
+    /* ---- single-key navigation --------------------------------------
+       "/" jumps to search and 1-4 drop a starter prompt into the message
+       box. Both hints are painted only while their control is hovered, and
+       neither fires while someone is typing in a field.
+       ---------------------------------------------------------------- */
+
+    function typingInField(target) {
+        if (!target || !target.tagName) return false;
+        var tag = target.tagName;
+        return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" ||
+            target.isContentEditable === true;
+    }
+
+    Dom.on(document, "keydown", function (event) {
+        if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
+        if (typingInField(event.target)) return;
+
+        if (event.key === "/" && nodes.search) {
+            event.preventDefault();
+            nodes.search.focus();
+            nodes.search.select();
+            return;
+        }
+
+        var index = parseInt(event.key, 10);
+        if (isNaN(index) || index < 1) return;
+        var tile = Dom.$$(".demo-tile[data-starter]", nodes.stream)[index - 1];
+        if (!tile || tile.disabled) return;
+        event.preventDefault();
+        tile.click();
     });
 
     Dom.on(document, "cybersyn:lang", function () {

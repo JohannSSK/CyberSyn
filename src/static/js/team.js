@@ -141,6 +141,21 @@
     }
 
     Dom.on($("#btn-refresh"), "click", function () { load($("#btn-refresh")); });
+
+    /* "R" refreshes the roster; the hint is painted only while the button is
+       hovered, and the key is inert while someone is typing in a field. */
+    Dom.on(document, "keydown", function (event) {
+        if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
+        var target = event.target;
+        if (target && target.tagName && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+        if (target && target.isContentEditable) return;
+        if (event.key !== "r" && event.key !== "R") return;
+        var button = $("#btn-refresh");
+        if (!button || button.disabled) return;
+        event.preventDefault();
+        load(button);
+    });
+
     Dom.on(window, "beforeprint", updatePrintFooter);
     Dom.on(document, "cybersyn:lang", function () {
         if (latestData) render(latestData);

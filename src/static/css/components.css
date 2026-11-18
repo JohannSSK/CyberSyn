@@ -272,6 +272,31 @@ input:-webkit-autofill:active {
     line-height: 1.5;
 }
 
+/* --------------------------------------------------------------------------
+   Keyboard hints — a quiet pill that only appears while its control is
+   hovered, so shortcuts stay discoverable without decorating the page.
+   -------------------------------------------------------------------------- */
+
+.shortcut {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--fast) var(--ease);
+}
+
+button:hover .shortcut,
+a:hover .shortcut,
+.demo-tile:hover .shortcut,
+.auth-dash-card:hover .shortcut,
+.composer-box:hover .shortcut,
+.search-box:hover .shortcut {
+    opacity: 1;
+}
+
+/* Touch screens never hover, so the reserved space would be wasted. */
+@media (hover: none) {
+    .shortcut { display: none; }
+}
+
 .callout {
     padding: 12px 16px;
     border-radius: var(--r-md);
