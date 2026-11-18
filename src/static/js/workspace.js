@@ -459,8 +459,10 @@
 
         var hasAnswer = message.answer && String(message.answer).trim() !== "" &&
             String(message.answer) !== "NULL";
+        var reply = null;
+        var copyTintTimer = null;
         if (hasAnswer) {
-            var reply = Dom.el("div", "bubble bubble-ai");
+            reply = Dom.el("div", "bubble bubble-ai");
             reply.innerHTML = window.Markdown.render(message.answer);
             Dom.highlightText(reply, state.query);
             wrap.appendChild(reply);
@@ -485,7 +487,17 @@
         var actions = Dom.el("div", "msg-actions");
         actions.appendChild(iconButton("copy", "Copy the answer", function () {
             Dom.copyText(message.answer || "")
-                .then(function () { Loading.toast("Answer copied.", "success"); })
+                .then(function () {
+                    if (reply) {
+                        if (copyTintTimer) clearTimeout(copyTintTimer);
+                        reply.classList.add("is-copied");
+                        copyTintTimer = setTimeout(function () {
+                            reply.classList.remove("is-copied");
+                            copyTintTimer = null;
+                        }, 700);
+                    }
+                    Loading.toast("Answer copied.", "success");
+                })
                 .catch(function () {
                     Loading.toast("Clipboard access was blocked — select the text to copy it.", "error");
                 });

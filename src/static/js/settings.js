@@ -45,6 +45,7 @@
         keyState: $("#key-state"),
         modelState: $("#model-state"),
         saveConnection: $("#btn-save-connection"),
+        connectionState: $("#connection-state"),
         provider: $("#setting-provider"),
         base: $("#setting-base"),
         baseField: $("#field-base")
@@ -95,7 +96,39 @@
         }
     }
 
+    var SAVED_FLASH_MS = 1500;
+    var checksSavedTimer = null;
+    var connectionSavedTimer = null;
+
+    function clearChecksSaved() {
+        if (checksSavedTimer) {
+            clearTimeout(checksSavedTimer);
+            checksSavedTimer = null;
+        }
+    }
+
+    function flashChecksSaved() {
+        if (!nodes.checksState) return;
+        clearChecksSaved();
+        nodes.checksState.textContent = t("Saved.");
+        checksSavedTimer = setTimeout(function () {
+            checksSavedTimer = null;
+            if (!dirty && nodes.checksState) nodes.checksState.textContent = "";
+        }, SAVED_FLASH_MS);
+    }
+
+    function flashConnectionSaved() {
+        if (!nodes.connectionState) return;
+        if (connectionSavedTimer) clearTimeout(connectionSavedTimer);
+        nodes.connectionState.textContent = t("Saved.");
+        connectionSavedTimer = setTimeout(function () {
+            connectionSavedTimer = null;
+            if (nodes.connectionState) nodes.connectionState.textContent = "";
+        }, SAVED_FLASH_MS);
+    }
+
     function markDirty() {
+        clearChecksSaved();
         dirty = true;
         nodes.checksState.textContent = t("Unsaved changes");
         updateAllOff();
@@ -134,6 +167,7 @@
         showBaseField(nodes.provider.value);
         savedMask = data.API_KEY_MASK || "";
         paintKeyState();
+        clearChecksSaved();
         dirty = false;
         nodes.checksState.textContent = "";
     }
@@ -174,6 +208,7 @@
                 });
             }).then(function (data) {
                 apply(data);
+                flashChecksSaved();
                 Loading.toast("Safety checks saved.", "success");
             }).catch(function (err) {
                 Loading.toast(err.message, "error");
@@ -203,6 +238,7 @@
             }).then(function (data) {
                 nodes.key.value = "";
                 apply(data);
+                flashConnectionSaved();
                 Loading.toast("Connection saved.", "success");
                 probedKey = null;
                 refreshModels();
@@ -326,7 +362,14 @@
     Dom.on(document, "cybersyn:lang", function () {
         updateAllOff();
         paintKeyState();
-        if (dirty) nodes.checksState.textContent = t("Unsaved changes");
+        if (dirty) {
+            nodes.checksState.textContent = t("Unsaved changes");
+        } else if (checksSavedTimer && nodes.checksState) {
+            nodes.checksState.textContent = t("Saved.");
+        }
+        if (connectionSavedTimer && nodes.connectionState) {
+            nodes.connectionState.textContent = t("Saved.");
+        }
         var autoOpt = nodes.provider.querySelector('option[value="auto"]');
         if (autoOpt) autoOpt.textContent = t("Detect automatically");
     });
