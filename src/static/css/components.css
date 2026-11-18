@@ -93,14 +93,6 @@
     border-radius: var(--r-sm);
 }
 
-.btn-lg {
-    min-height: 48px;
-    padding: 12px 24px;
-    font-size: var(--text-md);
-}
-
-.btn-block { width: 100%; }
-
 .btn .icon { width: var(--icon-sm); height: var(--icon-sm); flex: none; }
 
 /* --------------------------------------------------------------------------
@@ -201,25 +193,9 @@
 
 .select option { background: var(--surface-2); color: var(--text); }
 
-.hint,
-.field-hint { font-size: var(--text-sm); color: var(--text-muted); line-height: 1.5; margin: 0; }
+.hint { font-size: var(--text-sm); color: var(--text-muted); line-height: 1.5; margin: 0; }
 .hint.is-ok { color: var(--text-dim); }
 .hint.is-error { color: var(--danger); }
-
-.label-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 8px;
-}
-
-.row-end {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 10px;
-}
 
 .kbd {
     display: inline-block;
@@ -591,7 +567,7 @@
 }
 
 .modal-note-danger {
-    background: var(--danger-soft);
+    background: var(--surface-2);
     border-color: var(--danger-line);
 }
 
@@ -604,27 +580,6 @@
     gap: 10px;
     padding: 16px 24px;
     border-top: 1px solid var(--border-soft);
-}
-
-.btn-close {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex: none;
-    width: 44px;
-    height: 44px;
-    border-radius: var(--r-sm);
-    font-size: var(--text-xl);
-    line-height: 1;
-    color: var(--text-muted);
-    background: transparent;
-    transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
-}
-
-.btn-close:hover,
-.btn-close:focus-visible {
-    color: var(--text);
-    background: var(--surface-2);
 }
 
 /* --------------------------------------------------------------------------
@@ -734,8 +689,7 @@
     background: var(--surface-2);
 }
 
-.lang-btn,
-.lang-switch button {
+.lang-btn {
     position: relative;
     display: inline-flex;
     align-items: center;
@@ -756,23 +710,19 @@
                 border-color var(--fast) var(--ease);
 }
 
-.lang-btn::before,
-.lang-switch button::before {
+.lang-btn::before {
     content: "";
     position: absolute;
-    top: -9px;
-    bottom: -9px;
+    top: -10px;
+    bottom: -10px;
     left: 0;
     right: 0;
 }
 
 .lang-btn:hover,
-.lang-btn:focus-visible,
-.lang-switch button:hover,
-.lang-switch button:focus-visible { color: var(--text); }
+.lang-btn:focus-visible { color: var(--text); }
 
-.lang-btn.is-active,
-.lang-switch button.is-active {
+.lang-btn.is-active {
     background: var(--surface-3);
     color: var(--text-strong);
     border-color: var(--border);

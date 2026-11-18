@@ -352,8 +352,8 @@
 .unlock-lock::before {
     content: "";
     position: absolute;
-    top: -8px;
-    bottom: -8px;
+    top: -10px;
+    bottom: -10px;
     left: 0;
     right: 0;
 }

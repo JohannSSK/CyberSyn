@@ -123,8 +123,7 @@
     background: var(--field-deep);
 }
 
-.auth-shell .lang-btn.is-active,
-.auth-shell .lang-switch button.is-active {
+.auth-shell .lang-btn.is-active {
     background: var(--surface-3);
     color: var(--text-strong);
     border-color: var(--border-strong);

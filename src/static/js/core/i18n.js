@@ -277,11 +277,11 @@
         "Personal data": "Προσωπικά στοιχεία",
         "Confidential context": "Εμπιστευτικό περιεχόμενο",
         "Context": "Συμφραζόμενα",
-        "Prompt injection": "Prompt injection",
+        "Prompt injection": "Εντολές παράκαμψης (prompt injection)",
         "Injection": "Εντολές παράκαμψης",
         "Personal data check": "Έλεγχος προσωπικών στοιχείων",
         "Context check": "Έλεγχος συμφραζομένων",
-        "Prompt injection check": "Έλεγχος prompt injection",
+        "Prompt injection check": "Έλεγχος εντολών παράκαμψης",
         "Check": "Έλεγχος",
         "Local check": "Τοπικός έλεγχος",
         "a local check": "έναν τοπικό έλεγχο",
@@ -379,7 +379,7 @@
             "Κρυπτογραφείται σε αυτόν τον υπολογιστή και δεν επιστρέφεται ποτέ ολόκληρο στο πρόγραμμα περιήγησης.",
         "1. Personal data": "1. Προσωπικά στοιχεία",
         "2. Context": "2. Συμφραζόμενα",
-        "3. Prompt injection": "3. Prompt injection",
+        "3. Prompt injection": "3. Εντολές παράκαμψης (prompt injection)",
         "Model": "Μοντέλο",
         "API key": "Κλειδί API",
 
@@ -779,14 +779,18 @@
         for (var i = 0; i < ATTRS.length; i++) {
             var attr = ATTRS[i];
             if (!element.hasAttribute(attr)) continue;
+            var live = element.getAttribute(attr);
             var key = "__i18n_" + attr;
-            if (element[key] === undefined) {
-                element[key] = element.getAttribute(attr);
+            var last = "__i18n_last_" + attr;
+            if (element[key] === undefined ||
+                (element[last] !== undefined && live !== element[last])) {
+                element[key] = live;
             }
             var target = current === "el" ? translate(element[key]) : element[key];
-            if (element.getAttribute(attr) !== target) {
+            if (live !== target) {
                 element.setAttribute(attr, target);
             }
+            element[last] = target;
         }
     }
 
@@ -838,6 +842,7 @@
         ].forEach(function (option) {
             var btn = document.createElement("button");
             btn.type = "button";
+            btn.className = "lang-btn";
             btn.dataset.lang = option.code;
             btn.textContent = option.label;
             btn.title = option.tip;

@@ -106,13 +106,12 @@
             node.textContent = "";
             return;
         }
-        var half = Math.floor(series.length / 2);
         var prev = 0;
         var curr = 0;
-        series.slice(series.length - half * 2, series.length - half).forEach(function (d) {
+        series.slice(series.length - 14, series.length - 7).forEach(function (d) {
             prev += Number(d[field]) || 0;
         });
-        series.slice(series.length - half).forEach(function (d) {
+        series.slice(series.length - 7).forEach(function (d) {
             curr += Number(d[field]) || 0;
         });
 

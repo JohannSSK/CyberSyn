@@ -212,10 +212,7 @@
     .row-item .row-value { text-align: left; }
 }
 
-.settings-intro        { margin-bottom: 6px; }
-.settings-callout      { margin-top: 14px; }
-.profile-row           { padding: 3px 0; }
-.profile-signout-title { font-size: var(--text-md); font-weight: 600; color: var(--text-strong); }
+.settings-intro { margin-bottom: 6px; }
 
 .profile-head {
     display: flex;
