@@ -15,7 +15,7 @@ FROM python:3.11-slim AS builder
 
 ENV PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    HF_HOME=/opt/cybersyn/model-cache \
+    CYBERSYN_MODEL_CACHE=/opt/cybersyn/model-cache \
     TOKENIZERS_PARALLELISM=false
 
 # build-essential stays in this stage only: it lets any dependency without a
@@ -34,8 +34,10 @@ RUN pip install --upgrade pip \
  && pip check
 
 # Use the production loader to verify NER and an actual DistilBART forward pass.
-COPY src/MLscripts/model_cache.py /tmp/model_cache.py
-RUN python /tmp/model_cache.py
+COPY includes /app/includes
+COPY src/config.py /app/src/config.py
+COPY src/MLscripts/model_cache.py /app/src/MLscripts/model_cache.py
+RUN python /app/src/MLscripts/model_cache.py --download
 
 # ---------------------------------------------------------------------------
 # Stage 2 — runtime
@@ -48,7 +50,7 @@ LABEL org.opencontainers.image.title="CyberSyn" \
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    HF_HOME=/opt/cybersyn/model-cache \
+    CYBERSYN_MODEL_CACHE=/opt/cybersyn/model-cache \
     HF_HUB_OFFLINE=1 \
     TORCH_HOME=/opt/cybersyn/model-cache \
     TOKENIZERS_PARALLELISM=false \

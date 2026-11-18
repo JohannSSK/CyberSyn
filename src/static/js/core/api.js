@@ -146,11 +146,6 @@
             return EXACT_REMEDIES[text];
         }
         var m;
-        m = text.match(/^Not sent — (a check|checks) could not run \((.+)\)\.$/);
-        if (m) {
-            return "Not sent — " + m[1] + " could not run (" + clip(m[2], 38) +
-                "). Try a smaller paste, or ask your administrator to approve this once.";
-        }
         m = text.match(/^AI API Error:\s*(.+)$/);
         if (m) {
             var detail = clip(m[1].replace(/\.+$/, ""), 52);

@@ -10,6 +10,7 @@ import tempfile
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
+from math import ceil
 from pathlib import Path
 from unittest.mock import patch
 
@@ -26,6 +27,7 @@ import gunicorn_conf
 import rate_limit
 import secret_store
 from app import app
+from scanning import MAX_SCREEN_BUDGET
 from config import DB_FILE, ROUTES
 from errors import ApiError, ChatError
 from routes import chat_api
@@ -251,6 +253,9 @@ class Gateway(unittest.TestCase):
                 rows = con.execute(f"SELECT * FROM {table} WHERE Parent_id=?", (self.pid,)).fetchall()
                 self.assertNotIn(secret, repr([tuple(row) for row in rows]))
             self.assertIn("approved by owner", con.execute("SELECT detail FROM ACTIVITY_LOG WHERE Parent_id=? AND kind='override'", (self.pid,)).fetchone()[0])
+        timeline = self.post("TEAM", token=self.admin).json["timeline"]
+        self.assertEqual([row["detail"] for row in timeline if row["kind"] == "override"], ["approved by owner"])
+        self.assertEqual([row["detail"] for row in timeline if row["kind"] == "blocked"], ["API_KEY"])
 
     def test_limits_and_prompt_free_activity(self):
         self.edit(admin_token=self.admin, API_KEY="fixture", check1=False, check2=False, check3=False)
@@ -390,6 +395,11 @@ class Gateway(unittest.TestCase):
                     INSERT INTO SETTINGS VALUES (1,1,1,0,1,'old-model','');
                     CREATE TABLE ADMIN_SESSIONS(token_hash TEXT PRIMARY KEY, admin_id INTEGER, expires_at TEXT);
                     INSERT INTO ADMIN_SESSIONS VALUES ('old-digest',1,'2099-01-01T00:00:00+00:00');
+                    CREATE TABLE DISCOVERY_EVENTS(id INTEGER PRIMARY KEY, Parent_id INTEGER, observed_at TEXT,
+                        team TEXT, actor TEXT, host TEXT, tool_key TEXT, tool_name TEXT, method TEXT,
+                        bytes_sent INTEGER, data_signal TEXT, imported_at TEXT);
+                    INSERT INTO DISCOVERY_EVENTS VALUES (7,1,'2026-11-18','Sales','192.0.2.10',
+                        'chat.deepseek.com','deepseek','DeepSeek','POST',4200,'client_data','2026-11-18');
                     CREATE TABLE ACTIVITY_LOG(kind TEXT, detail TEXT);
                     INSERT INTO ACTIVITY_LOG VALUES ('blocked','old private text'),('prompt','old private text'),('login',NULL);
                 """)
@@ -411,8 +421,30 @@ class Gateway(unittest.TestCase):
                 db.init_db()
             with contextlib.closing(db.connect(path)) as con:
                 self.assertEqual(con.execute("SELECT detail FROM ACTIVITY_LOG ORDER BY rowid DESC").fetchone()[0], 'safe category')
+                self.assertEqual([tuple(r) for r in con.execute("SELECT id, is_sample, actor FROM DISCOVERY_EVENTS")],
+                                 [(7, 0, '192.0.2.10')])
                 with self.assertRaises(sqlite3.IntegrityError):
                     con.execute("UPDATE EMPLOYEES SET username='same' WHERE id=2")
+
+    def test_a_draft_title_is_saved_only_with_the_first_successful_exchange(self):
+        draft = {"prompt": "Ordinary fixture", "title": "  Team   review  "}
+        with patch.object(chat_api, "complete", return_value="ok") as complete:
+            no_key = self.post("CHAT", **self.ids, **draft)
+            self.assertEqual((no_key.status_code, no_key.json["error_code"]), (400, "missing_api_key"))
+            self.assertEqual(self.post("CHATS", **self.ids).json["chats"], [])
+            complete.assert_not_called()
+            self.edit(admin_token=self.admin, API_KEY="fixture", check1=False, check2=False, check3=False)
+            for title in ([], "  ", None):
+                self.assertEqual(self.post("CHAT", **self.ids, prompt=draft["prompt"], title=title).status_code, 400)
+            complete.assert_not_called()
+            result = self.post("CHAT", **self.ids, **draft)
+            self.assertEqual(result.status_code, 200, result.json)
+            self.assertEqual(complete.call_args.args[2], draft["prompt"])
+            chat_id = result.json["chat_id"]
+            result = self.post("CHAT", **self.ids, chat_id=chat_id, prompt="Another fixture", title="Not a rename")
+            self.assertEqual(result.status_code, 200, result.json)
+        self.assertEqual(self.post("CHATS", **self.ids).json["chats"][0]["title"], "Team review")
+        self.assertEqual(self.post("CHATS_OPEN", **self.ids, chat_id=chat_id).json["chat"]["title"], "Team review")
 
     def test_deletion_during_completion_and_legacy_search_ids(self):
         self.edit(admin_token=self.admin, API_KEY="fixture", check1=False, check2=False, check3=False)
@@ -460,6 +492,7 @@ class Gateway(unittest.TestCase):
             ai_client.complete("fixture-key", "gpt-4o-mini", "hi", api_base="http://127.0.0.1:9876/custom/v1")
         self.assertEqual(completion.call_args.kwargs['api_base'], "http://127.0.0.1:9876/custom/v1")
         self.assertEqual(completion.call_args.kwargs['messages'], [{"role":"user", "content":"hi"}])
+        self.assertEqual(completion.call_args.kwargs["num_retries"], 0)
 
     def test_completion_uses_selected_provider_not_the_model_spelling(self):
         import ai_client
@@ -482,7 +515,9 @@ class Gateway(unittest.TestCase):
         self.assertEqual(headers["X-Content-Type-Options"], "nosniff")
         self.assertEqual(headers["Referrer-Policy"], "no-referrer")
         self.assertEqual(gunicorn_conf.workers, 1)
-        self.assertGreaterEqual(gunicorn_conf.timeout, config.OPENAI_TIMEOUT + 45)
+        self.assertGreaterEqual(gunicorn_conf.timeout, MAX_SCREEN_BUDGET + config.OPENAI_TIMEOUT + 45)
+        self.assertIn(f'data-request-timeout="{ceil(MAX_SCREEN_BUDGET) + config.OPENAI_TIMEOUT + 30}"',
+                      self.api.get("/workspace").get_data(as_text=True))
         with tempfile.TemporaryDirectory() as tmp, patch.object(secret_store, 'KEY_FILE', Path(tmp)/'private/key'):
             with ThreadPoolExecutor(6) as pool:
                 values = list(pool.map(secret_store.encrypt_secret, ["stored"]*10))

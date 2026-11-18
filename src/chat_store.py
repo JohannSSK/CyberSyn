@@ -71,6 +71,17 @@ def make_title(prompt):
     return text[:TITLE_LEN - 3].rstrip() + "..."
 
 
+def normalise_title(value):
+    """Use the same title rules on chat creation and rename."""
+    if not isinstance(value, str):
+        return ""
+    try:
+        value.encode("utf-8")
+    except UnicodeError:
+        return ""
+    return " ".join(value.split())[:80].rstrip()
+
+
 def normalise(messages):
     """Give every message an id and a timestamp.
 
@@ -233,7 +244,7 @@ def _mutate(db_file, parent_id, employee_id, chat_id, change, *, retitle=None):
 
 
 def save_exchange(db_file, parent_id, employee_id, chat_id, prompt, answer, blocked=False, block_info=None,
-                  *, redaction_info=None, metadata_only=False):
+                  *, redaction_info=None, metadata_only=False, title=None):
     now = _now()
     entry = {"id": _new_id(), "prompt": prompt, "answer": answer, "created_at": now,
              "blocked": bool(blocked), "edited": False}
@@ -248,7 +259,7 @@ def save_exchange(db_file, parent_id, employee_id, chat_id, prompt, answer, bloc
             # A member may have been offboarded while the provider was answering.
             cur = con.execute("INSERT INTO CHATS (Parent_id, Employee_id, title, messages, created_at, updated_at) "
                               "SELECT Parent_id, id, ?, ?, ?, ? FROM EMPLOYEES WHERE Parent_id=? AND id=?",
-                              (make_title(prompt), _dump([entry]), now, now, parent_id, employee_id))
+                              (title or make_title(prompt), _dump([entry]), now, now, parent_id, employee_id))
             if not cur.rowcount:
                 return None, None
             chat_id = cur.lastrowid

@@ -27,7 +27,7 @@ Three findings, in the order they were found:
 import os
 import sys
 import time
-import types
+from unittest.mock import patch
 
 sys.path.insert(0, "src")
 
@@ -83,7 +83,7 @@ try:
 except ChatError as exc:
     check("a scanner that dies raises instead of passing", True)
     check("the reason is the last useful line, not a traceback",
-          "ModuleNotFoundError" in str(exc) and "File \"" not in str(exc), str(exc))
+          "missing dependencies" in str(exc) and "spacy" not in str(exc), str(exc))
 
 # The prompt must travel on stdin, and stdin alone.
 check("the prompt is passed on stdin", calls[-1]["stdin"] == PII, calls[-1]["stdin"][:40])
@@ -114,13 +114,31 @@ except ChatError as exc:
     check("a check that overruns raises", True)
     check("the overrun message names the check", "check1" in str(exc), str(exc))
 
+scanning.subprocess.run, calls = fake_subprocess(lambda c: FakeCompleted(stdout=c["stdin"]))
+try:
+    scanning.screen(PII, {"check2": True})
+    check("unusable fallback output refuses the prompt", False)
+except ChatError as exc:
+    check("unusable fallback output refuses with a safe reason",
+          "check2: scanner exited without a usable verdict" in exc.message and PII not in exc.message,
+          exc.message)
+
+scanning.subprocess.run, _ = fake_subprocess(lambda c: FakeCompleted(stderr="ImportError: " + c["stdin"], returncode=1))
+try:
+    scanning.screen(PII, ALL)
+    check("multiple fallback failures refuse the prompt", False)
+except ChatError as exc:
+    check("all failed fallback checks show the actionable diagnosis without stderr",
+          exc.status == 503 and all(f"{stage}: missing dependencies" in exc.message for stage in ALL)
+          and PII not in exc.message, exc.message)
+
 # --------------------------------------------------------------------------
 # 2. Screening is bounded and the checks run together
 # --------------------------------------------------------------------------
 
 scanning.registry.available = real_available
-from unittest.mock import patch
-with patch.object(scanning.registry, "run", side_effect=ValueError("runtime error")), patch.object(scanning, "_run_subprocess") as spawn:
+with patch.object(scanning.registry, "available", return_value=True), \
+        patch.object(scanning.registry, "run", side_effect=ValueError("runtime error")), patch.object(scanning, "_run_subprocess") as spawn:
     try:
         scanning.run_check("check1", PII)
         check("loaded scanner failures refuse", False)
@@ -192,21 +210,12 @@ sys.path.insert(0, str(ML_DIR))
 try:
     import model_cache
 
+    with (patch.object(model_cache, "get_taggers", return_value=(None, None)),
+          patch.object(model_cache, "get_zero_shot", side_effect=OSError("no model here")) as get_model):
+        result = model_cache.warm()
     check("warm reports what it loaded and what it skipped",
-          set(model_cache.warm()) == {"loaded", "skipped"}, model_cache.warm())
-
-    seen = {}
-    real_get = model_cache.get_zero_shot
-
-    def spy(local_only=False):
-        seen["local_only"] = local_only
-        raise RuntimeError("no model here")
-
-    model_cache.get_zero_shot = spy
-    model_cache.warm(("zero-shot",))
-    check("warm-up never reaches the network for weights",
-          seen.get("local_only") is True, seen)
-    model_cache.get_zero_shot = real_get
+          result == {"loaded": ["spacy"], "skipped": ["zero-shot"]}, result)
+    check("warm uses the same loader as requests", get_model.call_count == 1)
 except ImportError as exc:
     check("model_cache imports", False, str(exc))
 
@@ -215,14 +224,41 @@ except ImportError as exc:
 # --------------------------------------------------------------------------
 
 from config import OPENAI_TIMEOUT  # noqa: E402
+from gunicorn_conf import timeout as worker_timeout  # noqa: E402
+from routes.pages import _timeouts  # noqa: E402
 
-screen = scanning.SCREEN_BUDGET
-request_timeout = screen + OPENAI_TIMEOUT + 30
-check("the browser waits longer than the server can take",
-      request_timeout > screen + OPENAI_TIMEOUT,
-      f"{request_timeout} vs {screen}+{OPENAI_TIMEOUT}")
-check("screening fits well inside the wait",
-      screen <= 60, f"screen budget {screen}s")
+screen = scanning.MAX_SCREEN_BUDGET
+request_timeout = _timeouts()["request_timeout"]
+check("the real browser and Gunicorn settings cover the maximum screening and completion budgets",
+      worker_timeout >= request_timeout > screen + OPENAI_TIMEOUT,
+      f"{worker_timeout}, {request_timeout} vs {screen}+{OPENAI_TIMEOUT}")
+
+with patch.object(scanning, "SCREEN_BUDGET", 45), patch.object(scanning, "MAX_SCREEN_BUDGET", 180):
+    sizes = [scanning.screening_budget(text) for text in ("One short question", "x" * 4000, "x" * 16000, "x\n" * 8000)]
+    check("only longer pastes get more time, with a hard ceiling", sizes == [45, 53, 101, 180], sizes)
+    check("extra nonblank lines increase the budget even for a short string",
+          scanning.screening_budget("x\n" * 20) == 61 and scanning.screening_budget(" \n" * 20 + "x") == 45)
+
+
+def needs_more_time(stage, prompt, timeout, stop=None):
+    ready = time.monotonic() + .16
+    while time.monotonic() < ready and not stop():
+        time.sleep(.005)
+    # Deliberately return a valid-looking verdict even if cancelled. A late
+    # partial result still must never let the prompt pass.
+    return {"blocked": False}
+
+
+with patch.object(scanning, "SCREEN_BUDGET", .05), patch.object(scanning, "MAX_SCREEN_BUDGET", .5), \
+        patch.object(scanning, "run_check", side_effect=needs_more_time):
+    try:
+        scanning.screen("Short fixture", {"check2": True})
+        check("deadline cancellation cannot pass an incomplete scan", False)
+    except ChatError as exc:
+        check("deadline cancellation cannot pass an incomplete scan",
+              "check2: did not finish within 0.05s" in str(exc), str(exc))
+    check("the same controlled scanner finishes under the larger paste deadline",
+          scanning.screen("Fixture line\n" * 30, {"check2": True}) is None)
 
 # --------------------------------------------------------------------------
 # A refusal in one check cuts the others short, but only for that prompt

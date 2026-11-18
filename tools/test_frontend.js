@@ -347,37 +347,45 @@ function runSidebar() {
         const click = (node) =>
             node.dispatchEvent(new win.MouseEvent("click", { bubbles: true }));
 
-        check("the drawer starts shut", !aside.classList.contains("is-open"));
+        check("the drawer starts shut and inert", !aside.classList.contains("is-open") && aside.hasAttribute("inert"));
         check("the button says so", btn.getAttribute("aria-expanded") === "false");
         check("nothing is dimmed while it is shut",
             scrim && !scrim.classList.contains("is-open"));
 
         click(btn);
-        check("the button opens the drawer", aside.classList.contains("is-open"));
+        check("the button opens the drawer and puts focus inside", aside.classList.contains("is-open") &&
+            !aside.hasAttribute("inert") && doc.activeElement === aside);
         check("the button says so", btn.getAttribute("aria-expanded") === "true");
         check("opening dims the page behind it", scrim.classList.contains("is-open"));
 
         click(scrim);
         check("clicking away from the drawer closes it",
             !aside.classList.contains("is-open"));
-        check("and puts the button back", btn.getAttribute("aria-expanded") === "false");
+        check("and puts focus back on the toggle", btn.getAttribute("aria-expanded") === "false" &&
+            doc.activeElement === btn && aside.hasAttribute("inert"));
 
         click(btn);
         doc.dispatchEvent(new win.KeyboardEvent("keydown",
             { key: "Escape", bubbles: true }));
-        check("Escape closes the drawer", !aside.classList.contains("is-open"));
+        check("Escape closes the drawer and returns focus", !aside.classList.contains("is-open") &&
+            aside.hasAttribute("inert") && doc.activeElement === btn);
 
         click(btn);
         click(btn);
         check("a second press closes it again", !aside.classList.contains("is-open"));
 
         click(btn);
+        const link = aside.querySelector("a[href='/workspace']");
+        link.focus();
         win.__setNarrow(false);
         win.dispatchEvent(new win.Event("resize"));
         check("crossing the breakpoint leaves the drawer state behind",
             !aside.classList.contains("is-open"));
-        check("and the column is showing instead",
-            !doc.querySelector(".layout").classList.contains("is-sidebar-collapsed"));
+        check("the column becomes visible without moving focus", doc.activeElement === link &&
+            !aside.hasAttribute("inert") && !doc.querySelector(".layout").classList.contains("is-sidebar-collapsed"));
+        win.__setNarrow(true);
+        win.dispatchEvent(new win.Event("resize"));
+        check("narrowing cannot leave focus inside the now-inert drawer", aside.hasAttribute("inert") && doc.activeElement === btn);
     }
 
     /* ---- wide: a column that can be put away ---- */
@@ -522,7 +530,7 @@ function testChatReskin() {
         /\.composer-send:disabled \{[^}]*opacity: 0\.45[\s\S]*?cursor: not-allowed/.test(wsCss));
     check("the shortcut chip sits inside the box and hides on narrow screens",
         /\.composer-chip \{[^}]*align-self: flex-end/.test(wsCss) &&
-        /@media \(max-width: 640px\) \{\s*\.composer-chip \{ display: none; \}/.test(wsCss));
+        /@media \(max-width: 640px\), \(hover: none\) \{\s*\.composer-chip \{ display: none; \}/.test(wsCss));
     check("the composer box keeps the 1px --border and the focus recipe",
         /\.composer-box \{[^}]*background: var\(--surface-2\);[^}]*border: 1px solid var\(--border\);/.test(wsCss) &&
         /\.composer-box:focus-within \{[^}]*outline: 2px solid var\(--accent\)/.test(wsCss));
@@ -705,6 +713,9 @@ async function finish() {
     await testSignedInScreens();
     await testPortal();
     await testScreeningActions();
+    await testDraftRecovery();
+    await testLateMessageChange();
+    await testStatsCounts();
     await testDiscovery();
 
     console.log(`\n${pass} passed, ${fail} failed`);
@@ -841,6 +852,8 @@ function runEditInPlace() {
                 toasts.some((item) => item.kind === "warn"));
 
             ta2.value = "Updated in place";
+            ta2.dispatchEvent(new win.KeyboardEvent("keydown", { key: "Escape", isComposing: true, bubbles: true }));
+            check("Escape for an IME choice does not discard the edit", !!bubble.querySelector(".bubble-textarea"));
             ta2.dispatchEvent(new win.KeyboardEvent("keydown", {
                 key: "Enter", ctrlKey: true, bubbles: true
             }));
@@ -1107,6 +1120,198 @@ async function testScreeningActions() {
     win.close();
 }
 
+async function testDraftRecovery() {
+    console.log("\nDraft recovery and scanner refusals");
+    const missingKey = { httpStatus: 400, error_code: "missing_api_key", error_message: "No API_KEY provided." };
+    const failed = { httpStatus: 503, error_code: "screening_failed", error_message:
+        "Not sent — checks could not run (check1: missing dependencies — ask your administrator to check the scanner installation; " +
+        "check2: did not finish within 180s — try a smaller paste; check3: scanner exited without a usable verdict — " +
+        "ask your administrator to check the gateway setup)." };
+    const saved = { id: 7, title: "Existing conversation", messages: [] };
+    let chats = [saved];
+    let finishSend;
+    const answer = (key, body) => {
+        if (key === "SETTINGS") return { API_KEY_MASK: "", action_check1: "block", action_check2: "block", action_check3: "block" };
+        if (key === "CHATS") return { chats: chats.map(({ id, title }) => ({ id, title })) };
+        if (key === "CHATS_OPEN") return { chat: structuredClone(chats.find(({ id }) => id === body.chat_id)) };
+        if (key === "CHAT") return new Promise((resolve) => { finishSend = resolve; });
+        if (key === "CHAT_REGENERATE") return failed;
+        return {};
+    };
+    const p = screenFixture("workspace", answer);
+    const { $, win, posted } = p;
+    const promptInput = $("#prompt-input");
+    const title = () => $("#active-chat-title").textContent;
+    const notice = $("#chat-error");
+    const timeouts = [];
+    const setTimeout = win.setTimeout.bind(win);
+    win.setTimeout = (fn, delay, ...args) => {
+        if (delay >= 60000) timeouts.push(delay);
+        return setTimeout(fn, delay, ...args);
+    };
+    win.document.body.dataset.requestTimeout = "291";
+    const type = (text) => {
+        promptInput.value = text;
+        promptInput.dispatchEvent(new win.Event("input", { bubbles: true }));
+    };
+    const send = (text) => {
+        type(text);
+        promptInput.focus();
+        p.submit("#form-send");
+    };
+    const raw = "  private draft fixture\nsecond line  ";
+    const settle = async (data) => { finishSend(data); await tick(); };
+
+    await tick();
+    type("Composing text");
+    const composingEnter = new win.KeyboardEvent("keydown", { key: "Enter", isComposing: true, cancelable: true });
+    promptInput.dispatchEvent(composingEnter);
+    check("IME confirmation neither sends nor clears the draft", !composingEnter.defaultPrevented &&
+        promptInput.value === "Composing text" && !posted.some((r) => r.key === "CHAT"));
+    type("");
+    $("#btn-new-chat").click();
+    win.Shell.prompt = () => Promise.resolve("  Named   draft  ");
+    $("#btn-rename-chat").click();
+    await tick();
+    check("a draft rename stays in memory until its first successful send",
+        title() === "Named draft" && !posted.some((r) => r.key === "CHATS_RENAME"));
+    send(raw);
+    await settle(missingKey);
+    check("the missing-key refusal refills the original untrimmed draft without saving it",
+        promptInput.value === raw && win.document.activeElement === promptInput &&
+        /add a provider key in Settings/.test(notice.textContent) && !notice.hidden &&
+        !/private draft fixture/.test(JSON.stringify(win.localStorage) + JSON.stringify(win.sessionStorage)));
+    send(raw);
+    type("Newer typing");
+    await settle(missingKey);
+    check("a late refusal cannot overwrite newer typing", promptInput.value === "Newer typing");
+    send(raw);
+    type("Another draft");
+    type("");
+    await settle(missingKey);
+    check("a late refusal cannot resurrect a draft after newer input was cleared", promptInput.value === "");
+    send(raw);
+    await settle(failed);
+    check("all scanner reasons reach the visible alert without clipping and allow editing the draft",
+        !notice.hidden && notice.textContent.includes("Personal & Greek IDs: missing dependencies") &&
+        notice.textContent.includes("Confidential context: did not finish within 180s — try a smaller paste") &&
+        notice.textContent.includes("Prompt injection: scanner exited without a usable verdict") &&
+        !notice.textContent.includes("…") && promptInput.value === raw);
+    win.I18n.set("el");
+    check("screening diagnostics translate without losing the timeout or failed checks", /Δεν στάλθηκε/.test(notice.textContent) &&
+        /λείπουν εξαρτήσεις/.test(notice.textContent) && /180 δευτ\./.test(notice.textContent) && /χωρίς έγκυρο αποτέλεσμα/.test(notice.textContent));
+    win.I18n.set("en");
+
+    send(raw);
+    const body = posted.filter(({ key }) => key === "CHAT").at(-1).body;
+    check("retrying the named draft sends its title and prompt without creating a chat early",
+        body.title === "Named draft" && body.prompt === raw.trim() && body.chat_id === null && notice.hidden);
+    const first = { id: "saved-first", prompt: body.prompt, answer: "Saved reply", created_at: "2026-11-18T09:00:00Z" };
+    chats = [{ id: 9, title: body.title, messages: [first] }, saved];
+    await settle({ chat_id: 9, message_id: first.id, reply_message: first.answer });
+    check("the named draft keeps its title on success", title() === "Named draft" && promptInput.value === "");
+    $(".msg-actions-ai button[title='Generate a different answer']").click();
+    await tick();
+    check("regeneration uses the same server-supplied browser timeout and displays failures without replacing the answer",
+        timeouts.length === 6 && timeouts.every((ms) => ms === 291000) && !notice.hidden &&
+        notice.textContent.includes("try a smaller paste") && $(".bubble-ai").textContent === "Saved reply");
+
+    send(raw);
+    win.document.querySelectorAll(".chat-item")[1].click();
+    await tick();
+    await settle(missingKey);
+    check("a late refusal cannot refill another saved conversation", title() === saved.title && !promptInput.value && notice.hidden);
+    $("#btn-new-chat").click();
+    send(raw);
+    $("#btn-new-chat").click();
+    await settle(missingKey);
+    check("a fresh unsaved chat also rejects a stale refusal", title() === "New chat" && !promptInput.value && notice.hidden);
+    win.close();
+    const reloaded = screenFixture("workspace", answer);
+    await tick();
+    check("reopening the saved chat restores its title, never the unsent draft",
+        reloaded.$("#active-chat-title").textContent === "Named draft" && !reloaded.$("#prompt-input").value);
+    reloaded.win.close();
+}
+
+async function testLateMessageChange() {
+    console.log("\nConversation changes during navigation");
+    const chats = [1, 2].map((id) => ({ id, title: "Chat " + id, messages: [
+        { id: "msg-" + id, prompt: "Prompt " + id, answer: "Reply " + id }
+    ] }));
+    let finish;
+    const { win, $, posted } = screenFixture("workspace", (key, body) => {
+        if (key === "SETTINGS") return {
+            action_check1: "allow", action_check2: "allow", action_check3: "allow", action_code: "allow"
+        };
+        if (key === "CHATS") return { chats };
+        if (key === "CHATS_OPEN") return { chat: chats.find(({ id }) => id === body.chat_id) };
+        if (["MESSAGE_EDIT", "MESSAGE_DELETE", "CHATS_DELETE"].includes(key)) {
+            return new Promise((resolve) => { finish = resolve; });
+        }
+        return {};
+    });
+    win.Shell.confirm = () => Promise.resolve(true);
+    await tick();
+    check("the composer accurately reports when every rule is off",
+        $(".composer-trust").textContent === "Local safety checks are off. Prompts are not screened.");
+    for (const key of ["MESSAGE_EDIT", "MESSAGE_DELETE", "CHATS_DELETE"]) {
+        if (key === "MESSAGE_EDIT") {
+            $(".msg-actions-user .icon-btn").click();
+            $(".bubble-textarea").value = "Edited text";
+            $(".bubble-edit-save").click();
+        } else if (key === "MESSAGE_DELETE") {
+            $(".msg-actions-ai button[title='Delete this message']").click();
+        } else {
+            $("#btn-delete-chat").click();
+        }
+        await tick();
+        $(".chat-item:nth-child(2)").click();
+        await tick();
+        finish({ messages: [] });
+        await tick();
+        check(key + " targets its original chat without repainting the new one",
+            posted.find((r) => r.key === key).body.chat_id === 1 &&
+            $("#active-chat-title").textContent === "Chat 2" && $(".bubble-ai")?.textContent === "Reply 2");
+        $(".chat-item:nth-child(1)").click();
+        await tick();
+    }
+    win.close();
+}
+
+async function testStatsCounts() {
+    console.log("\nStatistics counts and export");
+    const counts = { sent: 2, answered: 1, regenerated: 1, blocked: 1, overrides: 0, attempts: 3, block_rate: 33 };
+    const trend = Array.from({ length: 30 }, (_, n) => ({ date: "2026-10-" + String(n + 1).padStart(2, "0"), blocked: n === 3 ? 1 : 0, overrides: 0 }));
+    const p = screenFixture("stats", (key) => key === "ADMIN_SESSION" ? VERIFIED : {
+        admin: "Fixture admin", trend, stats: { members: 1, ...counts },
+        members: [{ id: 1, username: "Fixture member", model: "fixture", checks_on: 3, trend, ...counts }],
+        timeline: [{ at: trend[3].date, employee_id: 1, kind: "blocked", stage: "check1", detail: "API_KEY" }]
+    }, { member: false, realShell: true });
+    const { $, win } = p;
+    const bins = (root) => win.document.querySelectorAll(root + " .trend-col").length;
+    await tick();
+    check("the default 14-day view remains available", bins("#trend") === 14);
+    for (const days of [7, 30]) {
+        $("#range-bar [data-days='" + days + "']").click();
+        check(`${days}-day workspace and member trends show every selected day`, bins("#trend") === days && bins("#members") === days);
+    }
+    check("stats counts a block once and uses counted attempts for the block-rate ring", $("#tile-sent").textContent === "2" &&
+        $("#tile-blocked").textContent === "1" && $(".donut").getAttribute("aria-label") === "1 of 3 counted attempts blocked (33%)" &&
+        win.document.querySelectorAll("#timeline .kind-blocked").length === 1);
+    let csv;
+    win.Blob = Blob;
+    win.URL.createObjectURL = (blob) => { csv = blob; return "blob:fixture"; };
+    win.URL.revokeObjectURL = () => {};
+    win.HTMLAnchorElement.prototype.click = () => {};
+    $("#btn-export-csv").click();
+    const text = await csv.text();
+    check("CSV totals match the UI and include the 30 selected dates", text.includes("Messages sent,2") &&
+        text.includes('Counted attempts (sent + blocked),3') && text.includes("Block rate (%),33") &&
+        text.split(/\r?\n/).filter((line) => /^2026-10-\d\d,/.test(line)).length === 30);
+    win.close();
+}
+
 async function testDiscovery() {
     console.log("\nShadow AI and administrator entry");
     const base = { tool_key: "fixture_tool", name: "Settings", vendor: "Fixture Vendor", category: "gateway", domains: ["assistant.example"],
@@ -1125,8 +1330,9 @@ async function testDiscovery() {
         if (key === "ADMIN_SESSION") return VERIFIED;
         if (key === "SHADOW_AI") return response();
         if (key === "SHADOW_AI_IMPORT") {
+            const replaced = body.sample ? events.length : 0;
             events = body.clear ? [] : [sample];
-            return { lines_scanned: 2, ai_events_added: events.length, non_ai_ignored: 1 };
+            return { lines_scanned: 2, ai_events_added: events.length, non_ai_ignored: 1, sample_events_replaced: replaced };
         }
         if (key === "SHADOW_AI_POLICY") {
             if (body.method === "add") inventory = [...inventory, { ...base, tool_key: "custom:" + body.domain, name: body.name,
@@ -1152,6 +1358,10 @@ async function testDiscovery() {
     check("sample import uses the primary cookie and refreshes counts and the event list", posted.some((r) => r.key === "SHADOW_AI_IMPORT" &&
         r.body.sample === true && r.body.Parent_id === "72" && !("admin_token" in r.body)) &&
         $("[data-summary='total_events']").textContent === "1" && $("#shadow-events").textContent.includes("192.0.2.55"));
+    $("#shadow-sample").click();
+    await tick();
+    check("sample refresh is explicit and keeps the event count steady", /^Sample week refreshed\./.test($("#shadow-import-result").textContent) &&
+        $("[data-summary='total_events']").textContent === "1");
     admin.change("#shadow-days", "30");
     admin.change("#shadow-status", "unapproved");
     admin.change("#shadow-team", "Settings");
@@ -1185,13 +1395,13 @@ async function testDiscovery() {
         tool().querySelector("summary strong").textContent === "Settings" && tool().querySelector(".shadow-tool-note").value === "Settings");
     win.I18n.set("en");
     check("Shadow AI English copy and filter values round-trip", $("#shadow-status option:checked").textContent === statusName &&
-        $("#shadow-signal").value === "client_data" && $("#shadow-import-result").textContent === "Scanned 2 lines · 1 AI event · 1 non-AI ignored");
+        $("#shadow-signal").value === "client_data" && $("#shadow-import-result").textContent === "Sample week refreshed. Scanned 2 lines · 1 AI event · 1 non-AI ignored");
     const log = "192.0.2.56 POST assistant.example 5000";
     Object.defineProperty($("#shadow-file"), "files", { value: [new win.File([log], "synthetic.log", { type: "text/plain" })] });
     $("#shadow-file").dispatchEvent(new win.Event("change", { bubbles: true }));
     for (let i = 0; i < 20 && !$("#shadow-content").value; i++) await tick();
     check("local file picker populates the paste field without uploading", $("#shadow-content").value === log &&
-        posted.filter((r) => r.key === "SHADOW_AI_IMPORT").length === 1);
+        posted.filter((r) => r.key === "SHADOW_AI_IMPORT").length === 2);
     $("#shadow-import").click();
     await tick();
     check("import posts the selected text once and clears the field on success", posted.some((r) => r.key === "SHADOW_AI_IMPORT" &&
@@ -1288,7 +1498,7 @@ async function testSignedInScreens() {
             };
         }
         if (key === "PROVIDERS") return { providers: ["auto", "openai", "custom"].map((k) => ({ key: k, label: k })) };
-        if (key === "MODELS") return { models: ["Settings"], provider: body.provider };
+        if (key === "MODELS") return { models: ["another-model"], provider: body.provider };
         return {};
     };
     const first = screenFixture("settings", answer), other = screenFixture("settings", answer, { employeeId: 6 });
@@ -1298,11 +1508,18 @@ async function testSignedInScreens() {
         !first.$("#setting-restore-redactions").checked);
     check("saved named-provider base path survives load and automatic discovery", first.$("#setting-base").value === base &&
         first.posted.find((r) => r.key === "MODELS").body.API_BASE === base);
+    check("model discovery retains a saved model the provider did not list", first.$("#setting-model").value === "Settings" &&
+        !!first.$("#setting-model option[value='another-model']") && /current model was kept/.test(first.$("#model-state").textContent));
     first.win.I18n.set("el");
     check("model names are data, not interface copy", first.$("#setting-model option:checked").textContent === "Settings");
     check("settings action labels translate without modifying action values", first.$("#setting-block-code option:checked").textContent !== "Warn" &&
         first.$("#setting-block-code").value === "warn");
     first.win.I18n.set("en");
+    const pendingBase = "https://draft.example/v1";
+    first.$("#setting-base").value = pendingBase;
+    first.$("#setting-base").dispatchEvent(new first.win.Event("input", { bubbles: true }));
+    check("connection edits do not mark the safety checks dirty", first.$("#checks-state").textContent === "" &&
+        first.$("#connection-state").textContent === "Unsaved changes");
     first.change("#setting-check1", "redact");
     first.change("#setting-block-code", "allow");
     first.$("#setting-restore-redactions").checked = true;
@@ -1314,12 +1531,15 @@ async function testSignedInScreens() {
         policy.action_code === "allow" && policy.action_check1 === "redact" && policy.action_check2 === "allow" && policy.action_check3 === "warn" &&
         policy.restore_redactions === true && policy.also_default === true && policy.admin_token === "test-grant-1" && first.approvals[0].fresh &&
         !first.$("#also-default").checked && !("block_code" in policy));
+    check("saving checks leaves the unsaved connection intact", first.$("#setting-base").value === pendingBase &&
+        first.$("#connection-state").textContent === "Unsaved changes" && !("API_BASE" in policy));
     first.$("#setting-base").value = "";
     first.$("#btn-refresh-models").click();
     await tick();
     const refresh = first.posted.filter((r) => r.key === "MODELS").pop().body;
     check("probing a new destination with the stored key asks afresh", refresh.API_BASE === "" && refresh.admin_token === "test-grant-2" &&
         first.approvals[1].fresh && !("API_KEY" in refresh));
+    first.change("#setting-check2", "warn");
     first.$("#connection-also-default").checked = true;
     first.$("#btn-save-connection").click();
     await tick();
@@ -1328,6 +1548,8 @@ async function testSignedInScreens() {
     first.$("#btn-clear-key").click();
     await tick();
     check("removing the saved key sends an approved clear operation", first.posted.some((r) => r.body.CLEAR_API_KEY && r.body.admin_token === "test-grant-4"));
+    check("saving the connection and removing its key leave unsaved policy intact", first.$("#setting-check2").value === "warn" &&
+        first.$("#checks-state").textContent === "Unsaved changes" && !("action_check2" in connection));
     first.win.close(); other.win.close();
 
     const workspace = screenFixture("workspace", (key, body) => {
@@ -1466,7 +1688,7 @@ function testDesignOverhaul() {
     check("tiles 2-4 each name the check they trip",
         ["check1", "check2", "check3"].every((rule) => wsHtml.includes(`data-check="${rule}"`)));
     check("the trust line is the only thing under the composer",
-        /class="composer-trust">Checked on this computer before anything reaches the AI\./.test(wsHtml) &&
+        /class="composer-trust">Enabled checks run on this computer before the prompt goes to the AI\./.test(wsHtml) &&
         !/composer-foot|Enter · Shift\+Enter/.test(wsHtml));
     check("the coaching prompt and starter caption are gone",
         !/What are we working on today|Pick a starter|first-run-title|starter-chip/.test(wsHtml));

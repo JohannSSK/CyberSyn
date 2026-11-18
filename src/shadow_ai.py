@@ -319,15 +319,18 @@ def shadow_import():
             raise ApiError("Choose log content, sample or clear.", 400)
         now = datetime.now(timezone.utc)
         tools = inventory(db, pid)
-        scanned = added = cleared = 0
+        scanned = added = cleared = replaced = 0
+        sample = data.get("sample") is True
         if data.get("clear"):
             cleared = db.execute("DELETE FROM DISCOVERY_EVENTS WHERE Parent_id=?", (pid,)).rowcount
             record_activity(DB_FILE, pid, 0, "shadow_clear", f"{cleared} events", con=db)
         else:
             try:
-                rows = parse_logs(sample_logs(now) if data.get("sample") else data["content"], now)
+                rows = parse_logs(sample_logs(now) if sample else data["content"], now)
             except LogFormatError as exc:
                 raise ApiError(str(exc), 400) from None
+            if sample:
+                replaced = db.execute("DELETE FROM DISCOVERY_EVENTS WHERE Parent_id=? AND is_sample=1", (pid,)).rowcount
             scanned = len(rows)
             domains = ToolDomains(tools)
             for row in rows:
@@ -335,10 +338,15 @@ def shadow_import():
                 if tool is None:
                     continue
                 db.execute("INSERT INTO DISCOVERY_EVENTS (Parent_id, observed_at, team, actor, host, tool_key, "
-                           "tool_name, method, bytes_sent, data_signal, imported_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                           "tool_name, method, bytes_sent, data_signal, imported_at, is_sample) "
+                           "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                            (pid, row["observed_at"], row["team"], row["actor"], row["host"], tool["tool_key"], tool["name"],
-                            row["method"], row["bytes_sent"], row["data_signal"], utc_text(now)))
+                            row["method"], row["bytes_sent"], row["data_signal"], utc_text(now), int(sample)))
                 added += 1
-            record_activity(DB_FILE, pid, 0, "shadow_import", f"{added} AI events / {scanned} rows", con=db)
+            detail = f"{added} AI events / {scanned} rows"
+            if sample:
+                detail += f" · sample ({replaced} replaced)"
+            record_activity(DB_FILE, pid, 0, "shadow_import", detail, con=db)
         summary = _discovery(db, pid, tools, (7, "", "", ""), now)["summary"]
-    return ok(lines_scanned=scanned, ai_events_added=added, non_ai_ignored=scanned - added, events_cleared=cleared, summary=summary)
+    return ok(lines_scanned=scanned, ai_events_added=added, non_ai_ignored=scanned - added,
+              events_cleared=cleared, sample_events_replaced=replaced, summary=summary)

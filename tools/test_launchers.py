@@ -50,7 +50,8 @@ class Launchers(unittest.TestCase):
         (stubs / "torch.py").write_text("raise ImportError\n")
         src = self.root / "src"
         (src / "MLscripts").mkdir(parents=True)
-        (src / "MLscripts/model_cache.py").write_text(check_prefix + "print('model check stub')\n")
+        (src / "MLscripts/model_cache.py").write_text(check_prefix +
+            "assert sys.argv[1:] == ['--download']\nprint('model check stub')\n")
         (src / "app.py").write_text("import json, sys\nprint(json.dumps([sys.executable, *sys.argv[1:]]))\n")
         self.env = dict(PATH=str(self.bin), PYTHONPATH=str(stubs), HOME=tmp.name, PIP_NO_INDEX="1",
                         PYTHONNOUSERSITE="1", FIXTURE_PYTHON=sys.executable)

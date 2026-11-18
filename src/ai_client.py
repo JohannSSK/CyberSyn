@@ -63,6 +63,7 @@ def complete(api_key, model, prompt, api_base=None, provider=None):
             "messages": [{"role": "user", "content": prompt}],
             "api_key": api_key or None,
             "timeout": OPENAI_TIMEOUT,
+            "num_retries": 0,  # one completion budget after screening, not a chain of retries
         }
         # Revalidate even a previously saved base, including named providers.
         if api_base:

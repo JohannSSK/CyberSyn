@@ -65,7 +65,7 @@
                         <h3 id="shadow-breakdown-title">Teams sending sensitive/client data to unapproved AI</h3>
                         <p class="hint">Data signals come from supplied tags or transfer size, not from inspecting message content.</p>
                     </div>
-                    <div class="shadow-table-wrap">
+                    <div class="shadow-table-wrap" tabindex="0" role="region" aria-labelledby="shadow-breakdown-title">
                         <table class="shadow-table" aria-labelledby="shadow-breakdown-title">
                             <thead><tr><th scope="col">Team</th><th scope="col">Total events</th><th scope="col">Unapproved events</th>
                                 <th scope="col">Sensitive to unapproved</th><th scope="col">Client data to unapproved</th><th scope="col">Unapproved tools</th></tr></thead>
@@ -92,7 +92,7 @@
                     <p class="callout hidden" id="shadow-import-result" role="status" aria-live="polite"></p>
                     <h3 id="shadow-events-title">Discovered events</h3>
                     <p class="hint">Showing up to 200 matching events, newest first (UTC).</p>
-                    <div class="shadow-table-wrap">
+                    <div class="shadow-table-wrap" tabindex="0" role="region" aria-labelledby="shadow-events-title">
                         <table class="shadow-table" aria-labelledby="shadow-events-title">
                             <thead><tr><th scope="col">Observed (UTC)</th><th scope="col">Team / actor</th><th scope="col">Tool / host</th>
                                 <th scope="col">Status / risk</th><th scope="col">Method / bytes sent</th><th scope="col">Data signal</th></tr></thead>

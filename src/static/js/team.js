@@ -25,16 +25,16 @@
 
     var latestData = null;
 
-    function buildDonut(rate, blocked, sent) {
+    function buildDonut(rate, blocked, attempts) {
         var pct = Math.max(0, Math.min(100, Math.round(Number(rate) || 0)));
         var radius = 23;
         var circ = 2 * Math.PI * radius;
         var offset = circ * (1 - pct / 100);
         var summary = isGreek()
-            ? Dom.formatNumber(blocked) + " από " + Dom.formatNumber(sent) +
-              " μηνύματα αποκλείστηκαν (" + Dom.formatPercent(pct) + ")"
-            : Dom.formatNumber(blocked) + " of " + Dom.formatNumber(sent) +
-              " messages blocked (" + Dom.formatPercent(pct) + ")";
+            ? Dom.formatNumber(blocked) + " από " + Dom.formatNumber(attempts) +
+              " προσμετρημένες προσπάθειες αποκλείστηκαν (" + Dom.formatPercent(pct) + ")"
+            : Dom.formatNumber(blocked) + " of " + Dom.formatNumber(attempts) +
+              " counted attempts blocked (" + Dom.formatPercent(pct) + ")";
 
         var donut = Dom.el("div", "donut has-tip");
         donut.tabIndex = 0;
@@ -68,7 +68,7 @@
             "<span>·</span><span>" + Dom.esc(t(member.checks_on + " of 4 checks on")) + "</span>" +
             "</span></span>";
 
-        head.appendChild(buildDonut(member.block_rate, member.blocked, member.sent));
+        head.appendChild(buildDonut(member.block_rate, member.blocked, member.attempts));
         row.appendChild(head);
 
         var tiles = Dom.el("div", "tiles");

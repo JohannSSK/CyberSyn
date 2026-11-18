@@ -37,6 +37,9 @@
         chats: [],
         chatsLoaded: false,
         chatId: null,
+        viewVersion: 0,
+        composerVersion: 0,
+        draftTitle: null,
         messages: [],
         settings: { check1: true, check2: true, check3: true },
         query: "",
@@ -54,6 +57,8 @@
         viewport: $("#chat-stream"),
         title: $("#active-chat-title"),
         input: $("#prompt-input"),
+        chatError: $("#chat-error"),
+        trust: $(".composer-trust"),
         form: $("#form-send"),
         send: $("#btn-send"),
         newChat: $("#btn-new-chat"),
@@ -151,6 +156,7 @@
     }
 
     function fillComposer(text) {
+        state.composerVersion++;
         nodes.input.value = text;
         autoGrow();
         nodes.input.focus();
@@ -161,6 +167,27 @@
                 behavior: reducedMotion() ? "auto" : "smooth"
             });
         }
+    }
+
+    function showChatError(err) {
+        var code = err.body && err.body.error_code;
+        if (!nodes.chatError || (code !== "screening_failed" && code !== "missing_api_key")) {
+            Loading.toast(err.message, "error");
+            return;
+        }
+        // Keep a refusal visible until retry/navigation, even if it lists
+        // several checks. Use text, never scanner output as HTML.
+        nodes.chatError.hidden = false;
+        nodes.chatError.textContent = code === "screening_failed"
+            ? err.message.replace(/\b(check[123]): /g, function (_, stage) { return Stages.title(stage) + ": "; })
+            : err.message;
+        if (window.I18n) window.I18n.apply();
+    }
+
+    function clearChatError() {
+        if (!nodes.chatError) return;
+        nodes.chatError.hidden = true;
+        nodes.chatError.textContent = "";
     }
 
     function scrollToEnd(smooth) {
@@ -313,6 +340,11 @@
         nodes.checksStatus.classList.toggle("is-all-on", on === 4);
         nodes.checksStatus.classList.toggle("is-partial", on > 0 && on < 4);
         nodes.checksStatus.classList.toggle("is-off", on === 0);
+        if (nodes.trust) {
+            nodes.trust.textContent = t(on === 0
+                ? "Local safety checks are off. Prompts are not screened."
+                : "Enabled checks run on this computer before the prompt goes to the AI.");
+        }
     }
 
     /* ------------------------------------------------------------------
@@ -628,6 +660,8 @@
        ------------------------------------------------------------------ */
 
     function beginEdit(wrap, message, trigger) {
+        var chatId = state.chatId;
+        var viewVersion = state.viewVersion;
         if (wrap.classList.contains("is-editing")) return;
         var bubble = wrap.querySelector(".bubble-user");
         if (!bubble) return;
@@ -660,6 +694,7 @@
         }
 
         function onBubbleKeydown(event) {
+            if (event.isComposing || event.keyCode === 229) return;
             if (event.key === "Escape") {
                 event.preventDefault();
                 event.stopPropagation();
@@ -697,12 +732,13 @@
             }
             Loading.withButton(save, function () {
                 return Api.post("MESSAGE_EDIT", {
-                    chat_id: state.chatId,
+                    chat_id: chatId,
                     message_id: message.id,
                     text: next
                 });
             }).then(function (data) {
                 bubble.removeEventListener("keydown", onBubbleKeydown);
+                if (viewVersion !== state.viewVersion) return loadChats();
                 state.messages = data.messages || [];
                 renderMessages();
                 if (message.id !== undefined && message.id !== null) {
@@ -734,6 +770,8 @@
     }
 
     function removeMessage(message, button) {
+        var chatId = state.chatId;
+        var viewVersion = state.viewVersion;
         Shell.confirm({
             eyebrow: "Remove message",
             title: "Delete this message?",
@@ -746,12 +784,14 @@
             if (!accepted) return null;
             return Loading.withButton(button, function () {
                 return Api.post("MESSAGE_DELETE", {
-                    chat_id: state.chatId,
+                    chat_id: chatId,
                     message_id: message.id
                 });
             }).then(function (data) {
-                state.messages = data.messages || [];
-                renderMessages();
+                if (viewVersion === state.viewVersion) {
+                    state.messages = data.messages || [];
+                    renderMessages();
+                }
                 loadChats();
                 Loading.toast("Message deleted.", "success");
             }).catch(function (err) {
@@ -764,8 +804,10 @@
         if (state.busy) return;
         var opts = options || {};
         var chatId = state.chatId;
+        var viewVersion = state.viewVersion;
         state.busy = true;
         setSendBusy(true);
+        clearChatError();
         var payload = { chat_id: chatId, message_id: message.id };
         if (opts.confirmWarn) payload.confirm_warn = true;
         if (opts.bypass) {
@@ -775,7 +817,7 @@
         return Loading.withButton(button, function () {
             return Api.post("CHAT_REGENERATE", payload, { timeout: requestBudget(), onUnauthorised: !opts.bypass });
         }).then(function (data) {
-            if (chatId !== state.chatId) return;
+            if (viewVersion !== state.viewVersion) return;
             if (data.blocked) {
                 renderBlocked(data.block_info || {}, message.prompt || "", function (token) {
                     return regenerate(message, null, { bypass: true, token: token });
@@ -798,14 +840,14 @@
                 }
                 loadChats().then(function () {
                     var chat = state.chats.find(function (item) { return item.id === chatId; });
-                    if (chat && state.chatId === chatId) setTitle(chat.title);
+                    if (chat && viewVersion === state.viewVersion) setTitle(chat.title);
                 });
             }
             if (opts.bypass) state.overriddenMessages[message.id] = true;
             renderMessages();
             Loading.toast("Answer regenerated.", "success");
         }).catch(function (err) {
-            Loading.toast(err.message, "error");
+            if (viewVersion === state.viewVersion) showChatError(err);
         }).finally(function () {
             state.busy = false;
             setSendBusy(false);
@@ -1078,7 +1120,7 @@
     function requestBudget() {
         var body = document.body || {};
         var seconds = parseInt(body.getAttribute("data-request-timeout"), 10);
-        if (!seconds || seconds < 30) seconds = 135;
+        if (!seconds || seconds < 30) seconds = 270;
         return seconds * 1000;
     }
 
@@ -1088,7 +1130,13 @@
         setSendBusy(true);
 
         var originalPrompt = typeof rawPrompt === "string" ? rawPrompt : text;
+        var viewVersion = state.viewVersion;
+        var composerVersion = state.composerVersion;
+        var canRefill = !nodes.input.value;
         var preSendKey = currentChatKey();
+        var creating = !state.chatId;
+        if (creating && nodes.rename) nodes.rename.disabled = true;
+        clearChatError();
         var paused = false;
         var emptyNode = nodes.stream.querySelector(".demo, .empty");
         if (emptyNode) emptyNode.remove();
@@ -1100,12 +1148,17 @@
             chat_id: state.chatId,
             bypass: !!bypass
         };
+        if (creating && state.draftTitle) payload.title = state.draftTitle;
         if (adminToken) payload.admin_token = adminToken;
         if (confirmWarn) payload.confirm_warn = true;
 
         return Api.post("CHAT", payload, { timeout: requestBudget(), onUnauthorised: !bypass })
             .then(function (data) {
-                if (currentChatKey() !== preSendKey) { hidePending(); return; }
+                if (viewVersion !== state.viewVersion) {
+                    hidePending();
+                    if (data.chat_id && !data.blocked && !data.warned) return loadChats();
+                    return;
+                }
                 if (data.warned) {
                     hidePending();
                     paused = true;
@@ -1132,6 +1185,7 @@
                     delete state.blockedChats[DRAFT_CHAT_KEY];
                 }
                 state.chatId = nextChatId;
+                if (creating) state.draftTitle = null;
 
                 if (data.message_id) {
                     if (bypass) {
@@ -1152,6 +1206,7 @@
                     });
                     return loadChats().then(function () {
                         hidePending();
+                        if (viewVersion !== state.viewVersion) return;
                         var current = state.chats.filter(function (c) {
                             return c.id === state.chatId;
                         })[0];
@@ -1166,15 +1221,26 @@
                 });
             })
             .catch(function (err) {
-                waiting.stop();
-                pending = null;
+                hidePending();
+                if (viewVersion !== state.viewVersion) return;
                 if (!nodes.stream.children.length) renderMessages();
-                Loading.toast(err.message, "error");
+                var code = err.body && err.body.error_code;
+                // Only a definite refusal can refill the composer, and only
+                // if nothing has been entered since this send started.
+                if ((code === "missing_api_key" || code === "screening_failed") &&
+                    canRefill && composerVersion === state.composerVersion && !nodes.input.value) {
+                    nodes.input.value = originalPrompt;
+                    autoGrow();
+                }
+                showChatError(err);
             })
             .finally(function () {
                 state.busy = false;
                 setSendBusy(false);
-                if (!paused) nodes.input.focus();
+                if (creating && nodes.rename) nodes.rename.disabled = false;
+                var focused = document.activeElement;
+                if (!paused && viewVersion === state.viewVersion &&
+                    (focused === document.body || focused === nodes.send)) nodes.input.focus();
             });
     }
 
@@ -1205,9 +1271,16 @@
     }
 
     function openChat(chatId) {
+        var viewVersion = ++state.viewVersion;
+        hidePending();
+        clearChatError();
         return Api.post("CHATS_OPEN", { chat_id: chatId })
             .then(function (data) {
+                if (viewVersion !== state.viewVersion) return false;
+                // Invalidate work that started in the old view while loading.
+                state.viewVersion++;
                 state.chatId = chatId;
+                state.draftTitle = null;
                 state.messages = (data.chat && data.chat.messages) || [];
                 var chat = data.chat || {};
                 setTitle(chat.title);
@@ -1216,12 +1289,20 @@
                 });
                 renderChatList();
                 renderMessages();
+                return true;
             })
-            .catch(function (err) { Loading.toast(err.message, "error"); });
+            .catch(function (err) {
+                if (viewVersion === state.viewVersion) Loading.toast(err.message, "error");
+                return false;
+            });
     }
 
     function newChat() {
+        state.viewVersion++;
+        hidePending();
+        clearChatError();
         state.chatId = null;
+        state.draftTitle = null;
         state.messages = [];
         delete state.blockedChats[DRAFT_CHAT_KEY];
         setTitle(null);
@@ -1231,7 +1312,9 @@
     }
 
     function deleteChat(button) {
-        if (!state.chatId) {
+        var chatId = state.chatId;
+        var viewVersion = state.viewVersion;
+        if (!chatId) {
             Loading.toast("This chat has no saved messages.", "info");
             return;
         }
@@ -1246,17 +1329,19 @@
         }).then(function (accepted) {
             if (!accepted) return null;
             return Loading.withButton(button, function () {
-                return Api.post("CHATS_DELETE", { chat_id: state.chatId });
+                return Api.post("CHATS_DELETE", { chat_id: chatId });
             }).then(function () {
                 Loading.toast("Chat deleted.", "success");
                 return loadChats();
             }).then(function () {
-                newChat();
+                if (viewVersion === state.viewVersion) newChat();
             }).catch(function (err) { Loading.toast(err.message, "error"); });
         });
     }
 
     function renameChat() {
+        var viewVersion = state.viewVersion;
+        var chatId = state.chatId;
         var current = nodes.title.hasAttribute("data-no-i18n")
             ? nodes.title.textContent.trim()
             : "";
@@ -1270,15 +1355,19 @@
             confirmLabel: "Save title",
             cancelLabel: "Cancel"
         }).then(function (raw) {
-            if (raw === null) return null;
-            var next = raw.trim().slice(0, 80);
+            if (raw === null || viewVersion !== state.viewVersion || (!chatId && state.busy)) return null;
+            var next = raw.trim().replace(/\s+/g, " ").slice(0, 80).trimEnd();
             if (!next || next === current) return null;
-            if (!state.chatId) { setTitle(next); return null; }
-            return Api.post("CHATS_RENAME", {
-                chat_id: state.chatId,
-                title: next
-            }).then(function () {
+            if (!chatId) {
+                state.draftTitle = next;
                 setTitle(next);
+                return null;
+            }
+            return Api.post("CHATS_RENAME", {
+                chat_id: chatId,
+                title: next
+            }).then(function (data) {
+                if (viewVersion === state.viewVersion) setTitle(data.title);
                 return loadChats();
             }).then(function () {
                 Loading.toast("Chat renamed.", "success");
@@ -1316,7 +1405,8 @@
                 Dom.highlightText(button, query);
                 Dom.on(button, "click", function () {
                     nodes.otherResults.hidden = true;
-                    openChat(hit.chat_id).then(function () {
+                    openChat(hit.chat_id).then(function (opened) {
+                        if (!opened) return;
                         var match = Dom.$$(".msg", nodes.stream).find(function (node) {
                             return node.dataset.id === String(hit.message_id);
                         });
@@ -1350,9 +1440,14 @@
        ------------------------------------------------------------------ */
 
     Dom.on(nodes.form, "submit", onSend);
-    Dom.on(nodes.input, "input", autoGrow);
+    Dom.on(nodes.input, "input", function () {
+        state.composerVersion++;
+        autoGrow();
+    });
     Dom.on(nodes.input, "keydown", function (e) {
-        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); onSend(e); }
+        // Some browsers report 229 on the Enter that commits an IME choice.
+        if (e.isComposing || e.keyCode === 229) return;
+        if (e.key === "Enter" && !e.shiftKey) onSend(e);
     });
 
     Dom.on(nodes.newChat, "click", newChat);
@@ -1463,6 +1558,7 @@
 
         loadChats()
             .then(function () {
+                if (state.viewVersion || state.busy || state.chatId) return null;
                 if (state.chats.length) return openChat(state.chats[0].id);
                 renderMessages();
                 return null;

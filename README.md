@@ -87,7 +87,7 @@ flowchart TB
         C1["check1 · greek_pii.py<br/>PII & Greek IDs<br/>regex + spaCy NER (en, el)"]
         C2["check2 · context.py<br/>Confidential context<br/>regex + zero-shot MNLI"]
         C3["check3 · injection.py<br/>Prompt injection<br/>regex + zero-shot MNLI"]
-        Runner["scanning.screen · shared SCREEN_BUDGET"] --> C1 & C2 & C3
+        Runner["scanning.screen · shared size-aware deadline"] --> C1 & C2 & C3
     end
 
     W -->|"parallel in-process calls via scanners.py"| Runner
@@ -116,7 +116,7 @@ flowchart TB
 2. The server authorises the caller — the member's own token, and an administrator's token as well
    when the request is an override. Unauthorised calls are refused before any work is done.
 3. CyberSyn resolves the saved model, provider and base, and checks the current destination policy.
-4. `scanning.screen()` runs enabled rules via `scanners.py` against one shared deadline (45 seconds by default).
+4. `scanning.screen()` runs enabled rules via `scanners.py` against one shared deadline (45 seconds for short prompts, up to 180 seconds for larger pastes by default).
    Loaded models are reused. A missing import can use the serialized subprocess fallback; an invalid, failed or timed-out check stops the send (`503`).
 5. Enforce block → warn → redact → allow in that order. Findings can be shown to the member; only audit metadata is written for stopped or flagged sends.
 6. Only a permitted or sanitized prompt is forwarded. Regeneration follows the same path. Redacted history saves the sanitized prompt and unrestored answer.
@@ -151,7 +151,7 @@ With **Restore redacted values locally in replies** enabled, exact tokens echoed
 Open **Shadow AI** as an administrator, or unlock the read-only page from a member session. The inventory covers the gateway's named service providers and common assistants, coding tools and model hubs. Review hosting, training and GDPR considerations before making a decision; scores are conservative assessments, not certifications or provider guarantees. Workspace policy and notes apply immediately, including to previously imported events. A custom service can be registered by hostname without adding a provider integration.
 
 - **Approved** and **Restricted** are available through the screened gateway. Restricted direct access is flagged in discovery. **Unapproved** blocks gateway sends and regenerations to the tool unless an administrator approves an exception.
-- Use **Load sample week** for a synthetic demo. To answer *Which teams sent client data to unapproved AI this week?*, choose **This week (7d)**, **Unapproved** and **Client data**, then read the ranked team breakdown.
+- Use **Load sample week** for a synthetic demo. Loading it again refreshes just the current workspace's generated sample, without changing file or paste imports. Earlier releases did not mark sample rows, so existing unmarked rows are left alone. To answer *Which teams sent client data to unapproved AI this week?*, choose **This week (7d)**, **Unapproved** and **Client data**, then read the ranked team breakdown.
 - Upload or paste synthetic CSV, proxy/Squid or DNS logs. The parser works offline: it does not look up DNS or fetch any pasted address. It keeps only normalized destination hosts and structured metadata, not URL credentials, paths, queries, fragments or message contents. Tags and upload sizes are indicators, not verification of what the traffic contained. See [log formats and limits](API_Examples.md#post-apiadminshadow-aiimport).
 - Imports and policy edits need a primary admin session or fresh one-time approval. Clearing logs does not change tool policy. Removing the workspace deletes its imported events and inventory overrides. Discovery is not live traffic interception.
 
@@ -241,8 +241,21 @@ Then run the same commands as on other supported systems:
 `setup.sh` reuses a compatible `.venv` first, then looks for a supported interpreter on `PATH`
 (including `python3.13`, `python3.12` and `python3.11`). If neither exists, it uses `uv` to create
 `.venv` with Python 3.12, downloading that interpreter if needed. No activation or `PATH` change is
-required. If `.venv` is broken or uses an unsupported Python, move it aside and rerun `./setup.sh`;
-neither launcher overwrites it. `run.sh` does not install anything.
+required. Once setup succeeds, run `./run.sh` again after closing a terminal or rebooting. Stop
+it with Ctrl+C. Neither activation nor a setup rerun is needed as long as the checkout, `.venv`,
+and its underlying Python are still in place. If an OS upgrade removed that Python, move only
+the broken `.venv` aside and rerun setup; this preserves your workspace data.
+
+Setup installs the English and Greek spaCy pipelines in `.venv` and verifies DistilBART from
+`src/backend/model-cache/`. The native cache does not depend on `HOME`, `XDG_CACHE_HOME`,
+`HF_HOME` or `HF_HUB_CACHE` from the setup shell. The running app reads the installed weights;
+it never downloads missing weights during startup or a chat request. Older installs can still
+use an existing local Hugging Face cache. If local weights are missing, run `./setup.sh` to repair
+the installation. The initial setup needs network access to PyPI, GitHub, Hugging Face, and
+(on Linux) the CPU PyTorch index. Provider calls still need access to the chosen provider.
+
+Stop CyberSyn before backing up `src/backend/app.db` and `src/backend/secret.key` together.
+Losing the encryption key makes saved provider keys unreadable. The model cache can be regenerated.
 
 Linux setup installs PyTorch from the CPU-only index first; macOS uses the native arm64 PyPI wheel.
 Prefer `setup.sh` over a direct Linux `pip install -r requirements.txt`, which otherwise uses PyPI’s
@@ -252,15 +265,16 @@ There is no default account. To create the first administrator from the command 
 `./run.sh seed alice` with your chosen username. Omit the password and a random one is generated
 and printed once.
 
-`run.sh` reads the host, the port and every path from `includes/constants.json`, so
-editing that file is enough to move the app. The environment still wins where it has
-to — a container cannot bind `0.0.0.0` by editing a tracked file:
+`run.sh` uses the app's settings in `includes/constants.json` and prints the bound URL when
+it has started (by default, `http://127.0.0.1:5000/`). For a port conflict, stop the other process
+or run `CYBERSYN_PORT=5001 ./run.sh`. For access from another device, deliberately bind to the
+network interface after creating your administrator account:
 
 ```bash
 CYBERSYN_HOST=0.0.0.0 ./run.sh
 ```
 
-Both scripts work on Linux and macOS, under bash, zsh, fish, dash or ksh, and from any
+Both scripts work on glibc Linux and Apple Silicon macOS, under bash, zsh, fish, dash or ksh, and from any
 directory, including when symlinked onto your `PATH`. **Windows is not supported:**
 the scanners need `torch` and `spaCy`, which do not build reliably there. Use WSL
 (`wsl --install`, then run `setup.sh` inside Ubuntu) or `docker compose up --build`.
@@ -272,6 +286,8 @@ Run the tests from the repository root with the project Python (in Bash, `source
 
 ```bash
 python3 tools/test_launchers.py    # local interpreter selection (offline; no models needed)
+python3 tools/test_model_cache.py  # deterministic cache and no-download behaviour
+python3 tools/test_native_restart.py --models  # after setup: new shells, restarts, and offline model warm-up
 python3 tools/test_constants.py    # includes/constants.json is real, and is actually used
 python3 tools/test_auth.py         # authorisation on the member routes
 python3 tools/test_screening.py    # the screening stage: bounded, parallel, fail-closed
@@ -284,6 +300,11 @@ python3 tools/test_shadow_policy.py # Shadow AI, policy actions and direct sign-
 node tools/test_frontend.js        # browser behaviour (needs: npm install jsdom)
 node tools/test_account_pages.js
 ```
+
+The optional **Verify native setup and restart** Actions workflow runs full setup on Linux
+with a separate Hugging Face cache environment, then runs the native restart test in fresh,
+offline-model shells. The test checks state and encryption-key reuse after Ctrl+C and a killed
+process. Omit `--models` on a web-only test environment; that does not verify scanner inference.
 
 `smoke.py` needs a running **disposable test workspace**: it creates fixture accounts and removes a fixture member. Do not run it against production.
 
@@ -326,9 +347,20 @@ All settings are optional; defaults suit the Docker flow.
 | `CYBERSYN_RATE_LIMIT` / `CYBERSYN_TRUST_PROXY` | `1` / `0` | Failed credential attempts are limited per IP and IP/username; trust forwarded IPs only behind a trusted proxy that replaces the header |
 | `CYBERSYN_MAX_BODY_BYTES` / `CYBERSYN_MAX_PROMPT_CHARS` | `262144` / `16000` | Request body and prompt/edit limits |
 | `CYBERSYN_LOG_PROMPT_PREVIEW` | `0` | Opt in to 80-character activity previews for ordinary prompts, edits and regenerations; never for blocked, warned, redacted or overridden sends |
-| `CYBERSYN_SCREEN_BUDGET` / `CYBERSYN_AI_TIMEOUT` | `45` / `60` seconds | Shared screening deadline and outbound model timeout |
+| `CYBERSYN_SCREEN_BUDGET` / `CYBERSYN_MAX_SCREEN_BUDGET` | `45` / `180` seconds | Base and ceiling for the shared screening deadline |
+| `CYBERSYN_AI_TIMEOUT` | `60` seconds | Outbound completion timeout |
+| `CYBERSYN_MODEL_CACHE` | `src/backend/model-cache` (native) | Optional persistent model directory; if overridden, use the same path for setup and launches |
+| `CYBERSYN_LITELLM_NETWORK` | `0` | Set `1` to allow LiteLLM to fetch its optional model price catalogue |
 | `CYBERSYN_WARM_MODELS` / `CYBERSYN_SCANNER_FALLBACK` | `1` / native `1`, Docker `0` | Background model loading and optional import-failure subprocess fallback |
 | `CYBERSYN_THREADS` / `CYBERSYN_DB_FILE` | `8` / path registry | Gunicorn threads and optional SQLite location |
+
+Short prompts use the base screening budget. Larger pastes get the larger of
+2 extra seconds per nonblank line beyond 12 or 1 extra second per 250 characters
+beyond 2,000, up to the ceiling. This is a time allowance, not a measured
+inference-speed estimate. The browser and Gunicorn allow the ceiling plus the
+provider timeout and request overhead (270 s / 285 s by default). Behind a
+reverse proxy, allow at least the browser's request timeout for chat sends and
+regenerations, or those requests may be cut off before the gateway responds.
 
 Non-secret defaults (host, port, database and script paths, route names) live in
 `includes/constants.json`.

@@ -5,10 +5,12 @@ loading overlay) lives in `base.html`, so a page only contains what makes it
 different.
 """
 
+from math import ceil
+
 from flask import Blueprint, render_template
 
 from config import OPENAI_TIMEOUT
-from scanning import SCREEN_BUDGET
+from scanning import MAX_SCREEN_BUDGET
 
 pages = Blueprint("pages", __name__)
 
@@ -16,11 +18,10 @@ pages = Blueprint("pages", __name__)
 def _timeouts():
     """What the browser needs to know about how long a prompt may take.
 
-    Screening shares one budget and the model call has its own; the page's
-    own timeout has to exceed both, with room for everything else. Keeping
-    it derived means the two cannot drift apart.
+    Use the same ceiling as the server: even the largest paste has time for
+    screening and the completion that follows it.
     """
-    screen = int(SCREEN_BUDGET)
+    screen = ceil(MAX_SCREEN_BUDGET)
     ai = int(OPENAI_TIMEOUT)
     return {
         "screen_budget": screen,

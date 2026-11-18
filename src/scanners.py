@@ -72,10 +72,10 @@ def run(stage, prompt, stop=None, **policy):
     keep the fail-closed guarantee: a scanner that will not run must stop
     the prompt rather than wave it through.
 
-    `stop` is passed through to scanners that accept it. It means "another
-    check has already refused this prompt", and lets a scanner drop the rest
-    of a long paste instead of pricing out work that cannot change the
-    answer. Scanners that do not accept it simply scan in full.
+    `stop` is passed through to scanners that accept it. It indicates that
+    another check blocked the prompt or the deadline expired, so finishing
+    the remaining detail cannot permit the send. Scanners that do not accept
+    it simply scan in full; any late result is discarded by the caller.
     """
     fn = get_scanner(stage)
     if fn is None:

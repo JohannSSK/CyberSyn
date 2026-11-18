@@ -31,6 +31,7 @@
     var rules = Object.keys(Dom.policyFields);
     var savedMask = "";
     var dirty = false;
+    var connectionDirty = false;
     var savedConnection = { provider: "auto", base: "", hasKey: false };
     var discoveryVersion = 0;
 
@@ -129,6 +130,7 @@
     function flashConnectionSaved() {
         if (!nodes.connectionState) return;
         if (connectionSavedTimer) clearTimeout(connectionSavedTimer);
+        connectionDirty = false;
         nodes.connectionState.textContent = t("Saved.");
         connectionSavedTimer = setTimeout(function () {
             connectionSavedTimer = null;
@@ -141,6 +143,13 @@
         dirty = true;
         nodes.checksState.textContent = t("Unsaved changes");
         updateAllOff();
+    }
+
+    function markConnectionDirty() {
+        if (connectionSavedTimer) clearTimeout(connectionSavedTimer);
+        connectionSavedTimer = null;
+        connectionDirty = true;
+        if (nodes.connectionState) nodes.connectionState.textContent = t("Unsaved changes");
     }
 
     function paintKeyState() {
@@ -157,38 +166,42 @@
         }
     }
 
-    function apply(data) {
+    function applyChecks(data) {
         rules.forEach(function (key) { nodes[key].value = Dom.policyAction(data, key); });
         nodes.restore.checked = data.restore_redactions === true;
         updateAllOff();
-        if (data.MODEL_NAME && !Array.from(nodes.model.options).some(function (o) {
-            return o.value === data.MODEL_NAME;
-        })) {
-            var option = document.createElement("option");
-            option.value = data.MODEL_NAME;
-            option.textContent = data.MODEL_NAME;
-            nodes.model.appendChild(option);
-        }
-        if (data.MODEL_NAME) nodes.model.value = data.MODEL_NAME;
-        if (data.PROVIDER) nodes.provider.value = data.PROVIDER;
-        nodes.base.value = data.API_BASE || "";
-
-        savedMask = data.API_KEY_MASK || "";
-        savedConnection = {
-            provider: data.PROVIDER || "auto",
-            base: nodes.base.value,
-            hasKey: !!savedMask
-        };
-        if (nodes.clearKey) nodes.clearKey.classList.toggle("hidden", !savedMask);
-        paintKeyState();
         clearChecksSaved();
         dirty = false;
         nodes.checksState.textContent = "";
     }
 
+    function applyConnection(data) {
+        if (data.MODEL_NAME && !Array.from(nodes.model.options).some(function (o) {
+            return o.value === data.MODEL_NAME;
+        })) {
+            nodes.model.appendChild(modelOption(data.MODEL_NAME));
+        }
+        if (data.MODEL_NAME) nodes.model.value = data.MODEL_NAME;
+        if (data.PROVIDER) nodes.provider.value = data.PROVIDER;
+        nodes.base.value = data.API_BASE || "";
+        updateSavedConnection(data);
+    }
+
+    function updateSavedConnection(data) {
+        savedMask = data.API_KEY_MASK || "";
+        savedConnection = {
+            provider: data.PROVIDER || "auto",
+            base: data.API_BASE || "",
+            hasKey: !!savedMask
+        };
+        if (nodes.clearKey) nodes.clearKey.classList.toggle("hidden", !savedMask);
+        paintKeyState();
+    }
+
     function load() {
         return Api.post("SETTINGS", {}).then(function (data) {
-            apply(data);
+            applyChecks(data);
+            applyConnection(data);
             return data;
         });
     }
@@ -222,7 +235,7 @@
                 rules.forEach(function (rule) { payload[Dom.policyFields[rule]] = nodes[rule].value; });
                 return Api.post("SETTINGS", payload);
             }).then(function (data) {
-                apply(data);
+                applyChecks(data);
                 nodes.alsoDefault.checked = false;
                 flashChecksSaved();
                 Loading.toast("Safety checks saved.", "success");
@@ -250,11 +263,12 @@
                 return Api.post("SETTINGS", payload);
             }).then(function (data) {
                 nodes.key.value = "";
-                apply(data);
+                discoveryVersion++;
+                applyConnection(data);
                 nodes.connectionDefault.checked = false;
                 flashConnectionSaved();
                 Loading.toast("Connection saved.", "success");
-                if (savedConnection.hasKey) refreshModels();
+                refreshModels();
             }).catch(function (err) {
                 Loading.toast(err.message, "error");
             });
@@ -283,17 +297,26 @@
         if (kind) nodes.modelState.classList.add(kind);
     }
 
-    function showModels(models, providerLabel) {
+    function modelOption(name) {
+        var option = Dom.el("option", "", name);
+        option.value = name;
+        option.setAttribute("data-no-i18n", "");
+        return option;
+    }
+
+    function showModels(models, providerLabel, keepCurrent) {
         var current = nodes.model.value;
-        nodes.model.innerHTML = models.map(function (name) {
-            return '<option value="' + Dom.esc(name) + '">' + Dom.esc(name) + "</option>";
-        }).join("");
-        if (models.indexOf(current) !== -1) nodes.model.value = current;
+        var retained = keepCurrent && current && models.indexOf(current) === -1;
+        nodes.model.replaceChildren();
+        if (retained) nodes.model.appendChild(modelOption(current));
+        models.forEach(function (name) { nodes.model.appendChild(modelOption(name)); });
+        if (retained || models.indexOf(current) !== -1) nodes.model.value = current;
         var where = providerLabel || (isGreek() ? "αυτόν τον πάροχο" : "that provider");
         var summary = isGreek()
             ? (models.length === 1 ? "1 μοντέλο" : Dom.formatNumber(models.length) + " μοντέλα") +
               " στον πάροχο " + where + "."
             : Dom.plural(models.length, "model") + " available on " + where + ".";
+        if (retained) summary += " " + t("The current model was kept because it is not in this list.");
         setModelState(summary, "is-ok");
     }
 
@@ -349,7 +372,9 @@
                     setModelState(t(emptyMsg), "is-error");
                     return null;
                 }
-                showModels(data.models, data.provider_label);
+                // A saved connection may use a model the listing omits (or
+                // spells with a provider prefix). Do not silently replace it.
+                showModels(data.models, data.provider_label, !key && !changed);
                 if (key && data.provider && data.provider !== "auto") {
                     nodes.provider.value = data.provider;
                 }
@@ -366,7 +391,15 @@
             });
     }
 
-    var autoProbe = Dom.debounce(function () { refreshModels(); }, 900);
+    var autoProbe = Dom.debounce(function () {
+        if (nodes.key.value.trim().length >= 8) refreshModels();
+    }, 900);
+
+    function destinationEdited() {
+        discoveryVersion++;
+        markConnectionDirty();
+        setModelState(t("Refresh the list to check this connection."));
+    }
 
     /* ------------------------------------------------------------------
        Wiring
@@ -393,7 +426,7 @@
                 nodes.key.value = "";
                 discoveryVersion++;
                 nodes.connectionDefault.checked = false;
-                apply(data);
+                updateSavedConnection(data);
                 setModelState(t("No key saved yet."));
                 Loading.toast("Saved key removed.", "success");
             }).catch(function (err) {
@@ -406,18 +439,18 @@
     Dom.on(nodes.saveChecks, "click", saveChecks);
     Dom.on(nodes.saveConnection, "click", saveConnection);
     Dom.on(nodes.refresh, "click", function () { refreshModels({ button: true }); });
-    Dom.on(nodes.model, "change", markDirty);
+    Dom.on(nodes.model, "change", markConnectionDirty);
     Dom.on(nodes.provider, "change", function () {
         nodes.base.value = nodes.provider.value === savedConnection.provider
             ? savedConnection.base
             : "";
-        markDirty();
+        markConnectionDirty();
         refreshModels();
     });
 
-    Dom.on(nodes.base, "input", function () { discoveryVersion++; });
+    Dom.on(nodes.base, "input", destinationEdited);
     Dom.on(nodes.key, "input", function () {
-        discoveryVersion++;
+        destinationEdited();
         if (nodes.key.value.trim().length >= 8) autoProbe();
     });
 
@@ -429,8 +462,9 @@
         } else if (checksSavedTimer && nodes.checksState) {
             nodes.checksState.textContent = t("Saved.");
         }
-        if (connectionSavedTimer && nodes.connectionState) {
-            nodes.connectionState.textContent = t("Saved.");
+        if (nodes.connectionState) {
+            if (connectionDirty) nodes.connectionState.textContent = t("Unsaved changes");
+            else if (connectionSavedTimer) nodes.connectionState.textContent = t("Saved.");
         }
         var autoOpt = nodes.provider.querySelector('option[value="auto"]');
         if (autoOpt) autoOpt.textContent = t("Detect automatically");

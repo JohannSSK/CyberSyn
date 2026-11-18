@@ -2,17 +2,18 @@
 
 import os
 import sys
+from math import ceil
 from pathlib import Path
 
 chdir = str(Path(__file__).resolve().parent)
 sys.path.insert(0, chdir)
 from config import HOST, OPENAI_TIMEOUT, PORT, WARM_MODELS
-from scanning import SCREEN_BUDGET
+from scanning import MAX_SCREEN_BUDGET
 
 bind = f"{HOST}:{PORT}"
 workers = 1
 threads = int(os.environ.get("CYBERSYN_THREADS", 8))
-timeout = max(180, int(SCREEN_BUDGET + OPENAI_TIMEOUT + 45))
+timeout = max(180, ceil(MAX_SCREEN_BUDGET + OPENAI_TIMEOUT + 45))
 control_socket_disable = True  # do not create an administrative socket in the app directory
 access_log_format = '%(t)s "%(m)s %(U)s" %(s)s %(L)s'  # no query, headers or body
 accesslog = "-"

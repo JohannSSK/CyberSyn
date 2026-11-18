@@ -103,7 +103,8 @@ if [ "$(uname -s)" = Linux ]; then
         "$VENV_PY" -m pip uninstall -y torch
     fi
     "$VENV_PY" -m pip install --index-url https://download.pytorch.org/whl/cpu "$(grep '^torch==' requirements.txt)" \
-        || die "could not install the CPU build of PyTorch"
+        || die "could not install PyTorch from https://download.pytorch.org/whl/cpu.
+   Check that this package index is reachable and a CPU wheel is available for your Python and platform."
 fi
 if ! "$VENV_PY" -m pip install -r requirements.txt; then
     cat >&2 <<'HINT'
@@ -125,8 +126,8 @@ fi
 # ---------------------------------------------------------------------------
 
 "$VENV_PY" -m pip check || die "incompatible packages in the virtual environment"
-say "==> 5. Loading the local models and verifying CPU inference..."
-"$VENV_PY" src/MLscripts/model_cache.py || die "model verification failed; check the weights, dependencies and network, then rerun ./setup.sh"
+say "==> 5. Preparing the project model cache and verifying CPU inference..."
+"$VENV_PY" src/MLscripts/model_cache.py --download || die "model verification failed; check the weights, dependencies and network, then rerun ./setup.sh"
 
 # ---------------------------------------------------------------------------
 # Where to go next.
@@ -138,23 +139,5 @@ cat <<'NEXT'
 
     ./run.sh
 
+No activation is needed in this terminal or any later one.
 NEXT
-
-# Offer an activated shell, but only where we know how. `exec "$SHELL"
-# --rcfile` is bash-specific and zsh -- macOS's default shell -- does not
-# accept it, which used to strand the user in a shell that never printed a
-# prompt. Printing the command is portable and never wrong.
-case "${SHELL##*/}" in
-    bash|zsh|ksh)
-        say "To activate the virtual environment in this shell:"
-        say "    source .venv/bin/activate"
-        ;;
-    fish)
-        say "To activate the virtual environment in this shell:"
-        say "    source .venv/bin/activate.fish"
-        ;;
-    csh|tcsh)
-        say "To activate the virtual environment in this shell:"
-        say "    source .venv/bin/activate.csh"
-        ;;
-esac

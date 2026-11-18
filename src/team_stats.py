@@ -3,11 +3,10 @@
 Gives the page a per-member screening breakdown, daily trends and a
 metadata-only activity timeline. Imported network activity is in Shadow AI.
 
-Blocks and approved overrides are counted separately: an override is in the
-audit trail, but the message *was* sent, so it is not a block.
+Blocks, successful completions and approved overrides are counted separately.
+An approval is an audit event, not a refusal or a guarantee of completion.
 """
 
-import json
 from collections import Counter
 
 from flask import Blueprint
@@ -20,16 +19,7 @@ from policy import ACTION_FIELDS, rule_actions
 team_stats_api = Blueprint("team_stats_api", __name__)
 
 OVERRIDE_STAGE = "override"
-DAYS = 14
-
-
-def count_answered(raw):
-    """The lifetime answered total, kept outside the chat rows."""
-    try:
-        logs = json.loads(raw or "[]")
-    except (TypeError, ValueError):
-        return 0
-    return len(logs) if isinstance(logs, list) else 0
+DAYS = 30
 
 
 def pct(part, whole):
@@ -50,12 +40,14 @@ def ranked(counter, total, limit=6):
 
 
 def member_stats(db_file, parent_id, employee_id, username, settings,
-                 answered, blocks, created_at):
+                 answered, regenerated, blocks, created_at):
     """Everything the page charts for one member."""
     stopped = [b for b in blocks if b["stage"] != OVERRIDE_STAGE]
     blocked = len(stopped)
     overrides = len(blocks) - blocked
-    sent = answered + blocked
+    # Count completions saved to history, not all provider call attempts.
+    sent = answered + regenerated
+    attempts = sent + blocked
     checks_on = sum(action != "allow" for action in rule_actions(settings or {}).values())
 
     return {
@@ -64,9 +56,11 @@ def member_stats(db_file, parent_id, employee_id, username, settings,
         "member_since": created_at,
         "sent": sent,
         "answered": answered,
+        "regenerated": regenerated,
         "blocked": blocked,
+        "attempts": attempts,
         "overrides": overrides,
-        "block_rate": pct(blocked, sent),
+        "block_rate": pct(blocked, attempts),
         "checks_on": checks_on,
         "checks_off": len(ACTION_FIELDS) - checks_on,
         "model": (settings["MODEL_NAME"] if settings else None) or DEFAULT_MODEL,
@@ -103,6 +97,7 @@ def build_stats(db_file, parent_id):
     }
     con.close()
 
+    regenerated_map = block_log.regeneration_counts(db_file, parent_id)
     blocks_by_member = {}
     for row in block_log.block_rows(db_file, parent_id):
         blocks_by_member.setdefault(row["Employee_id"], []).append(row)
@@ -112,6 +107,7 @@ def build_stats(db_file, parent_id):
             db_file, parent_id, emp["id"], emp["username"],
             settings.get(emp["id"]),
             answered_map.get(emp["id"], 0),
+            regenerated_map.get(emp["id"], 0),
             blocks_by_member.get(emp["id"], []),
             emp["created_at"],
         )
@@ -121,6 +117,7 @@ def build_stats(db_file, parent_id):
     total_sent = sum(m["sent"] for m in members)
     total_blocked = sum(m["blocked"] for m in members)
     total_overrides = sum(m["overrides"] for m in members)
+    total_attempts = total_sent + total_blocked
 
     all_stages = Counter()
     all_reasons = Counter()
@@ -139,7 +136,9 @@ def build_stats(db_file, parent_id):
             "sent": total_sent,
             "blocked": total_blocked,
             "overrides": total_overrides,
-            "block_rate": pct(total_blocked, total_sent),
+            "attempts": total_attempts,
+            "regenerated": sum(m["regenerated"] for m in members),
+            "block_rate": pct(total_blocked, total_attempts),
         },
         "stages": ranked(all_stages, total_blocked),
         "reasons": ranked(all_reasons, total_blocked),

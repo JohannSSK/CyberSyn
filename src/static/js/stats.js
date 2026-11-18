@@ -69,17 +69,17 @@
        Flat SVG stroke ring with keyboard-focusable label & tooltip
        ------------------------------------------------------------------ */
 
-    function buildDonut(rate, blocked, sent) {
+    function buildDonut(rate, blocked, attempts) {
         var pct = Math.max(0, Math.min(100, Math.round(Number(rate) || 0)));
         var radius = 23;
         var circ = 2 * Math.PI * radius;
         var offset = circ * (1 - pct / 100);
 
         var summary = isGreek()
-            ? Dom.formatNumber(blocked) + " από " + Dom.formatNumber(sent) +
-              " μηνύματα αποκλείστηκαν (" + Dom.formatPercent(pct) + ")"
-            : Dom.formatNumber(blocked) + " of " + Dom.formatNumber(sent) +
-              " messages blocked (" + Dom.formatPercent(pct) + ")";
+            ? Dom.formatNumber(blocked) + " από " + Dom.formatNumber(attempts) +
+              " προσμετρημένες προσπάθειες αποκλείστηκαν (" + Dom.formatPercent(pct) + ")"
+            : Dom.formatNumber(blocked) + " of " + Dom.formatNumber(attempts) +
+              " counted attempts blocked (" + Dom.formatPercent(pct) + ")";
 
         var donut = Dom.el("div", "donut has-tip");
         donut.tabIndex = 0;
@@ -99,7 +99,7 @@
     }
 
     /* ------------------------------------------------------------------
-       Period-over-period delta (computed client-side from 14-day trend)
+       7-day period-over-period delta (computed from the latest 14 bins)
        Inverted polarity: fewer blocks/overrides is good (--success).
        ------------------------------------------------------------------ */
 
@@ -295,7 +295,7 @@
             '</span><span>·</span><span class="mono" data-no-i18n>' +
             Dom.esc(member.model) + "</span></span></span>";
 
-        head.appendChild(buildDonut(member.block_rate, member.blocked, member.sent));
+        head.appendChild(buildDonut(member.block_rate, member.blocked, member.attempts));
         card.appendChild(head);
 
         var trend = Dom.el("div", "trend trend-compact");
@@ -307,7 +307,7 @@
         var tiles = Dom.el("div", "tiles");
         [
             ["Sent", member.sent],
-            ["Answered", member.answered],
+            ["Regenerated", member.regenerated],
             ["Blocked", member.blocked],
             ["Overrides", member.overrides]
         ].forEach(function (entry) {
@@ -463,19 +463,23 @@
         push(["CyberSyn workspace statistics"]);
         push(["Generated (UTC)", nowIso]);
         push(["Administrator", data.admin || ""]);
+        push(["Totals", "Lifetime, active members only"]);
         push(["Members", stats.members || 0]);
         push(["Messages sent", stats.sent || 0]);
+        push(["Sent definition", "Successful new exchanges and regenerations"]);
+        push(["Regenerated", stats.regenerated || 0]);
         push(["Blocked", stats.blocked || 0]);
+        push(["Counted attempts (sent + blocked)", stats.attempts || 0]);
         push(["Overrides", stats.overrides || 0]);
         push(["Block rate (%)", stats.block_rate || 0]);
         lines.push("");
 
         push(["Members"]);
         push(["Username", "Model", "Checks active (of 4)", "Key configured",
-              "Sent", "Answered", "Blocked", "Overrides", "Block rate (%)"]);
+              "Sent", "New answers", "Regenerated", "Blocked", "Counted attempts", "Overrides", "Block rate (%)"]);
         (data.members || []).forEach(function (m) {
             push([m.username, m.model, m.checks_on, m.has_key ? "yes" : "no",
-                  m.sent, m.answered, m.blocked, m.overrides, m.block_rate]);
+                  m.sent, m.answered, m.regenerated, m.blocked, m.attempts, m.overrides, m.block_rate]);
         });
         lines.push("");
 

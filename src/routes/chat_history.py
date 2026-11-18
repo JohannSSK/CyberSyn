@@ -89,7 +89,7 @@ def chats_rename():
         return fail("Your session has ended. Sign in again.", 401)
     if chat_id is None:
         return fail("chat_id is required.", 400)
-    title = " ".join(str(data.get("title") or "").split())[:80]
+    title = chat_store.normalise_title(data.get("title"))
     if not title:
         return fail("Title cannot be empty.", 400)
     if not chat_store.rename_chat(DB_FILE, ids[0], ids[1], chat_id, title):

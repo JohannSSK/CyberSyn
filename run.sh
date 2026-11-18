@@ -78,43 +78,8 @@ else
 fi
 say "==> Using $("$PY" --version) at $PY"
 
-# ---------------------------------------------------------------------------
-# Host and port: constants.json, with the environment taking precedence.
-# ---------------------------------------------------------------------------
-
-read_constants() {
-    "$PY" - "$ROOT/includes/constants.json" <<'PYTHON'
-import json, sys
-try:
-    with open(sys.argv[1], encoding="utf-8") as fh:
-        constants = json.load(fh)
-    print(constants.get("HOST", "127.0.0.1"), int(constants.get("PORT", 5000)))
-except Exception:
-    # A malformed or missing constants file must not stop the server: the
-    # defaults below are the same ones config.py falls back to.
-    print("127.0.0.1", 5000)
-PYTHON
-}
-
-DEFAULTS="$(read_constants)"
-DEFAULT_HOST="${DEFAULTS%% *}"
-DEFAULT_PORT="${DEFAULTS##* }"
-
-CYBERSYN_HOST="${CYBERSYN_HOST:-$DEFAULT_HOST}"
-CYBERSYN_PORT="${CYBERSYN_PORT:-$DEFAULT_PORT}"
-export CYBERSYN_HOST CYBERSYN_PORT
-
-# 0.0.0.0 means "every interface"; it is not something to type into a browser.
-case "$CYBERSYN_HOST" in
-    0.0.0.0|"::") SHOWN_HOST="127.0.0.1" ;;
-    *)            SHOWN_HOST="$CYBERSYN_HOST" ;;
-esac
-
-say "==> CyberSyn will listen on $CYBERSYN_HOST:$CYBERSYN_PORT"
-say "==> Open http://$SHOWN_HOST:$CYBERSYN_PORT/"
-say ""
-
-# app.py expects to be started from src/, which is also what puts its own
-# directory on sys.path so `import config` works.
+# Use config.py as the source of truth for the bind and paths. The server
+# prints the actual URL after binding. exec keeps Ctrl-C and SIGTERM on the
+# server process, and unbuffered output also works when launched from a service.
 cd "$ROOT/src"
-exec "$PY" app.py "$@"
+exec "$PY" -u app.py "$@"

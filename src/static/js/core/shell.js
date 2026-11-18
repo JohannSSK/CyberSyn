@@ -655,6 +655,7 @@
     var shell = null;
     var scrim = null;
     var narrowNow = null;
+    var drawerTrigger = null;
 
     function narrow() {
         return !!(global.matchMedia && global.matchMedia(NARROW_QUERY).matches);
@@ -667,10 +668,15 @@
             : !(shell && shell.classList.contains("is-sidebar-collapsed"));
     }
 
-    function showSidebar(open) {
+    function showSidebar(open, returnFocus) {
         if (!sidebar) return;
 
         var asDrawer = narrow();
+        if (!open && (returnFocus || sidebar.contains(document.activeElement))) {
+            var toggle = drawerTrigger || global.Dom.$("[data-action='toggle-sidebar']");
+            if (toggle) toggle.focus({ preventScroll: true });
+        }
+        sidebar.toggleAttribute("inert", !open);
         sidebar.classList.toggle("is-open", asDrawer && open);
         if (shell) shell.classList.toggle("is-sidebar-collapsed", !asDrawer && !open);
 
@@ -681,14 +687,20 @@
         });
     }
 
-    function toggleSidebar() { showSidebar(!sidebarShown()); }
+    function toggleSidebar(event) {
+        var asDrawer = narrow();
+        var opening = !sidebarShown();
+        if (opening && asDrawer) drawerTrigger = event.currentTarget;
+        showSidebar(opening, !opening && asDrawer);
+        if (opening && asDrawer) sidebar.focus({ preventScroll: true });
+    }
 
     function buildScrim() {
         var node = global.Dom.el("div", "sidebar-scrim");
         node.setAttribute("data-sidebar-scrim", "");
         node.setAttribute("aria-hidden", "true");
         global.document.body.appendChild(node);
-        global.Dom.on(node, "click", function () { showSidebar(false); });
+        global.Dom.on(node, "click", function () { showSidebar(false, true); });
         return node;
     }
 
@@ -729,9 +741,8 @@
         global.Dom.on(document, "keydown", function (event) {
             if (event.key !== "Escape") return;
             if (narrow() && sidebarShown()) {
-                showSidebar(false);
-                var toggle = global.Dom.$("[data-action='toggle-sidebar']");
-                if (toggle && typeof toggle.focus === "function") toggle.focus();
+                event.preventDefault();
+                showSidebar(false, true);
             }
         });
 
