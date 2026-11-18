@@ -72,6 +72,15 @@ def revoke(db_file, token):
     return changed
 
 
+def retire_page_grant(con, response):
+    """End this browser's previous page unlock in the account transition's transaction."""
+    token = request.cookies.get(PAGE_COOKIE)  # used only for revocation, never to authorise the change
+    if token:
+        con.execute("DELETE FROM ADMIN_SESSIONS WHERE token_hash=? AND purpose='approval_page'", (_hash(token.strip()),))
+    response.delete_cookie(PAGE_COOKIE)
+    return response
+
+
 def register(app):
     app.register_blueprint(admin_session_api)
 

@@ -60,69 +60,39 @@ case "$(uname -s 2>/dev/null || echo unknown)" in
 esac
 
 # ---------------------------------------------------------------------------
-# 1. A Python 3 interpreter, under one of the names it is shipped as.
+# 1–2. Use a compatible project environment, or provision one alongside the
+# system Python. In particular, Arch's current `python` may be too new.
 # ---------------------------------------------------------------------------
 
-say "==> 1. Looking for Python 3..."
+. "$ROOT/tools/local_python.sh"
 
-PYTHON=""
-for candidate in python3 python3.13 python3.12 python3.11 python; do
-    if command -v "$candidate" >/dev/null 2>&1; then
-        # `python` is Python 2 on older systems; skip it unless it is 3.x.
-        if "$candidate" -c 'import sys; sys.exit(0 if (3, 11) <= sys.version_info < (3, 14) else 1)' \
-           >/dev/null 2>&1; then
-            PYTHON="$candidate"
-            break
-        fi
-    fi
-done
-
-[ -n "$PYTHON" ] || die "no supported Python (3.11–3.13) found on PATH.
-   Debian/Ubuntu:  sudo apt install python3 python3-venv python3-pip
-   Fedora:         sudo dnf install python3 python3-pip
-   Arch:           sudo pacman -S python python-pip
-   Alpine:         apk add python3 py3-pip py3-virtualenv
-   macOS:          xcode-select --install   (or: brew install python3)"
-
-if ! "$PYTHON" -c 'import sys; sys.exit(0 if (3, 11) <= sys.version_info < (3, 14) else 1)' \
-   >/dev/null 2>&1; then
-    die "Python 3.11–3.13 is required, but $PYTHON is $("$PYTHON" -c 'import sys; print("%d.%d" % sys.version_info[:2])').
-   Install a newer Python 3 and run this script again."
-fi
-
-say "    using $PYTHON ($("$PYTHON" -c 'import sys; print("%d.%d.%d" % sys.version_info[:3])'))"
-
-# ---------------------------------------------------------------------------
-# 2. The virtual environment.
-# ---------------------------------------------------------------------------
-
-if [ -d .venv ] && [ -x .venv/bin/python ]; then
-    say "==> 2. Reusing the existing virtual environment (.venv)."
+say "==> 1. Looking for Python 3.11–3.13..."
+if has_project_venv; then
+    say "==> 2. Checking the existing virtual environment (.venv)."
+elif PYTHON=$(path_python); then
+    say "==> 2. Creating .venv with $PYTHON..."
+    "$PYTHON" -m venv .venv || die "could not create .venv with $PYTHON.
+   On Debian/Ubuntu install the matching python3-venv package, then rerun ./setup.sh."
+elif command -v uv >/dev/null 2>&1; then
+    say "==> 2. Using uv to create .venv with Python 3.12 (downloaded if needed)..."
+    uv venv --python 3.12 --seed .venv || die "uv could not provision Python 3.12 and pip.
+   Check the download error above, or put Python 3.11–3.13 on PATH and rerun ./setup.sh."
 else
-    say "==> 2. Creating the virtual environment (.venv)..."
-    if ! "$PYTHON" -m venv .venv 2>/tmp/cybersyn-venv-error; then
-        cat /tmp/cybersyn-venv-error >&2 || true
-        rm -f /tmp/cybersyn-venv-error
-        # The usual cause, and it is not guessable from the traceback.
-        die "could not create a virtual environment.
-   Debian/Ubuntu almost always needs:  sudo apt install python3-venv
-   Fedora:                             sudo dnf install python3-virtualenv
-   Alpine:                             apk add py3-virtualenv
-   then run ./setup.sh again."
-    fi
-    rm -f /tmp/cybersyn-venv-error
+    die "the pinned dependencies need Python 3.11–3.13. No compatible interpreter was found.
+   Install uv (on Arch: sudo pacman -S --needed uv) and rerun ./setup.sh,
+   or put a supported Python on PATH. Do not downgrade your system Python."
 fi
-
-VENV_PY="$ROOT/.venv/bin/python"
-[ -x "$VENV_PY" ] || die "the virtual environment was created but has no interpreter at .venv/bin/python."
-"$VENV_PY" -c 'import sys; sys.exit(not (3, 11) <= sys.version_info < (3, 14))' \
-    || die "the existing .venv needs Python 3.11–3.13. Recreate it with the supported interpreter."
+VENV_PY=$(venv_python)
+say "    using $("$VENV_PY" --version) at $VENV_PY"
 
 # ---------------------------------------------------------------------------
 # 3. Dependencies.
 # ---------------------------------------------------------------------------
 
 say "==> 3. Upgrading pip..."
+if ! "$VENV_PY" -m pip --version >/dev/null 2>&1; then
+    "$VENV_PY" -m ensurepip --upgrade || die "the project .venv has no pip. Install venv/ensurepip for its interpreter and rerun ./setup.sh."
+fi
 "$VENV_PY" -m pip install --upgrade pip || die "pip could not be upgraded."
 
 say "==> 4. Installing dependencies from requirements.txt..."

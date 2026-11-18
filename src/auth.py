@@ -105,9 +105,11 @@ def member_from_token(db_file, token=None, *, con=None):
 
 def admin_from_token(db_file, token=None, *, parent_id=None, consume=False, page=False, con=None):
     """Page grants are read-only; a once grant authorises exactly one transaction."""
+    # Choose once: explicit token, primary cookie, then (for page reads only)
+    # page cookie. Failed validation must not silently switch workspaces.
+    token = cookie_token(token, ADMIN_COOKIE)
     if page:
         token = cookie_token(token, PAGE_COOKIE)
-    token = cookie_token(token, ADMIN_COOKIE)
     if not isinstance(token, str) or not token.strip():
         return None
     if con is None:

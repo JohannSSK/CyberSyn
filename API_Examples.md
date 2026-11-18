@@ -49,6 +49,8 @@ Bootstrap is open **only while there are zero administrators**. For another acco
 
 A **once** grant expires after five minutes and is atomically consumed on use; reuse cannot authorise a second write. A **page** grant (`scope:"page"`) lasts at most 15 minutes and grants read-only roster/statistics access, not policy changes or overrides. Browser mode sets a separate HttpOnly `cybersyn_page` cookie; API clients receive `admin_token`. “Lock now” revokes the grant on the server. Approval tokens cannot evict a primary login session.
 
+For team statistics, the member roster and the page-access check, the explicit token takes precedence, then `cybersyn_admin`, then `cybersyn_page`. An invalid credential does not fall back to a different identity. Successful administrator login, creation or deletion revokes the page grant presented by that browser and clears its page cookie.
+
 ## 3. `POST /api/admin/employee`
 
 **Add** (workspace administrator):

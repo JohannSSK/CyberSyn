@@ -200,19 +200,33 @@ clients cannot bypass the proxy or supply the forwarded IP header themselves.
 
 ## Local development
 
-Use Python **3.11+** (3.11–3.13 for the pinned dependencies). Linux setup installs PyTorch from the
-CPU-only index first; macOS uses the native arm64 PyPI wheel. Prefer `setup.sh` over a direct Linux
-`pip install -r requirements.txt`, which otherwise uses PyPI’s default torch build.
+The pinned dependencies require **Python 3.11–3.13**. If your only Python on Arch Linux is 3.14,
+**keep the system Python** and install `uv` once:
+
+```bash
+sudo pacman -S --needed uv
+```
+
+Then run the same commands as on other supported systems:
 
 ```bash
 ./setup.sh                 # creates .venv, installs dependencies, fetches the model
 ./run.sh                   # starts the server
-./run.sh seed <username>   # creates the first administrator
 ```
 
-There is no default account. A gateway that ships with a known username and password
-is a gateway anyone can sign in to, so `seed` has to be given one. Omit the password
-and a random one is generated and printed once.
+`setup.sh` reuses a compatible `.venv` first, then looks for a supported interpreter on `PATH`
+(including `python3.13`, `python3.12` and `python3.11`). If neither exists, it uses `uv` to create
+`.venv` with Python 3.12, downloading that interpreter if needed. No activation or `PATH` change is
+required. If `.venv` is broken or uses an unsupported Python, move it aside and rerun `./setup.sh`;
+neither launcher overwrites it. `run.sh` does not install anything.
+
+Linux setup installs PyTorch from the CPU-only index first; macOS uses the native arm64 PyPI wheel.
+Prefer `setup.sh` over a direct Linux `pip install -r requirements.txt`, which otherwise uses PyPI’s
+default torch build.
+
+There is no default account. To create the first administrator from the command line, run
+`./run.sh seed alice` with your chosen username. Omit the password and a random one is generated
+and printed once.
 
 `run.sh` reads the host, the port and every path from `includes/constants.json`, so
 editing that file is enough to move the app. The environment still wins where it has
@@ -230,9 +244,10 @@ the scanners need `torch` and `spaCy`, which do not build reliably there. Use WS
 
 ## Testing
 
-Run the tests from the repository root:
+Run the tests from the repository root with the project Python (in Bash, `source .venv/bin/activate`):
 
 ```bash
+python3 tools/test_launchers.py    # local interpreter selection (offline; no models needed)
 python3 tools/test_constants.py    # includes/constants.json is real, and is actually used
 python3 tools/test_auth.py         # authorisation on the member routes
 python3 tools/test_screening.py    # the screening stage: bounded, parallel, fail-closed
