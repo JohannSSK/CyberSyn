@@ -232,7 +232,7 @@
     --slow: 420ms;
 
     --sidebar-w: 268px;
-    --topbar-h: 64px;
+    --topbar-h: 56px;
 
     /* The default theme is always warm charcoal. */
     color-scheme: dark;
