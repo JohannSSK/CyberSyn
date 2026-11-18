@@ -64,13 +64,16 @@
                         </div>
                     </div>
 
+                    <div id="checks-consequence" class="callout callout-warn checks-consequence hidden"
+                         role="status" aria-live="polite"></div>
+
                     <div id="all-checks-off-note" class="callout callout-warn hidden" role="status">
                         All three checks are turned off. Messages from this account will go straight to the AI provider until at least one check is turned back on.
                     </div>
 
                     <div class="row">
                         <button type="button" class="btn btn-primary" id="btn-save-checks">Save checks</button>
-                        <span class="tiny muted" id="checks-state"></span>
+                        <span class="tiny muted" id="checks-state" role="status" aria-live="polite"></span>
                     </div>
                 </section>
 
@@ -116,6 +119,7 @@
 
                     <div class="row">
                         <button type="button" class="btn btn-primary" id="btn-save-connection">Save connection</button>
+                        <span class="tiny muted" id="connection-state" role="status" aria-live="polite"></span>
                         <span class="tiny muted">Encrypted on this computer and never sent back in full to the browser.</span>
                     </div>
                 </section>

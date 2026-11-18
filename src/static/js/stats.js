@@ -581,7 +581,10 @@
             latestData = data;
             render(data);
         }).catch(function (err) {
-            Loading.toast(err.message, "error");
+            Loading.toast(
+                err.message || "Could not load statistics. Select Refresh to try again.",
+                "error"
+            );
         });
     }
 

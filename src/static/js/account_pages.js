@@ -93,7 +93,7 @@
             message(msg, "");
             var name = username.value.trim();
             if (!name) {
-                message(msg, "Choose a username.");
+                message(msg, "Choose a username to continue.");
                 username.focus();
                 return Promise.resolve();
             }
@@ -180,7 +180,7 @@
     function requireAdmin() {
         var context = adminContext();
         if (context) return context;
-        Loading.toast("Sign in as an administrator first.", "warn");
+        Loading.toast("Sign in as an administrator on the sign-in screen first.", "warn");
         setTimeout(home, 800);
         return null;
     }
@@ -203,7 +203,7 @@
             message(msg, "");
             var name = username.value.trim();
             if (!name) {
-                message(msg, "Choose a username.");
+                message(msg, "Choose a username to continue.");
                 username.focus();
                 return Promise.resolve();
             }

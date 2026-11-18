@@ -257,8 +257,25 @@
         "Send message": "Αποστολή μηνύματος",
         "Checked on this computer before anything reaches the AI.":
             "Ελέγχεται σε αυτόν τον υπολογιστή πριν φτάσει οτιδήποτε στην ΤΝ.",
+        "No AI is wired up for this workspace yet — ask your administrator to add a provider in":
+            "Δεν έχει συνδεθεί ακόμη πάροχος ΤΝ σε αυτόν τον χώρο εργασίας — ζητήστε από τον διαχειριστή σας να προσθέσει έναν στις",
+        "Dismiss notice": "Απόκρυψη ειδοποίησης",
         "Local safety checks": "Τοπικοί έλεγχοι ασφάλειας",
+        "Checks": "Έλεγχοι",
+        "On": "Ενεργός",
+        "Off": "Ανενεργός",
+        "Manage in Settings": "Διαχείριση στις Ρυθμίσεις",
+        "AFM, AMKA, IBANs, phones, emails, cards and names.":
+            "ΑΦΜ, ΑΜΚΑ, IBAN, τηλέφωνα, email, κάρτες και ονόματα.",
+        "Contracts, NDAs, internal financials, HR, credentials and code.":
+            "Συμβάσεις, NDA, εσωτερικά οικονομικά, HR, διαπιστευτήρια και κώδικας.",
+        "Hidden instructions in pasted emails, web pages and documents.":
+            "Κρυφές εντολές σε επικολλημένα email, ιστοσελίδες και έγγραφα.",
         "Checking locally before sending…": "Τοπικός έλεγχος πριν την αποστολή…",
+        "Still checking — normal on a long paste.":
+            "Ο έλεγχος συνεχίζεται — φυσιολογικό σε μεγάλο κείμενο.",
+        "Still waiting — normal on a long paste.":
+            "Η αναμονή συνεχίζεται — φυσιολογικό σε μεγάλο κείμενο.",
         "Checking the message": "Έλεγχος μηνύματος",
         "All checks passed.": "Όλοι οι έλεγχοι ολοκληρώθηκαν.",
         "Waiting for the AI reply…": "Αναμονή απάντησης από την ΤΝ…",
@@ -313,6 +330,8 @@
         "Ask an administrator to approve this once, or rephrase without the flagged details.":
             "Ζητήστε από έναν διαχειριστή μεμονωμένη έγκριση ή διατυπώστε ξανά το μήνυμα χωρίς τα επισημασμένα στοιχεία.",
         "Edit in message box": "Επεξεργασία στο πεδίο",
+        "Put my text back in the message box":
+            "Επαναφορά του κειμένου μου στο πεδίο μηνύματος",
         "Approve once": "Έγκριση για μία φορά",
         "Approve & send": "Έγκριση & αποστολή",
         "One-off approvals need the administrator password and are recorded in the audit log.":
@@ -346,7 +365,16 @@
             "Κρυφές οδηγίες και απόπειρες παράκαμψης κανόνων — συχνές σε επικολλημένα email, ιστοσελίδες και έγγραφα.",
         "All three checks are turned off. Messages from this account will go straight to the AI provider until at least one check is turned back on.":
             "Και οι τρεις έλεγχοι είναι ανενεργοί. Τα μηνύματα αυτού του λογαριασμού θα στέλνονται απευθείας στον πάροχο ΤΝ μέχρι να ενεργοποιηθεί τουλάχιστον ένας.",
+        "(AFM, AMKA, IBAN, phones, Greek IDs, names) will not be flagged.":
+            "(ΑΦΜ, ΑΜΚΑ, IBAN, τηλέφωνα, ελληνικές ταυτότητες, ονόματα) δεν θα επισημαίνονται.",
+        "Context:": "Συμφραζόμενα:",
+        "Legal, financial, HR and customer records will not be flagged.":
+            "Νομικά, οικονομικά, στοιχεία HR και αρχεία πελατών δεν θα επισημαίνονται.",
+        "Prompt-injection": "Εντολές παράκαμψης (prompt injection):",
+        "attempts will not be flagged.":
+            "Οι απόπειρες παράκαμψης δεν θα επισημαίνονται.",
         "Save checks": "Αποθήκευση ελέγχων",
+        "Saved.": "Αποθηκεύτηκε.",
         "Unsaved changes": "Μη αποθηκευμένες αλλαγές",
         "Approve": "Έγκριση",
         "Safety checks saved.": "Οι έλεγχοι ασφάλειας αποθηκεύτηκαν.",
@@ -543,6 +571,7 @@
         "Type the team member's password to open the workspace.":
             "Πληκτρολογήστε τον κωδικό του μέλους για να ανοίξετε τον χώρο εργασίας.",
         "Choose a username.": "Επιλέξτε όνομα χρήστη.",
+        "Choose a username to continue.": "Επιλέξτε όνομα χρήστη για να συνεχίσετε.",
         "Choose a password first.": "Επιλέξτε πρώτα κωδικό πρόσβασης.",
         "Those passwords do not match. Type the same password in both boxes.":
             "Οι κωδικοί δεν ταιριάζουν. Πληκτρολογήστε τον ίδιο κωδικό και στα δύο πεδία.",
@@ -554,12 +583,18 @@
             "Πληκτρολογήστε τον κωδικό αυτού του λογαριασμού για επιβεβαίωση.",
         "Administrator account deleted.": "Ο λογαριασμός διαχειριστή διαγράφηκε.",
         "Sign in as an administrator first.": "Συνδεθείτε πρώτα ως διαχειριστής.",
+        "Sign in as an administrator on the sign-in screen first.":
+            "Συνδεθείτε πρώτα ως διαχειριστής από την οθόνη σύνδεσης.",
         "Type the member username you want to remove.":
             "Πληκτρολογήστε το όνομα χρήστη του μέλους προς αφαίρεση.",
         "Type that member's password to confirm.":
             "Πληκτρολογήστε τον κωδικό αυτού του μέλους για επιβεβαίωση.",
         "Enter the administrator password.": "Εισαγάγετε τον κωδικό διαχειριστή.",
+        "Enter the administrator password to continue.":
+            "Εισαγάγετε τον κωδικό διαχειριστή για να συνεχίσετε.",
         "Enter the administrator username.": "Εισαγάγετε το όνομα χρήστη διαχειριστή.",
+        "Enter the administrator username to continue.":
+            "Εισαγάγετε το όνομα χρήστη διαχειριστή για να συνεχίσετε.",
         "That password did not match. Check it and try again.":
             "Ο κωδικός δεν ταίριαξε. Ελέγξτε τον και δοκιμάστε ξανά.",
         "Administrator approval was cancelled.": "Η επιβεβαίωση διαχειριστή ακυρώθηκε.",
@@ -616,13 +651,58 @@
         "That key returned no models.":
             "Αυτό το κλειδί δεν επέστρεψε διαθέσιμα μοντέλα.",
         "Too many attempts. Please wait a minute and try again.":
-            "Πολλές προσπάθειες. Περιμένετε ένα λεπτό και δοκιμάστε ξανά."
+            "Πολλές προσπάθειες. Περιμένετε ένα λεπτό και δοκιμάστε ξανά.",
+        "Could not load models. Check the key and try again.":
+            "Δεν φορτώθηκαν τα μοντέλα. Ελέγξτε το κλειδί και δοκιμάστε ξανά.",
+        "Could not load statistics. Select Refresh to try again.":
+            "Δεν φορτώθηκαν τα στατιστικά. Επιλέξτε Ανανέωση για νέα δοκιμή.",
+        "No API_KEY provided. Ask your administrator to add a provider key in Settings.":
+            "Δεν έχει δηλωθεί API_KEY. Ζητήστε από τον διαχειριστή σας να προσθέσει κλειδί παρόχου στις Ρυθμίσεις.",
+        "Invalid password. Check it and try again.":
+            "Λανθασμένος κωδικός. Ελέγξτε τον και δοκιμάστε ξανά.",
+        "Invalid employee password. Check it and try again.":
+            "Λανθασμένος κωδικός μέλους. Ελέγξτε τον και δοκιμάστε ξανά.",
+        "Invalid employee username or password. Check both fields and try again.":
+            "Λανθασμένο όνομα χρήστη ή κωδικός μέλους. Ελέγξτε τα πεδία και δοκιμάστε ξανά.",
+        "Current password is incorrect. Check it and try again.":
+            "Ο τρέχων κωδικός είναι λανθασμένος. Ελέγξτε τον και δοκιμάστε ξανά.",
+        "That chat was not found. Refresh the list or start a new chat.":
+            "Η συνομιλία δεν βρέθηκε. Ανανεώστε τη λίστα ή ξεκινήστε νέα συνομιλία.",
+        "That chat was not found for this team member. Start a new chat or refresh.":
+            "Η συνομιλία δεν βρέθηκε για αυτό το μέλος. Ξεκινήστε νέα ή ανανεώστε.",
+        "That message was not found. Reload this chat to see current messages.":
+            "Το μήνυμα δεν βρέθηκε. Φορτώστε ξανά τη συνομιλία για τα τρέχοντα μηνύματα.",
+        "That message was not found in this chat. Reload to see current messages.":
+            "Το μήνυμα δεν βρέθηκε σε αυτή τη συνομιλία. Φορτώστε ξανά τη σελίδα.",
+        "Title cannot be empty. Type a short name or press Esc to cancel.":
+            "Ο τίτλος δεν μπορεί να είναι κενός. Γράψτε ένα όνομα ή πατήστε Esc για ακύρωση.",
+        "The message cannot be empty. Type a line before saving.":
+            "Το μήνυμα δεν μπορεί να είναι κενό. Γράψτε μια γραμμή πριν την αποθήκευση.",
+        "Only a message you sent can be regenerated. Pick one of your prompts instead.":
+            "Μόνο δικό σας μήνυμα μπορεί να επαναληφθεί. Επιλέξτε ένα από τα μηνύματά σας.",
+        "Paste an API key first, then select Refresh list.":
+            "Επικολλήστε πρώτα ένα κλειδί API και έπειτα επιλέξτε Ανανέωση λίστας.",
+        "That key returned no models. Check the provider and key, then try again.":
+            "Το κλειδί δεν επέστρεψε μοντέλα. Ελέγξτε τον πάροχο και το κλειδί και δοκιμάστε ξανά.",
+        "Adding or removing a team member needs an administrator session. Sign in again.":
+            "Η προσθήκη ή αφαίρεση μέλους απαιτεί συνεδρία διαχειριστή. Συνδεθείτε ξανά.",
+        "Changing these settings needs the administrator password. Approve to save.":
+            "Η αλλαγή αυτών των ρυθμίσεων απαιτεί κωδικό διαχειριστή. Επιβεβαιώστε για αποθήκευση.",
+        "Bypassing the checks needs the administrator password. Enter it to send once.":
+            "Η παράκαμψη ελέγχων απαιτεί κωδικό διαχειριστή. Εισαγάγετέ τον για μεμονωμένη αποστολή.",
+        "The new username is the same as the current one. Pick a different username.":
+            "Το νέο όνομα χρήστη είναι ίδιο με το τρέχον. Επιλέξτε διαφορετικό όνομα.",
+        "The new password must differ from the current one. Choose a new password.":
+            "Ο νέος κωδικός πρέπει να διαφέρει από τον τρέχοντα. Επιλέξτε νέο κωδικό."
     };
 
     /* ----------------------------------------------------------------------
        Patterns for strings with numbers or names filled in at runtime.
        ---------------------------------------------------------------------- */
     var PATTERNS = [
+        [/^Checks · (\d+) of 3 active$/, function (m) {
+            return "Έλεγχοι · " + m[1] + " από 3 ενεργοί";
+        }],
         [/^(\d+) of 3 checks active$/, function (m) {
             return m[1] + " από 3 έλεγχοι ενεργοί";
         }],
@@ -676,6 +756,30 @@
         }],
         [/^The server could not finish that request \((.+)\)\. Try again\.$/, function (m) {
             return "Ο διακομιστής δεν ολοκλήρωσε το αίτημα (" + (EL[m[1]] || m[1]) + "). Δοκιμάστε ξανά.";
+        }],
+        [/^Not sent — (a check|checks) could not run \((.+)\)\. Try a smaller paste, or ask your administrator to approve this once\.$/, function (m) {
+            var prefix = m[1] === "a check"
+                ? "Δεν στάλθηκε — ένας έλεγχος απέτυχε ("
+                : "Δεν στάλθηκε — οι έλεγχοι απέτυχαν (";
+            return prefix + m[2] + "). Δοκιμάστε μικρότερο κείμενο ή ζητήστε μεμονωμένη έγκριση.";
+        }],
+        [/^AI API Error: (.+)\. Check the model and key in Settings, or try again\.$/, function (m) {
+            return "Σφάλμα παρόχου ΤΝ: " + m[1] + ". Ελέγξτε μοντέλο και κλειδί στις Ρυθμίσεις ή δοκιμάστε ξανά.";
+        }],
+        [/^Admin '(.+)' not found\. Check the spelling or create an account\.$/, function (m) {
+            return "Ο διαχειριστής '" + m[1] + "' δεν βρέθηκε. Ελέγξτε το όνομα ή δημιουργήστε λογαριασμό.";
+        }],
+        [/^Admin '(.+)' already exists\. Choose a different username\.$/, function (m) {
+            return "Ο διαχειριστής '" + m[1] + "' υπάρχει ήδη. Επιλέξτε διαφορετικό όνομα χρήστη.";
+        }],
+        [/^Employee '(.+)' already exists here\. Choose a different username\.$/, function (m) {
+            return "Το μέλος '" + m[1] + "' υπάρχει ήδη εδώ. Επιλέξτε διαφορετικό όνομα χρήστη.";
+        }],
+        [/^Employee '(.+)' not found here\. Check the spelling and try again\.$/, function (m) {
+            return "Το μέλος '" + m[1] + "' δεν βρέθηκε εδώ. Ελέγξτε το όνομα και δοκιμάστε ξανά.";
+        }],
+        [/^Server error \((.+)\)\. Retry in a moment, or check the gateway log\.$/, function (m) {
+            return "Σφάλμα διακομιστή (" + m[1] + "). Δοκιμάστε ξανά σε λίγο ή ελέγξτε το αρχείο καταγραφής.";
         }],
         [/^(\d+)s ago$/, function (m) { return "πριν " + m[1] + " δευτ."; }],
         [/^(\d+) min ago$/, function (m) { return "πριν " + m[1] + " λεπτά"; }],

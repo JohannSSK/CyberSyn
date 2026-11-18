@@ -35,6 +35,7 @@
         check1: $("#setting-check1"),
         check2: $("#setting-check2"),
         check3: $("#setting-check3"),
+        consequence: $("#checks-consequence"),
         allOff: $("#all-checks-off-note"),
         saveChecks: $("#btn-save-checks"),
         checksState: $("#checks-state"),
@@ -44,6 +45,7 @@
         keyState: $("#key-state"),
         modelState: $("#model-state"),
         saveConnection: $("#btn-save-connection"),
+        connectionState: $("#connection-state"),
         provider: $("#setting-provider"),
         base: $("#setting-base"),
         baseField: $("#field-base")
@@ -52,13 +54,81 @@
     var probedKey = null;
     var BASE_NEEDED = {};
 
+    var CHECK_CONSEQUENCES = [
+        {
+            key: "check1",
+            name: "Personal data",
+            body: " (AFM, AMKA, IBAN, phones, Greek IDs, names) will not be flagged."
+        },
+        {
+            key: "check2",
+            name: "Context:",
+            body: " Legal, financial, HR and customer records will not be flagged."
+        },
+        {
+            key: "check3",
+            name: "Prompt-injection",
+            body: " attempts will not be flagged."
+        }
+    ];
+
     function updateAllOff() {
-        if (!nodes.allOff) return;
-        var anyOn = nodes.check1.checked || nodes.check2.checked || nodes.check3.checked;
-        nodes.allOff.classList.toggle("hidden", anyOn);
+        var off = CHECK_CONSEQUENCES.filter(function (item) {
+            return nodes[item.key] && !nodes[item.key].checked;
+        });
+        var noneOn = off.length === CHECK_CONSEQUENCES.length;
+        var partialOff = off.length > 0 && !noneOn;
+
+        if (nodes.allOff) {
+            nodes.allOff.classList.toggle("hidden", !noneOn);
+        }
+        if (nodes.consequence) {
+            nodes.consequence.textContent = "";
+            if (partialOff) {
+                off.forEach(function (item) {
+                    var line = Dom.el("p", "checks-consequence-item");
+                    line.appendChild(Dom.el("strong", "", t(item.name)));
+                    line.appendChild(document.createTextNode(t(item.body)));
+                    nodes.consequence.appendChild(line);
+                });
+            }
+            nodes.consequence.classList.toggle("hidden", !partialOff);
+        }
+    }
+
+    var SAVED_FLASH_MS = 1500;
+    var checksSavedTimer = null;
+    var connectionSavedTimer = null;
+
+    function clearChecksSaved() {
+        if (checksSavedTimer) {
+            clearTimeout(checksSavedTimer);
+            checksSavedTimer = null;
+        }
+    }
+
+    function flashChecksSaved() {
+        if (!nodes.checksState) return;
+        clearChecksSaved();
+        nodes.checksState.textContent = t("Saved.");
+        checksSavedTimer = setTimeout(function () {
+            checksSavedTimer = null;
+            if (!dirty && nodes.checksState) nodes.checksState.textContent = "";
+        }, SAVED_FLASH_MS);
+    }
+
+    function flashConnectionSaved() {
+        if (!nodes.connectionState) return;
+        if (connectionSavedTimer) clearTimeout(connectionSavedTimer);
+        nodes.connectionState.textContent = t("Saved.");
+        connectionSavedTimer = setTimeout(function () {
+            connectionSavedTimer = null;
+            if (nodes.connectionState) nodes.connectionState.textContent = "";
+        }, SAVED_FLASH_MS);
     }
 
     function markDirty() {
+        clearChecksSaved();
         dirty = true;
         nodes.checksState.textContent = t("Unsaved changes");
         updateAllOff();
@@ -97,6 +167,7 @@
         showBaseField(nodes.provider.value);
         savedMask = data.API_KEY_MASK || "";
         paintKeyState();
+        clearChecksSaved();
         dirty = false;
         nodes.checksState.textContent = "";
     }
@@ -137,6 +208,7 @@
                 });
             }).then(function (data) {
                 apply(data);
+                flashChecksSaved();
                 Loading.toast("Safety checks saved.", "success");
             }).catch(function (err) {
                 Loading.toast(err.message, "error");
@@ -166,6 +238,7 @@
             }).then(function (data) {
                 nodes.key.value = "";
                 apply(data);
+                flashConnectionSaved();
                 Loading.toast("Connection saved.", "success");
                 probedKey = null;
                 refreshModels();
@@ -238,10 +311,10 @@
 
         return request.then(function (data) {
             if (!data.models || !data.models.length) {
-                setModelState(
-                    t(data.message || "That key returned no usable models. Check the provider and key."),
-                    "is-error"
-                );
+                var emptyMsg = data.message
+                    ? Api.withRemedy(data.message)
+                    : "That key returned no usable models. Check the provider and key.";
+                setModelState(t(emptyMsg), "is-error");
                 return null;
             }
             showModels(data.models, data.provider_label);
@@ -251,7 +324,10 @@
             }
             return data.models;
         }).catch(function (err) {
-            setModelState(err.message, "is-error");
+            setModelState(
+                t(err.message || "Could not load models. Check the key and try again."),
+                "is-error"
+            );
             return null;
         });
     }
@@ -284,8 +360,16 @@
     });
 
     Dom.on(document, "cybersyn:lang", function () {
+        updateAllOff();
         paintKeyState();
-        if (dirty) nodes.checksState.textContent = t("Unsaved changes");
+        if (dirty) {
+            nodes.checksState.textContent = t("Unsaved changes");
+        } else if (checksSavedTimer && nodes.checksState) {
+            nodes.checksState.textContent = t("Saved.");
+        }
+        if (connectionSavedTimer && nodes.connectionState) {
+            nodes.connectionState.textContent = t("Saved.");
+        }
         var autoOpt = nodes.provider.querySelector('option[value="auto"]');
         if (autoOpt) autoOpt.textContent = t("Detect automatically");
     });

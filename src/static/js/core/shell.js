@@ -489,14 +489,14 @@
         function submit() {
             var password = input.value;
             if (!password) {
-                message.textContent = t("Enter the administrator password.");
+                message.textContent = t("Enter the administrator password to continue.");
                 input.focus();
                 return;
             }
             message.textContent = "";
             var username = known ? admin.username : usernameField.value.trim();
             if (!username) {
-                message.textContent = t("Enter the administrator username.");
+                message.textContent = t("Enter the administrator username to continue.");
                 usernameField.focus();
                 return;
             }
@@ -666,7 +666,11 @@
 
         global.Dom.on(document, "keydown", function (event) {
             if (event.key !== "Escape") return;
-            if (narrow() && sidebarShown()) showSidebar(false);
+            if (narrow() && sidebarShown()) {
+                showSidebar(false);
+                var toggle = global.Dom.$("[data-action='toggle-sidebar']");
+                if (toggle && typeof toggle.focus === "function") toggle.focus();
+            }
         });
 
         global.Dom.on(global, "resize", function () {

@@ -86,6 +86,102 @@
      * Rejects with an Error carrying `.status` and `.body` so callers can
      * tell "your session ended" (401) from "the server is unhappy" (500).
      */
+    function clip(text, max) {
+        var clean = String(text || "").replace(/\s+/g, " ").trim();
+        return clean.length > max ? clean.slice(0, max - 1).trim() + "…" : clean;
+    }
+
+    /* Append a minimal one-line remedy to bare-fact server error strings
+       while keeping backend API payloads untouched and every line <= 160 chars. */
+    var EXACT_REMEDIES = {
+        "No API_KEY provided.":
+            "No API_KEY provided. Ask your administrator to add a provider key in Settings.",
+        "Invalid password.":
+            "Invalid password. Check it and try again.",
+        "Invalid employee password.":
+            "Invalid employee password. Check it and try again.",
+        "Invalid employee username or password.":
+            "Invalid employee username or password. Check both fields and try again.",
+        "Current password is incorrect.":
+            "Current password is incorrect. Check it and try again.",
+        "That chat was not found.":
+            "That chat was not found. Refresh the list or start a new chat.",
+        "That chat was not found for this team member.":
+            "That chat was not found for this team member. Start a new chat or refresh.",
+        "That message was not found.":
+            "That message was not found. Reload this chat to see current messages.",
+        "That message was not found in this chat.":
+            "That message was not found in this chat. Reload to see current messages.",
+        "Title cannot be empty.":
+            "Title cannot be empty. Type a short name or press Esc to cancel.",
+        "The message cannot be empty.":
+            "The message cannot be empty. Type a line before saving.",
+        "Only a message you sent can be regenerated.":
+            "Only a message you sent can be regenerated. Pick one of your prompts instead.",
+        "Paste an API key first.":
+            "Paste an API key first, then select Refresh list.",
+        "That key returned no models.":
+            "That key returned no models. Check the provider and key, then try again.",
+        "Adding or removing a team member needs a valid administrator session for this workspace.":
+            "Adding or removing a team member needs an administrator session. Sign in again.",
+        "Changing these settings needs the administrator password.":
+            "Changing these settings needs the administrator password. Approve to save.",
+        "Bypassing the checks needs the administrator password.":
+            "Bypassing the checks needs the administrator password. Enter it to send once.",
+        "The new username is the same as the current one.":
+            "The new username is the same as the current one. Pick a different username.",
+        "The new password must differ from the current one.":
+            "The new password must differ from the current one. Choose a new password.",
+        "Your session has ended. Sign in again.":
+            "Your session has ended. Sign in again."
+    };
+
+    function withRemedy(raw) {
+        if (!raw) return raw;
+        var text = String(raw).trim();
+        if (Object.prototype.hasOwnProperty.call(EXACT_REMEDIES, text)) {
+            return EXACT_REMEDIES[text];
+        }
+        var m;
+        m = text.match(/^Not sent — (a check|checks) could not run \((.+)\)\.$/);
+        if (m) {
+            return "Not sent — " + m[1] + " could not run (" + clip(m[2], 38) +
+                "). Try a smaller paste, or ask your administrator to approve this once.";
+        }
+        m = text.match(/^AI API Error:\s*(.+)$/);
+        if (m) {
+            var detail = clip(m[1].replace(/\.+$/, ""), 52);
+            return "AI API Error: " + detail +
+                ". Check the model and key in Settings, or try again.";
+        }
+        m = text.match(/^Admin (?:username )?'(.+)' not found\.$/);
+        if (m) {
+            return "Admin '" + clip(m[1], 32) +
+                "' not found. Check the spelling or create an account.";
+        }
+        m = text.match(/^Admin '(.+)' already exists\.$/);
+        if (m) {
+            return "Admin '" + clip(m[1], 32) +
+                "' already exists. Choose a different username.";
+        }
+        m = text.match(/^Employee '(.+)' already exists under Parent_id \d+\.$/);
+        if (m) {
+            return "Employee '" + clip(m[1], 28) +
+                "' already exists here. Choose a different username.";
+        }
+        m = text.match(/^Employee '(.+)' not found under Parent_id \d+\.$/);
+        if (m) {
+            return "Employee '" + clip(m[1], 28) +
+                "' not found here. Check the spelling and try again.";
+        }
+        m = text.match(/^Server error:\s*(.+)$/);
+        if (m) {
+            return "Server error (" + clip(m[1], 48) +
+                "). Retry in a moment, or check the gateway log.";
+        }
+        return text;
+    }
+
     function post(path, body, options) {
         var opts = options || {};
         var payload = Object.assign({}, body || {});
@@ -120,10 +216,12 @@
                     }
                 }
                 if (!result.ok) {
-                    var message = result.data.error_message ||
+                    var raw = result.data.error_message ||
                         result.data.message ||
-                        result.data.reason ||
-                        ("The server could not finish that request (" + result.status + "). Try again.");
+                        result.data.reason;
+                    var message = raw
+                        ? withRemedy(raw)
+                        : ("The server could not finish that request (" + result.status + "). Try again.");
                     var err = new Error(message);
                     err.status = result.status;
                     err.body = result.data;
@@ -153,5 +251,5 @@
         return fetch(path).then(function (res) { return res.json(); });
     }
 
-    global.Api = { post: post, get: get, Session: Session };
+    global.Api = { post: post, get: get, withRemedy: withRemedy, Session: Session };
 })(window);

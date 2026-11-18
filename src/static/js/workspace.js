@@ -65,6 +65,11 @@
         searchCount: $("#search-count"),
         checksSummary: $("#checks-summary"),
         checksStatus: $("#checks-status"),
+        checksPopover: $("#checks-popover"),
+        checksPopoverList: $("#checks-popover-list"),
+        checksPopoverSettings: $("#checks-popover-settings"),
+        missingKeyNote: $("#missing-key-note"),
+        dismissKeyNote: $("#btn-dismiss-key-note"),
         firstRunTpl: $("#first-run-template")
     };
 
@@ -97,6 +102,12 @@
         autoGrow();
         nodes.input.focus();
         nodes.input.setSelectionRange(text.length, text.length);
+        if (typeof nodes.input.scrollIntoView === "function") {
+            nodes.input.scrollIntoView({
+                block: "nearest",
+                behavior: reducedMotion() ? "auto" : "smooth"
+            });
+        }
     }
 
     function scrollToEnd(smooth) {
@@ -127,6 +138,7 @@
        blocking stage, --success on clean completion) with no fake timers.
        ------------------------------------------------------------------ */
 
+    var LONG_WAIT_MS = 8000;
     var pending = null;
 
     function showPending(promptText, bypass) {
@@ -135,6 +147,7 @@
         var enabled = ["check1", "check2", "check3"].filter(function (id) {
             return state.settings[id] !== false;
         });
+        var checking = !bypass && enabled.length > 0;
 
         var wrap = Dom.el("div", "msg");
         var head = Dom.el("div", "msg-head");
@@ -144,31 +157,73 @@
         wrap.appendChild(Dom.el("div", "bubble bubble-user", promptText));
 
         var note = Dom.el("div", "msg-pending");
-        note.setAttribute("role", "status");
-        note.setAttribute("aria-live", "polite");
 
         var tracker = null;
-        if (!bypass && enabled.length) {
+        if (checking) {
             tracker = buildTracker({ checking: true });
             note.appendChild(tracker);
         }
 
+        var line = Dom.el("div", "pending-line");
         var label = Dom.el("span", "pending-text");
-        if (bypass) {
-            label.textContent = t("Sending once with administrator approval…");
-        } else if (!enabled.length) {
-            label.textContent = t("Waiting for the AI reply…");
-        } else {
-            label.textContent = t("Checking locally before sending…");
-        }
-        note.appendChild(label);
+        label.setAttribute("role", "status");
+        label.setAttribute("aria-live", "polite");
+
+        var labelKey = bypass
+            ? "Sending once with administrator approval…"
+            : (!enabled.length
+                ? "Waiting for the AI reply…"
+                : "Checking locally before sending…");
+        var slowKey = checking
+            ? "Still checking — normal on a long paste."
+            : "Still waiting — normal on a long paste.";
+        var resolvedClean = false;
+
+        label.textContent = t(labelKey);
+        line.appendChild(label);
+
+        var elapsed = Dom.el("span", "pending-elapsed", "0.0s");
+        elapsed.setAttribute("aria-hidden", "true");
+        elapsed.setAttribute("data-no-i18n", "");
+        line.appendChild(elapsed);
+
+        var slow = Dom.el("span", "pending-slow hidden");
+        slow.setAttribute("aria-hidden", "true");
+        line.appendChild(slow);
+
+        note.appendChild(line);
         wrap.appendChild(note);
         nodes.stream.appendChild(wrap);
         scrollToEnd(true);
 
+        var startedAt = Date.now();
+        var slowShown = false;
+        var elapsedTimer = setInterval(function () {
+            var ms = Math.max(0, Date.now() - startedAt);
+            elapsed.textContent = (ms / 1000).toFixed(1) + "s";
+            if (!slowShown && ms >= LONG_WAIT_MS) {
+                slowShown = true;
+                slow.textContent = t(slowKey);
+                slow.classList.remove("hidden");
+            }
+        }, 100);
+
+        function stopTimer() {
+            if (elapsedTimer !== null) {
+                clearInterval(elapsedTimer);
+                elapsedTimer = null;
+            }
+        }
+
         pending = {
             wrap: wrap,
+            relocalise: function () {
+                label.textContent = t(resolvedClean ? "All checks passed." : labelKey);
+                if (slowShown) slow.textContent = t(slowKey);
+            },
             resolve: function (blockedStage) {
+                stopTimer();
+                slow.classList.add("hidden");
                 if (!tracker) return;
                 var replacement = buildTracker(
                     blockedStage ? { blockedStage: blockedStage } : { passedAll: true }
@@ -176,10 +231,12 @@
                 tracker.replaceWith(replacement);
                 tracker = replacement;
                 if (!blockedStage) {
+                    resolvedClean = true;
                     label.textContent = t("All checks passed.");
                 }
             },
             stop: function () {
+                stopTimer();
                 if (wrap.parentNode) wrap.remove();
             }
         };
@@ -192,19 +249,78 @@
     }
 
     /* ------------------------------------------------------------------
-       Checks status pill (B6 + D7 off -> on ring pulse)
+       Checks status pill + overview popover (B6 + D7 + v3 Item 1)
        ------------------------------------------------------------------ */
+
+    var CHECK_ROWS = [
+        {
+            key: "check1",
+            name: "Personal data",
+            desc: "AFM, AMKA, IBANs, phones, emails, cards and names."
+        },
+        {
+            key: "check2",
+            name: "Context",
+            desc: "Contracts, NDAs, internal financials, HR, credentials and code."
+        },
+        {
+            key: "check3",
+            name: "Prompt injection",
+            desc: "Hidden instructions in pasted emails, web pages and documents."
+        }
+    ];
+
+    function renderChecksPopover() {
+        if (!nodes.checksPopoverList) return;
+        nodes.checksPopoverList.textContent = "";
+        CHECK_ROWS.forEach(function (row) {
+            var enabled = state.settings[row.key] !== false;
+            var item = Dom.el("li", "checks-popover-row");
+
+            var copy = Dom.el("div", "checks-popover-copy");
+            copy.appendChild(Dom.el("span", "checks-popover-name", t(row.name)));
+            copy.appendChild(Dom.el("span", "checks-popover-desc", t(row.desc)));
+
+            var badge = Dom.el(
+                "span",
+                "checks-popover-state " + (enabled ? "is-on" : "is-off")
+            );
+            var dot = Dom.el("span", "dot");
+            dot.setAttribute("aria-hidden", "true");
+            badge.appendChild(dot);
+            badge.appendChild(document.createTextNode(t(enabled ? "On" : "Off")));
+
+            item.appendChild(copy);
+            item.appendChild(badge);
+            nodes.checksPopoverList.appendChild(item);
+        });
+    }
+
+    function isChecksPopoverOpen() {
+        return !!(nodes.checksPopover && !nodes.checksPopover.classList.contains("hidden"));
+    }
+
+    function setChecksPopoverOpen(open, restoreFocus) {
+        if (!nodes.checksPopover || !nodes.checksStatus) return;
+        if (open) renderChecksPopover();
+        nodes.checksPopover.classList.toggle("hidden", !open);
+        nodes.checksStatus.setAttribute("aria-expanded", open ? "true" : "false");
+        if (!open && restoreFocus) {
+            nodes.checksStatus.focus();
+        }
+    }
 
     function updateChecksBadge() {
         var on = ["check1", "check2", "check3"].filter(function (k) {
             return state.settings[k];
         }).length;
-        var summary = t(on + " of 3 checks active");
+        var summary = t("Checks · " + on + " of 3 active");
         nodes.checksSummary.textContent = summary;
         nodes.checksStatus.title = summary;
         nodes.checksStatus.setAttribute("aria-label", summary);
         nodes.checksStatus.classList.toggle("off", on === 0);
         nodes.checksStatus.classList.toggle("is-all-on", on === 3);
+        renderChecksPopover();
 
         if (state.checksCount === 0 && on > 0 && !reducedMotion()) {
             nodes.checksStatus.classList.remove("is-pulsing");
@@ -216,6 +332,72 @@
 
     Dom.on(nodes.checksStatus, "animationend", function () {
         nodes.checksStatus.classList.remove("is-pulsing");
+    });
+
+    Dom.on(nodes.checksStatus, "click", function () {
+        setChecksPopoverOpen(!isChecksPopoverOpen(), false);
+    });
+
+    Dom.on(nodes.checksPopoverSettings, "click", function () {
+        setChecksPopoverOpen(false, false);
+    });
+
+    Dom.on(document, "mousedown", function (event) {
+        if (!isChecksPopoverOpen()) return;
+        var target = event.target;
+        if (nodes.checksPopover.contains(target) || nodes.checksStatus.contains(target)) {
+            return;
+        }
+        setChecksPopoverOpen(false, false);
+    });
+
+    Dom.on(document, "keydown", function (event) {
+        if (event.key === "Escape" && isChecksPopoverOpen()) {
+            event.preventDefault();
+            event.stopPropagation();
+            setChecksPopoverOpen(false, true);
+        }
+    });
+
+    /* ------------------------------------------------------------------
+       Missing provider key callout (v3 Item 2)
+
+       Inferred strictly from the existing /api/admin/employee/settings
+       API_KEY_MASK field (empty when no key is stored). Non-blocking and
+       dismissible for the current browser session.
+       ------------------------------------------------------------------ */
+
+    function missingKeyStorageKey() {
+        var m = Api.Session.getMember() || {};
+        return "cybersyn_missing_key_dismissed_" +
+            (m.parentId || "0") + "_" + (m.employeeId || "0");
+    }
+
+    function isMissingKeyDismissed() {
+        try {
+            return sessionStorage.getItem(missingKeyStorageKey()) === "1";
+        } catch (err) {
+            return false;
+        }
+    }
+
+    function updateMissingKeyNote(data) {
+        if (!nodes.missingKeyNote || !data || typeof data.API_KEY_MASK !== "string") {
+            return;
+        }
+        var hasKey = data.API_KEY_MASK.length > 0;
+        if (hasKey) {
+            try { sessionStorage.removeItem(missingKeyStorageKey()); } catch (err) {}
+            nodes.missingKeyNote.classList.add("hidden");
+            return;
+        }
+        nodes.missingKeyNote.classList.toggle("hidden", isMissingKeyDismissed());
+    }
+
+    Dom.on(nodes.dismissKeyNote, "click", function () {
+        try { sessionStorage.setItem(missingKeyStorageKey(), "1"); } catch (err) {}
+        if (nodes.missingKeyNote) nodes.missingKeyNote.classList.add("hidden");
+        nodes.input.focus();
     });
 
     /* ------------------------------------------------------------------
@@ -277,8 +459,10 @@
 
         var hasAnswer = message.answer && String(message.answer).trim() !== "" &&
             String(message.answer) !== "NULL";
+        var reply = null;
+        var copyTintTimer = null;
         if (hasAnswer) {
-            var reply = Dom.el("div", "bubble bubble-ai");
+            reply = Dom.el("div", "bubble bubble-ai");
             reply.innerHTML = window.Markdown.render(message.answer);
             Dom.highlightText(reply, state.query);
             wrap.appendChild(reply);
@@ -303,14 +487,25 @@
         var actions = Dom.el("div", "msg-actions");
         actions.appendChild(iconButton("copy", "Copy the answer", function () {
             Dom.copyText(message.answer || "")
-                .then(function () { Loading.toast("Answer copied.", "success"); })
+                .then(function () {
+                    if (reply) {
+                        if (copyTintTimer) clearTimeout(copyTintTimer);
+                        reply.classList.add("is-copied");
+                        copyTintTimer = setTimeout(function () {
+                            reply.classList.remove("is-copied");
+                            copyTintTimer = null;
+                        }, 700);
+                    }
+                    Loading.toast("Answer copied.", "success");
+                })
                 .catch(function () {
                     Loading.toast("Clipboard access was blocked — select the text to copy it.", "error");
                 });
         }));
-        actions.appendChild(iconButton("edit", "Edit this message", function () {
-            beginEdit(wrap, message);
-        }));
+        var editBtn = iconButton("edit", "Edit this message", function () {
+            beginEdit(wrap, message, editBtn);
+        });
+        actions.appendChild(editBtn);
         if (hasAnswer) {
             actions.appendChild(iconButton("regenerate", "Generate a different answer", function () {
                 regenerate(message, actions);
@@ -400,7 +595,7 @@
        Per-message actions
        ------------------------------------------------------------------ */
 
-    function beginEdit(wrap, message) {
+    function beginEdit(wrap, message, trigger) {
         if (wrap.querySelector(".msg-edit")) return;
         wrap.classList.add("is-editing");
         var editor = Dom.el("div", "msg-edit");
@@ -420,9 +615,19 @@
         var cancel = editor.querySelector(".msg-edit-cancel");
         var save = editor.querySelector(".msg-edit-save");
 
-        Dom.on(cancel, "click", function () {
+        function closeEditor() {
             wrap.classList.remove("is-editing");
             editor.remove();
+            if (trigger && trigger.isConnected) trigger.focus();
+        }
+
+        Dom.on(cancel, "click", closeEditor);
+        Dom.on(editor, "keydown", function (event) {
+            if (event.key === "Escape") {
+                event.preventDefault();
+                event.stopPropagation();
+                closeEditor();
+            }
         });
 
         Dom.on(save, "click", function () {
@@ -433,8 +638,7 @@
                 return;
             }
             if (next === message.prompt) {
-                wrap.classList.remove("is-editing");
-                editor.remove();
+                closeEditor();
                 return;
             }
             Loading.withButton(save, function () {
@@ -455,6 +659,7 @@
 
         wrap.appendChild(editor);
         textarea.focus();
+        textarea.setSelectionRange(textarea.value.length, textarea.value.length);
     }
 
     function removeMessage(message, button) {
@@ -592,15 +797,18 @@
         expander.appendChild(details);
         card.appendChild(expander);
 
-        // Constructive next step: edit & rephrase, or request one-off admin approval.
+        // Constructive next step: restore the message to edit, or approve once.
+        var hasPrompt = typeof promptText === "string" && promptText.length > 0;
         var panel = Dom.el("div", "override-panel");
         panel.innerHTML =
             '<p class="blocked-next">' +
             Dom.esc(t("Ask an administrator to approve this once, or rephrase without the flagged details.")) +
             "</p>" +
             '<div class="blocked-cta-row">' +
-            '  <button type="button" class="btn btn-sm rephrase-btn">' +
-            Dom.esc(t("Edit in message box")) + "</button>" +
+            (hasPrompt
+                ? '  <button type="button" class="btn btn-sm btn-ghost rephrase-btn">' +
+                  Dom.esc(t("Put my text back in the message box")) + "</button>"
+                : "") +
             '  <button type="button" class="btn btn-sm btn-outline override-ask">' +
             Dom.esc(t("Approve once")) + "</button>" +
             "</div>" +
@@ -612,9 +820,11 @@
         var rephrase = panel.querySelector(".rephrase-btn");
         var ask = panel.querySelector(".override-ask");
 
-        Dom.on(rephrase, "click", function () {
-            fillComposer(promptText);
-        });
+        if (rephrase) {
+            Dom.on(rephrase, "click", function () {
+                fillComposer(promptText);
+            });
+        }
 
         Dom.on(ask, "click", function () {
             var passId = "override-password-" + Date.now();
@@ -644,7 +854,7 @@
             function submit() {
                 var password = input.value;
                 if (!password) {
-                    Loading.toast("Enter the administrator password.", "warn");
+                    Loading.toast("Enter the administrator password to continue.", "warn");
                     input.focus();
                     return;
                 }
@@ -660,7 +870,7 @@
                         username: data.username
                     });
                     wrap.remove();
-                    send(promptText, true, token);
+                    send(promptText.trim(), true, token, promptText);
                 }).catch(function (err) {
                     Loading.toast(
                         err.message || "That password did not match. Check it and try again.",
@@ -671,13 +881,15 @@
             }
 
             Dom.on(approve, "click", submit);
-            Dom.on(input, "keydown", function (e) {
+            Dom.on(form, "keydown", function (e) {
                 if (e.key === "Escape") {
                     e.preventDefault();
+                    e.stopPropagation();
                     panel.replaceChild(ctaRow, form);
                     ask.focus();
-                    return;
                 }
+            });
+            Dom.on(input, "keydown", function (e) {
                 if (e.key === "Enter") { e.preventDefault(); submit(); }
             });
         });
@@ -699,11 +911,12 @@
         return seconds * 1000;
     }
 
-    function send(text, bypass, adminToken) {
+    function send(text, bypass, adminToken, rawPrompt) {
         if (state.busy) return;
         state.busy = true;
         nodes.send.disabled = true;
 
+        var originalPrompt = typeof rawPrompt === "string" ? rawPrompt : text;
         var preSendKey = currentChatKey();
         var emptyNode = nodes.stream.querySelector(".first-run, .empty");
         if (emptyNode) emptyNode.remove();
@@ -726,7 +939,7 @@
                     waiting.resolve((data.block_info || {}).stage || "check1");
                     hidePending();
                     state.blockedChats[preSendKey] = true;
-                    renderBlocked(data.block_info || {}, text);
+                    renderBlocked(data.block_info || {}, originalPrompt);
                     return null;
                 }
 
@@ -787,7 +1000,8 @@
     function onSend(event) {
         event.preventDefault();
         if (state.busy) return;
-        var text = nodes.input.value.trim();
+        var raw = nodes.input.value;
+        var text = raw.trim();
         if (!text) {
             Loading.toast("That message was empty — type a line first.", "info");
             nodes.input.focus();
@@ -796,7 +1010,7 @@
         nodes.input.value = "";
         autoGrow();
         clearSearch();
-        send(text, false, null);
+        send(text, false, null, raw);
     }
 
     /* ------------------------------------------------------------------
@@ -926,7 +1140,10 @@
     Dom.on(document, "cybersyn:lang", function () {
         updateChecksBadge();
         renderChatList();
-        if (!state.busy) renderMessages();
+        if (pending && pending.relocalise) pending.relocalise();
+        if (!state.busy && !nodes.stream.querySelector(".bubble-blocked")) {
+            renderMessages();
+        }
     });
 
     /* ------------------------------------------------------------------
@@ -939,6 +1156,7 @@
             state.settings.check2 = data.check2 !== false;
             state.settings.check3 = data.check3 !== false;
             updateChecksBadge();
+            updateMissingKeyNote(data);
         }).catch(function () { updateChecksBadge(); });
 
         loadChats()

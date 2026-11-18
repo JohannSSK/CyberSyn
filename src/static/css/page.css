@@ -214,6 +214,17 @@
 
 .settings-intro { margin-bottom: 6px; }
 
+.checks-consequence {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: var(--text-sm);
+    font-weight: 400;
+}
+
+.checks-consequence-item { margin: 0; }
+.checks-consequence-item strong { font-weight: 600; }
+
 .profile-head {
     display: flex;
     align-items: center;
