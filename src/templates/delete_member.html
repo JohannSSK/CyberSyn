@@ -8,20 +8,22 @@
                     "Team statistics are kept, so the audit trail stays whole." %}
 {% set eyebrow = "Danger zone" %}
 {% set title = "Remove team member" %}
-{% set lead = "Sign in with the team member's own credentials to confirm removal." %}
+{% set lead = "Select a member and confirm with your administrator password." %}
 {% set back_href = "/" %}
 {% set back_label = "Back to sign in" %}
 {% set footnote = "Their sessions are ended immediately." %}
 
 {% block form %}
 <div class="auth-field">
-    <label for="del-member-username">Username</label>
+    <label for="member-picker">Team members</label>
+    <select id="member-picker" class="select" data-no-i18n><option value="">—</option></select>
+    <label for="del-member-username">Member username</label>
     <input type="text" id="del-member-username" placeholder="The member to remove"
            autocomplete="off" autofocus>
 </div>
 <div class="auth-field">
-    <label for="del-member-password">Password</label>
-    <input type="password" id="del-member-password" placeholder="Their password"
+    <label for="del-member-password">Administrator password</label>
+    <input type="password" id="del-member-password" placeholder="Administrator password"
            autocomplete="current-password">
 </div>
 

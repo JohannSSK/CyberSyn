@@ -44,7 +44,7 @@
                             <span class="toggle-track"></span>
                             <span class="toggle-body">
                                 <strong>Confidential context</strong>
-                                <small>Contracts and NDAs, financials, HR and payroll, credentials, source code</small>
+                                <small>Confidential contracts, internal financials, HR and payroll records, and credentials</small>
                             </span>
                         </label>
                         <label class="toggle" data-toggle="check3">
@@ -55,8 +55,18 @@
                                 <small>Jailbreaks, hidden instructions and override attempts</small>
                             </span>
                         </label>
+                        <label class="toggle" data-toggle="block_code">
+                            <input type="checkbox" id="setting-block-code">
+                            <span class="toggle-track"></span>
+                            <span class="toggle-body">
+                                <strong>Block proprietary source code</strong>
+                                <small>Block source-code pastes from this member. Off allows code review; other enabled checks still apply.</small>
+                            </span>
+                        </label>
                     </div>
 
+                    <label class="small"><input type="checkbox" id="also-default">
+                        Also save these checks as the workspace default for new team members</label>
                     <div class="row" style="margin-top:18px">
                         <button type="button" class="btn btn-primary" id="btn-save-checks">
                             Save checks
@@ -73,14 +83,13 @@
                         <select id="setting-provider" class="select">
                             <option value="auto">Detect automatically</option>
                         </select>
-                        <span class="hint" id="provider-state">Leave this on “detect” and the key
-                            is tried against every provider until one answers.</span>
+                        <span class="hint" id="provider-state">Automatic detection uses the key prefix. For unfamiliar or shared formats, select your provider before entering a key.</span>
                     </div>
 
-                    <div class="field hidden" id="field-base" style="margin-bottom:16px">
+                    <div class="field" id="field-base" style="margin-bottom:16px">
                         <label for="setting-base">Base URL</label>
                         <input type="text" id="setting-base" class="input"
-                               placeholder="http://localhost:11434" autocomplete="off"
+                               placeholder="https://gateway.example/v1" autocomplete="off"
                                spellcheck="false">
                         <span class="hint">Where that provider is reached. Leave empty for the
                             hosted address.</span>
@@ -106,9 +115,12 @@
                             <input type="password" id="setting-api-key" class="input"
                                    placeholder="Paste your API key…" autocomplete="off" spellcheck="false">
                         </div>
+                        <button type="button" class="btn btn-sm hidden" id="btn-clear-key">Remove saved key</button>
                         <span class="hint" id="key-state">No key saved yet.</span>
                     </div>
 
+                    <label class="small"><input type="checkbox" id="connection-also-default">
+                        Also save this connection, including its key, as the default for new team members</label>
                     <div class="row" style="margin-top:18px">
                         <button type="button" class="btn btn-primary" id="btn-save-connection">
                             Save connection

@@ -3,8 +3,8 @@
 **Shadow AI protection & Data Protection** · Netcompany Hackathon Athens 2026 · Challenge 3
 
 > Employees paste code, contracts and client data into public AI tools every day, often without IT knowing.
-> CyberSyn is the gate those prompts pass through: every message is screened **on your own machine**,
-> before it ever reaches an AI provider — and every decision is explained, logged and auditable.
+> For prompts sent through CyberSyn, the member’s policy runs **on the gateway** before forwarding.
+> Blocks are explained to the sender; administrator exceptions are recorded without logging the blocked text.
 
 ---
 
@@ -25,7 +25,7 @@
 ---
 
 CyberSyn is a self-hosted **AI gateway for teams**. Team members chat with the AI model of their choice
-through CyberSyn; administrators define what must never leave. Every prompt is screened by three local
+through CyberSyn; administrators define what must never leave. The server applies the member’s enabled local
 checks, and a risky prompt is stopped **before** it is sent — with the exact line, offset and reason shown
 to the user instead of a generic refusal.
 
@@ -39,9 +39,8 @@ Design principles:
    offending snippet, so the user learns the rule instead of fighting it.
 4. **Humans stay in control.** An administrator can approve a genuine exception; the override is recorded
    and attributed, not silently allowed.
-5. **Watch the watcher.** CyberSyn encrypts secrets at rest and treats the audit trail as sensitive data
-   too — though it is not minimal in one respect: the activity log keeps an 80-character prefix of each
-   prompt. See [Security & privacy design](#security--privacy-design).
+5. **Minimise audit data.** A blocked snippet is shown to its sender. The logs retain the stage,
+   reason, actor and time, not the snippet. Ordinary prompt previews are off by default.
 
 ## Key features
 
@@ -55,16 +54,15 @@ Design principles:
   `password=`/`token=` assignments.
 - Prompt-injection detection that reads code comments too — multi-line comment blocks are merged so an
   attack split across lines is still caught.
-- Per-team toggles per check, so a team can disable a stage that does not apply to its work.
+- Server-enforced **per-member** checks and a separate **Block proprietary source code** toggle.
+  Code alone is allowed by default. Workspace defaults seed new members; they do not rewrite existing policies.
 
 **Governance & visibility**
 
-- Administrator dashboard (`/team`): prompts sent, answered and blocked per member, block rate, and a
-  ranking of block reasons and stages — the "which teams sent what this week" question, answered. The
-  activity timeline shows up to 80 characters of each prompt — see [Limitations](#limitations--roadmap).
+- Administrator statistics (`/stats`): prompts answered and blocked per member, reasons, trends and a timestamped activity log.
 - Block log persisted in SQLite and attributed to a member and a stage.
 - Admin-approved override: a blocked prompt can be released by entering the administrator password; the
-  message is then flagged as bypassed in the transcript.
+  exception is attributed in the audit trail.
 - Full multi-chat history: create, open, rename and delete chats, restored on login.
 
 **Platform**
@@ -85,10 +83,10 @@ flowchart TB
         C1["check1 · greek_pii.py<br/>PII & Greek IDs<br/>regex + spaCy NER (en, el)"]
         C2["check2 · context.py<br/>Confidential context<br/>regex + zero-shot MNLI"]
         C3["check3 · injection.py<br/>Prompt injection<br/>regex + zero-shot MNLI"]
-        C1 --> C2 --> C3
+        Runner["scanning.screen · shared SCREEN_BUDGET"] --> C1 & C2 & C3
     end
 
-    W -->|"subprocess (stdin)"| GATE
+    W -->|"parallel in-process calls via scanners.py"| Runner
     GATE -->|"JSON: blocked / cause / line / offsets"| W
 
     W -->|"blocked → refuse + explain"| BL[("BLOCK_LOG<br/>SQLite")]
@@ -107,15 +105,15 @@ flowchart TB
 
 **Request lifecycle**
 
-1. The browser posts a prompt to `POST /api/admin/employee/chat`, with the session token issued at sign-in.
+1. The browser posts a prompt to `POST /api/admin/employee/chat`, with its HttpOnly member cookie and CSRF header. API clients may use a body token.
 2. The server authorises the caller — the member's own token, and an administrator's token as well
    when the request is an override. Unauthorised calls are refused before any work is done.
 3. The server resolves the member's saved settings (enabled checks, encrypted API key, model).
-4. Enabled scanners run **in order** as separate processes, each reading the prompt on stdin and
-   printing a JSON verdict. A scanner that fails, times out (60 s) or prints no verdict **blocks** the
-   request (fail closed).
+4. `scanning.screen()` runs enabled checks in parallel via `scanners.py`, against one shared deadline
+   (45 seconds by default). Loaded models are reused. Missing imports may use a serialized subprocess
+   fallback if configured; runtime failures and timeouts fail closed. Blocks are reported in stage order.
 5. On a hit: the block is written to `BLOCK_LOG` with stage and reason, and the response carries full
-   `block_info` — stage, cause, line, start/end offsets, snippet and every match.
+   `block_info` — stage, cause, line, start/end offsets, snippet and the blocking matches.
 6. On a clean pass: the prompt goes to the selected provider and the exchange is saved to the chat
    history.
 
@@ -123,9 +121,9 @@ flowchart TB
 
 | # | Script | Detects | Technique | Blocks when |
 |---|---|---|---|---|
-| 1 | `src/MLscripts/greek_pii.py` | AFM, AMKA, Greek phones, emails, provider API keys, company names, person names (EN + EL) | Regex with checksum & context scoring, plus spaCy `en_core_web_sm` / `el_core_news_sm` NER | A PII match scores ≥ 0.80 |
-| 2 | `src/MLscripts/context.py` | Credentials/banking, legal contracts & NDAs, internal financials, HR/payroll/customer dumps, source code | Curated bilingual regexes first; `valhalla/distilbart-mnli-12-1` zero-shot classification (threshold 0.55) on lines the regexes did not already explain | Top label is a blocked category |
-| 3 | `src/MLscripts/injection.py` | Prompt injection and instruction override, including attacks hidden in code comments | Attack-phrase regexes + zero-shot classification (threshold 0.60); consecutive `#` comment lines are merged before classification | `PROMPT_INJECTION` detected |
+| 1 | `src/MLscripts/greek_pii.py` | AFM checksum, AMKA date, Greek ID format/context, IBAN mod-97, phones, emails, modern provider/access keys, companies and names (EN + EL) | Regex with checksum & context scoring, plus spaCy `en_core_web_sm` / `el_core_news_sm` NER | A PII match scores ≥ 0.80 |
+| 2 | `src/MLscripts/context.py` | Credentials/banking, legal contracts & NDAs, internal financials, HR/payroll/customer dumps, source code | IBAN mod-97, Luhn, strict confidential indicators; `valhalla/distilbart-mnli-12-1` zero-shot classification (threshold 0.55) on lines the regexes did not already explain | Confidential hit, or source when this member’s `block_code` is enabled |
+| 3 | `src/MLscripts/injection.py` | Prompt injection and instruction override, including attacks hidden in code comments | Attack-phrase regexes + zero-shot classification (threshold 0.60); examines adjacent lines, `#`/`//`/`--`, block/HTML comments, strings and docstrings | `PROMPT_INJECTION` detected |
 
 The staged design is deliberate: cheap, precise regexes fire first and the neural classifier only sees
 lines the rules could not explain. That keeps latency and false positives down, and the zero-shot model
@@ -150,21 +148,61 @@ Later starts are fast.
 docker compose up                 # start
 docker compose logs -f cybersyn   # follow logs
 docker compose down               # stop (keeps data)
-docker compose down -v            # stop and delete the data volume
+docker compose down -v            # stop and delete BOTH volumes (irreversible)
 ```
 
 **First run**
 
-1. On the sign-in page choose **Create administrator account**.
-2. Sign in as the administrator, then add your team members.
-3. Open **Settings**, paste an AI provider API key, choose the enabled checks, and confirm with your
-   administrator password.
-4. Sign in as a team member and start chatting.
+1. Create the first administrator locally, **before exposing the port**. Later signups need an existing
+   administrator or the configured `CYBERSYN_ADMIN_SIGNUP_TOKEN` (the creation page has an optional field).
+2. Sign in as administrator, add team members and sign in as the intended member. This revokes the browser’s primary admin session.
+3. In **Settings**, select a provider before pasting an ambiguous key, select a model and save the connection with administrator approval.
+4. Under **Local safety checks**, set **Block proprietary source code** for this member and choose **Save checks**.
+   Leave it off for ordinary code reviews. Both “also save” options affect future members, not existing colleagues. Saving a connection as the default includes its key.
 
-Your data (accounts, chats, block log, generated encryption key) lives in the `cybersyn-data` volume at
-`/app/src/backend`, so it survives container rebuilds.
+Docker runs **Gunicorn**, one worker with eight threads by default; spaCy and DistilBART are loaded once
+per worker. The first build needs network access to the CPU wheel index, PyPI, GitHub and Hugging Face.
+`cybersyn-data` holds SQLite at `/app/src/backend`. `cybersyn-secrets` holds the Fernet key at
+`/app/secrets/secret.key`. Back up both **separately**. On upgrading a deployment with an existing
+`src/backend/secret.key`, stop the old service and install that same key into the new secrets volume
+(owner `cybersyn`, mode `0600`) **before starting**; verify existing keys decrypt before removing the old
+copy. For the supplied Compose layout, after backing up the old volume:
+
+```bash
+docker compose down  # never use -v during an upgrade
+docker compose build
+docker compose run --rm --no-deps --user root --entrypoint sh cybersyn -ec '
+  test -s /app/src/backend/secret.key
+  test ! -e /app/secrets/secret.key
+  install -o cybersyn -g cybersyn -m 0600 /app/src/backend/secret.key /app/secrets/secret.key'
+```
+
+Only use this migration when the old **file** was the active encryption key. If the destination
+already exists, compare and restore from backup rather than overwriting it. Generating a replacement
+cannot decrypt old keys. If you previously used `CYBERSYN_KEY`, continue supplying that same value;
+it takes precedence over any file.
+
+**Build verification.** The image build runs `pip check` and actual inference with the English and
+Greek NER models and DistilBART (not just an import). Verify on both native Linux architectures, or
+with a Buildx builder supporting amd64 and arm64. The optional **Verify container** Actions workflow
+checks both native architectures, including an offline forward pass as the runtime user:
+
+```bash
+docker compose config --quiet
+docker buildx build --platform linux/amd64,linux/arm64 --output=type=cacheonly .
+docker compose up --build -d --wait
+```
+
+Run behind an HTTPS reverse proxy in production. Preserve the public Host and forward the scheme
+from a **trusted** proxy, so Flask can compare Origin with the public origin. Set
+`CYBERSYN_COOKIE_SECURE=1` when terminating TLS upstream. Keep `CYBERSYN_TRUST_PROXY` off unless
+clients cannot bypass the proxy or supply the forwarded IP header themselves.
 
 ## Local development
+
+Use Python **3.11+** (3.11–3.13 for the pinned dependencies). Linux setup installs PyTorch from the
+CPU-only index first; macOS uses the native arm64 PyPI wheel. Prefer `setup.sh` over a direct Linux
+`pip install -r requirements.txt`, which otherwise uses PyPI’s default torch build.
 
 ```bash
 ./setup.sh                 # creates .venv, installs dependencies, fetches the model
@@ -192,7 +230,7 @@ the scanners need `torch` and `spaCy`, which do not build reliably there. Use WS
 
 ## Testing
 
-Everything in `tools/` runs from the repository root and needs no arguments:
+Run the tests from the repository root:
 
 ```bash
 python3 tools/test_constants.py    # includes/constants.json is real, and is actually used
@@ -200,12 +238,14 @@ python3 tools/test_auth.py         # authorisation on the member routes
 python3 tools/test_screening.py    # the screening stage: bounded, parallel, fail-closed
 python3 tools/test_providers.py    # provider discovery and address safety
 python3 tools/test_provider_errors.py
+python3 tools/test_gateway.py      # real DB/session/concurrency/policy boundaries
+python3 tools/test_scanner_rules.py # deterministic scanner rules with model stand-ins
 python3 tools/test_models.py       # model discovery uses the stored key
 node tools/test_frontend.js        # browser behaviour (needs: npm install jsdom)
 node tools/test_account_pages.js
 ```
 
-`smoke.py` is the only one that needs a running server — start one first, then:
+`smoke.py` needs a running **disposable test workspace**: it creates fixture accounts and removes a fixture member. Do not run it against production.
 
 ```bash
 ./run.sh &  python3 tools/smoke.py
@@ -239,7 +279,16 @@ All settings are optional; defaults suit the Docker flow.
 | `CYBERSYN_HOST` | `127.0.0.1` (`0.0.0.0` in Docker) | Bind address |
 | `CYBERSYN_PORT` | `5000` | Bind port |
 | `CYBERSYN_DEBUG` | `0` | Set `1` for the Werkzeug debugger/reloader (development only) |
-| `CYBERSYN_KEY` | *(unset)* | Fernet key for encrypting stored API keys. Unset → a key is generated and stored in the data volume |
+| `CYBERSYN_KEY` / `CYBERSYN_KEY_FILE` | Generated file | Fernet key override or key file; native default `src/backend/secret.key`, separate secrets volume in Docker |
+| `CYBERSYN_ADMIN_SIGNUP_TOKEN` / `CYBERSYN_ALLOW_OPEN_SIGNUP` | Unset / `0` | Gate additional administrators; enable open signup only deliberately |
+| `CYBERSYN_ALLOW_PRIVATE_BASE` | `1` | Allows self-hosted/LAN models. Set `0` to refuse non-public destinations; metadata is always denied |
+| `CYBERSYN_COOKIE_SECURE` | `0` | Force Secure cookies behind HTTPS termination (always set on HTTPS requests) |
+| `CYBERSYN_RATE_LIMIT` / `CYBERSYN_TRUST_PROXY` | `1` / `0` | Failed credential attempts are limited per IP and IP/username; trust forwarded IPs only behind a trusted proxy that replaces the header |
+| `CYBERSYN_MAX_BODY_BYTES` / `CYBERSYN_MAX_PROMPT_CHARS` | `262144` / `16000` | Request body and prompt/edit limits |
+| `CYBERSYN_LOG_PROMPT_PREVIEW` | `0` | Opt in to 80-character activity previews for ordinary prompts, edits and regenerations; never for blocked or overridden sends |
+| `CYBERSYN_SCREEN_BUDGET` / `CYBERSYN_AI_TIMEOUT` | `45` / `60` seconds | Shared screening deadline and outbound model timeout |
+| `CYBERSYN_WARM_MODELS` / `CYBERSYN_SCANNER_FALLBACK` | `1` / native `1`, Docker `0` | Background model loading and optional import-failure subprocess fallback |
+| `CYBERSYN_THREADS` / `CYBERSYN_DB_FILE` | `8` / path registry | Gunicorn threads and optional SQLite location |
 
 Non-secret defaults (host, port, database and script paths, route names) live in
 `includes/constants.json`.
@@ -248,18 +297,14 @@ Non-secret defaults (host, port, database and script paths, route names) live in
 
 | Concern | How CyberSyn handles it |
 |---|---|
-| Keys at rest | Provider API keys are encrypted with Fernet before touching SQLite. The key lives outside the database (env var or a `0600` file in the data volume) and is never returned by the API — only a mask such as `****7890` |
-| Key in transit to the browser | `settings_payload()` always returns an empty `API_KEY` field |
-| Passwords | `werkzeug` salted hashes; legacy plaintext rows are transparently upgraded to hashes on next successful login |
-| Sessions | Random tokens for both administrators and team members; only the SHA-256 hash is stored, with a 7-day expiry checked on every use |
-| Authenticated routes | Every route that touches a member's prompts, history or settings requires that member's session token (account management additionally requires this workspace's administrator session). A pair of IDs is never enough, and a member cannot act as another member |
-| Chat privacy | An administrator's token manages policy but cannot open another member's chats: history routes accept the member's own session only. Note the limit of that promise — the dashboard activity timeline shows up to 80 characters of each prompt (and of each admin-approved override), so administrators are not blind to prompt prefixes |
-| Fail-closed | Scanner crash, timeout, or unparseable output → the request is refused and never forwarded |
-| Overrides | An override needs a valid **administrator session token**, verified server-side (not only in the browser), and is written to the audit log as `override / administrator approved` |
-| Data minimisation | `BLOCK_LOG` stays minimal — stage, reason, member and timestamp. The `ACTIVITY_LOG` goes further than "none at all": every prompt (and every approved override) is logged with a detail field capped at 200 characters, which carries an 80-character prefix of the prompt. There is no prompt-free audit mode today; if a deployment requires one, truncate or strip that field rather than assume it is absent |
-| Local inspection | Prompts are analysed in-process on the host; they are never sent to a third-party classifier for inspection |
-| Container hardening | Multi-stage build, non-root user, no compiler or pip cache in the final image, baked model so scanning works offline |
-| Transparency | The in-app **Help & info** page states, in English and Greek, what is stored and where. One exception: it does not describe the 80-character prompt prefix this table documents above — the Help page is helpful, not exhaustive; this page is authoritative |
+| Secrets | Fernet encrypts provider keys; the `0600` key is separate from the DB volume. Settings return only an empty key and a mask. Discovery validates and pins HTTP(S) connections, strips credentials on cross-origin redirects and never broadcasts an unknown key. |
+| Login | Salted password hashes (legacy passwords upgrade on successful login), uniform failure messages and bounded credential attempts. No password trimming. |
+| Browser sessions | HttpOnly, SameSite=Lax cookies; same-origin custom request header and Origin checks. Only hashed session tokens are stored server-side. Password changes revoke old sessions. |
+| Approvals | Single-use 5-minute grants for writes/overrides; read-only page grants expire in 15 minutes and “Lock now” revokes them. Neither supplies a reusable admin login in the member’s browser. |
+| Member isolation | IDs are not credentials. The server enforces saved policy/model; only the member's live session can read chats. Offboarding removes sessions, settings and chats together; historical audit/statistics rows remain. |
+| Audit | Stage, category, time, actor and safe metadata by default. Blocked/override events never store the prompt or snippet. An explicitly enabled ordinary prompt preview is visible to workspace administrators. |
+| Fail-closed | An unavailable, failed or late scanner prevents forwarding. A deliberate admin override is attributed and logged. |
+| Web and container | Self-hosted fonts, same-origin CSP, no framing, no referrer, nosniff. Non-root Gunicorn worker, CPU wheels, baked classification weights; no CDN needed at runtime. |
 
 > **Note on the repository:** an encryption key was previously committed in `src/backend/secret.key`. It is
 > now untracked and git-ignored, and the app generates a fresh per-deployment key. Anyone who cloned the
@@ -268,8 +313,8 @@ Non-secret defaults (host, port, database and script paths, route names) live in
 
 ## Testing & evaluation
 
-Smoke-tested flows (administrator login, member add/login, settings with key masking, team stats, and
-fail-closed refusal when a scanner is unavailable) are exercised against a running instance.
+`tools/smoke.py` exercises account, settings, history and statistics routes over HTTP. With no provider
+key configured it verifies the no-key refusal; it does not substitute for real model inference.
 
 ### Authorisation tests
 
@@ -277,7 +322,7 @@ fail-closed refusal when a scanner is unavailable) are exercised against a runni
 python3 tools/test_auth.py
 ```
 
-36 tests, no network and no models needed (the scanners and the AI call are stubbed). They cover the
+No network or models are needed (scanners and the AI call are stubbed). The tests cover the
 token primitives — issue, expiry, revocation, rejection of forged tokens — and then hold the HTTP
 boundary to its contract: every member route refuses an unauthenticated caller with `401`, a member
 cannot act as another member, an override is refused without a real administrator session, an
@@ -290,7 +335,7 @@ errors, they simply never checked who was calling. A test is what stops that fro
 Detection quality is measured with the labelled harness in `tools/`:
 
 ```bash
-python tools/evaluate.py            # all checks
+python tools/evaluate.py --in-process  # all checks; reuse the loaded models
 python tools/evaluate.py check1     # one check
 ```
 
@@ -305,7 +350,7 @@ models.
 ```
 .
 ├── Dockerfile               # multi-stage: deps + baked model, then a slim non-root runtime
-├── docker-compose.yml       # one-command start, persistent data volume
+├── docker-compose.yml       # one-command start, separate data and secrets volumes
 ├── includes/constants.json  # host, port, paths, route names
 ├── requirements.txt
 ├── setup.sh                 # local dev environment
@@ -313,7 +358,7 @@ models.
 ├── src/
 │   ├── app.py               # create_app(): wiring only, no route bodies
 │   ├── routes/              # one blueprint per area
-│   │   ├── pages.py         # the seven page routes
+│   │   ├── pages.py         # page routes
 │   │   ├── admin_api.py     # admin auth, members, accounts, overrides
 │   │   ├── member_api.py    # settings and models for a signed-in member
 │   │   ├── chat_api.py      # the screened chat call
@@ -325,7 +370,7 @@ models.
 │   │   ├── injection.py     # check 3 — prompt injection
 │   │   └── model_cache.py   # loads each model once, then scans in-process
 │   ├── scanners.py          # in-process runner (subprocess fallback)
-│   ├── scanning.py          # run_check(): the three checks, in order
+│   ├── scanning.py          # parallel checks under one deadline
 │   ├── admin_session.py     # administrator token sessions (hashed, expiring)
 │   ├── members.py           # authorisation for member routes
 │   ├── passwords.py         # hashing and verification
@@ -345,13 +390,13 @@ models.
 │           └── auth.js workspace.js profile.js settings.js stats.js team.js
 └── tools/
     ├── evaluate.py          # precision / recall / F1 harness
-    ├── smoke.py             # drives the whole app over HTTP (22 checks)
+    ├── smoke.py             # drives the app over HTTP
     ├── test_auth.py         # authorisation unit tests
     ├── build_icons.py       # renders icons.js -> assets/icons/*.png
     └── icons/               # Pillow-only SVG rasteriser used by the above
 ```
 
-Every module has one job: `app.py` composes, `routes/` answer, `src/*.py` hold
+Layout: `app.py` composes, `routes/` answer, `src/*.py` hold
 the domain logic, and the browser gets one CSS file and one JS file per concern
 rather than a single bundle.
 
@@ -362,18 +407,17 @@ Greek-text, multi-line-code and blocked-prompt cases.
 
 | Endpoint | Purpose |
 |---|---|
-| `POST /api/admin/login`, `/api/admin` | Administrator authentication and management |
-| `POST /api/admin/employee`, `.../employee/login`, `.../employee/account` | Team member lifecycle |
-| `POST /api/admin/employee/settings` | Per-member policy: enabled checks, model, API key |
-| `POST /api/admin/employee/chat` | The screened chat call (`bypass` plus `admin_token` for admin-approved sends) |
-| `POST /api/admin/employee/chats[/open\|/rename\|/delete]` | Chat history (member's own session only) |
-| `POST /api/admin/employee/models` | Model discovery for the pasted key's provider |
+| `POST /api/admin`, `/api/admin/login`, `/api/admin/approve`, `/api/admin/password` | Account, login, scoped approval and password rotation |
+| `POST /api/admin/session`, `/api/admin/logout` | Session validation, logout or page lock |
+| `POST /api/admin/employee`, `…/employee/login`, `…/employee/logout`, `…/employee/account` | Member lifecycle |
+| `POST /api/admin/employee/settings` | Per-member and workspace-default policy and connection |
+| `POST /api/admin/employee/providers`, `…/employee/models` | Provider registry and scoped discovery |
+| `POST /api/admin/employee/chat`, `…/chat/regenerate` | Screened single-prompt completion / re-screened regeneration |
+| `POST /api/admin/employee/chats`, `…/chats/open`, `…/chats/rename`, `…/chats/delete`, `…/chats/search` | Member’s own chat history |
+| `POST /api/admin/employee/chats/message/edit`, `…/message/delete` | Modify a stored exchange |
+| `POST /api/admin/team`, `/api/admin/team/list`, `/api/admin/employee/override/check` | Statistics, roster and page-access verification |
 
-Every route below `/api/admin/employee/` takes the `session_token` issued at team-member sign-in;
-`/api/admin/employee/settings` also accepts the administrator's token so an administrator can set a
-member's policy.
-| `POST /api/admin/team` | Team statistics |
-| `POST /api/admin/session`, `/api/admin/logout` | Session validation and teardown |
+See [API examples](API_Examples.md) for request bodies, response shapes and permission rules.
 
 ## Limitations & roadmap
 
@@ -382,12 +426,9 @@ member's policy.
 - **Gateway coverage** today is the CyberSyn chat surface. Capturing traffic from arbitrary AI sites needs
   a browser extension or proxy (LiteLLM/mitmproxy) in front of those calls — the natural next step, and
   the reason the scanners are standalone stdin→JSON processes that any transport can call.
-- **Administrators are not blind to prompt prefixes.** History routes are restricted to the member's own
-  session, but the dashboard activity timeline renders up to 80 characters of each sent prompt (including
-  prompts released through an override) to anyone holding an administrator token for the workspace.
-  Chat content beyond that prefix is never shown, but do not present the admin view as zero-knowledge:
-  if your deployment requires it, truncate or disable the activity-timeline rendering rather than rely on
-  this description.
+- **Stored chats are not encrypted.** The DB contains answered exchanges, including approved overrides.
+  Protect backups and restrict host access. Upgrading removes old prompt details from the live activity
+  timeline; it does not erase old backups. Deletion retains audit statistics.
 - **Detection is English/Greek tuned**; more languages mean more patterns and NER models.
 - **Redaction instead of blocking** — "warn and forward a sanitised prompt" — is the most requested next
   policy action, and the per-match offsets needed for it are already returned by every scanner.

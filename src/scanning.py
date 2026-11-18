@@ -26,7 +26,6 @@ import subprocess
 import sys
 import threading
 import time
-from pathlib import Path
 
 import scanners as registry
 
@@ -54,39 +53,11 @@ def build_block_info(stage, result):
     }
 
 
-def _tail(text, n=300):
-    return (text or "").strip()[-n:]
-
-
 def _why(text):
-    """The one line from a traceback that says what actually went wrong.
-
-    A scanner that fails dumps a traceback on stderr. Showing 200 characters
-    of it is noise; the last line is the answer ("ModuleNotFoundError: No
-    module named 'spacy'"), and that is what tells someone what to install.
-    """
-    lines = [line.strip() for line in (text or "").splitlines() if line.strip()]
-    if not lines:
-        return "no output"
-    for line in reversed(lines):
-        if line.startswith("File \"") or line.startswith("^") or line.startswith("+"):
-            continue
-        return line[:160]
-    return lines[-1][:160]
-
-
-def resolve_script(configured):
-    """Find an ML script: configured path first, then src/MLscripts/<name>."""
-    name = Path(configured).name
-    candidates = [
-        ROOT_DIR / configured,
-        Path(__file__).resolve().parent / "MLscripts" / name,
-        ROOT_DIR / "testenv" / "MLscripts" / name,
-    ]
-    for c in candidates:
-        if c.is_file():
-            return c, candidates
-    return None, candidates
+    """Explain an import failure without copying arbitrary scanner output."""
+    if "ModuleNotFoundError:" in (text or ""):
+        return "ModuleNotFoundError: install the scanner dependencies"
+    return "scanner exited without a usable verdict"
 
 
 def find_result_json(text):
@@ -109,14 +80,27 @@ def find_result_json(text):
         i = text.find("{", end)
     for obj in reversed(found):
         for key in BLOCK_KEYS:
-            if key in obj:
+            if isinstance(obj.get(key), bool):
                 result = dict(obj)
-                result["blocked"] = bool(obj[key])
+                result["blocked"] = obj[key]
                 return result
     return None
 
 
-def _run_subprocess(stage, prompt, timeout=CHECK_TIMEOUT):
+_fallback_slot = threading.BoundedSemaphore(1)
+
+
+def _run_subprocess(stage, prompt, timeout=CHECK_TIMEOUT, **policy):
+    deadline = time.monotonic() + timeout
+    if not _fallback_slot.acquire(timeout=timeout):
+        raise ChatError(f"{stage}: fallback scanner busy.")
+    try:
+        return _spawn(stage, prompt, max(0.001, deadline - time.monotonic()), policy)
+    finally:
+        _fallback_slot.release()
+
+
+def _spawn(stage, prompt, timeout, policy):
     """Run a scanner as a script and read its verdict from stdout.
 
     The prompt goes in on stdin, which is the only input these scripts read.
@@ -127,26 +111,28 @@ def _run_subprocess(stage, prompt, timeout=CHECK_TIMEOUT):
     waved everything through.
     """
     key = dict(CHECKS)[stage]
-    script, tried = resolve_script(PATHS[key])
-    if script is None:
-        raise ChatError(
-            f"Script for {stage} not found. Tried: "
-            + ", ".join(str(t) for t in tried)
-        )
+    script = ROOT_DIR / PATHS[key]
+    if not script.is_file():
+        raise ChatError(f"Configured scanner for {stage} not found.")
 
     try:
+        args = [sys.executable, str(script)]
+        if policy.get("block_code"):
+            args.append("--block-code")
+        if not policy.get("context_enabled", True):
+            args.append("--code-only")
         proc = subprocess.run(
-            [sys.executable, str(script)], input=prompt,
+            args, input=prompt,
             capture_output=True, text=True, encoding="utf-8",
             timeout=timeout, cwd=str(script.parent),
         )
     except subprocess.TimeoutExpired:
         raise ChatError(f"{stage} did not finish within {timeout:.0f}s.")
-    except OSError as exc:
-        raise ChatError(f"{stage} could not be started: {exc}")
+    except OSError:
+        raise ChatError(f"{stage} could not be started.") from None
 
     result = find_result_json(proc.stdout or "")
-    if result is None:
+    if result is None or proc.returncode:
         # Fail closed: no verdict means no permission to send. The reason is
         # carried through so the message says what to fix rather than just
         # that something broke.
@@ -157,7 +143,7 @@ def _run_subprocess(stage, prompt, timeout=CHECK_TIMEOUT):
     return result
 
 
-def run_check(stage, prompt, timeout=CHECK_TIMEOUT, stop=None):
+def run_check(stage, prompt, timeout=CHECK_TIMEOUT, stop=None, **policy):
     """Run one check and return its verdict dict.
 
     Raises ChatError when the check cannot produce a verdict, so the caller
@@ -167,12 +153,12 @@ def run_check(stage, prompt, timeout=CHECK_TIMEOUT, stop=None):
     the checks still running can abandon a long paste instead of pricing out
     the rest of it. See scanners.run().
     """
+    if not registry.available(stage) and SCANNER_FALLBACK:
+        return _run_subprocess(stage, prompt, timeout, **policy)
     try:
-        return registry.run(stage, prompt, stop=stop)
+        return registry.run(stage, prompt, stop=stop, **policy)
     except Exception as exc:
-        if not SCANNER_FALLBACK:
-            raise ChatError(f"{stage} failed: {exc}")
-        return _run_subprocess(stage, prompt, timeout)
+        raise ChatError(f"{stage} failed: {type(exc).__name__}") from exc
 
 
 def _screening_deadline():
@@ -187,7 +173,8 @@ def screen(prompt, flags):
     enabled check could not produce a verdict in time, because a check that
     did not run is not the same thing as a check that passed.
     """
-    enabled = [stage for stage, _ in CHECKS if flags.get(stage, True)]
+    enabled = [stage for stage, _ in CHECKS if flags.get(stage, True) or
+               (stage == "check2" and flags.get("block_code"))]
     if not enabled:
         return None
 
@@ -207,12 +194,18 @@ def screen(prompt, flags):
         # slow checks cost one budget between them rather than three.
         remaining = max(1.0, deadline - time.monotonic())
         try:
-            result = run_check(stage, prompt, remaining, stop=refused.is_set)
+            policy = {}
+            if stage == "check2" and flags.get("block_code"):
+                policy = {"block_code": True, "context_enabled": flags.get("check2", True)}
+            result = run_check(stage, prompt, remaining, stop=refused.is_set, **policy)
+            if not isinstance(result, dict) or not isinstance(result.get("blocked"), bool):
+                raise ChatError("scanner did not produce a verdict")
             results[stage] = result
             if result.get("blocked"):
                 refused.set()
         except Exception as exc:  # noqa: BLE001 - recorded, then refused
             failures[stage] = exc
+            refused.set()
 
     # Daemon threads: if one is abandoned by the deadline it must not keep
     # the process from exiting.
@@ -226,6 +219,7 @@ def screen(prompt, flags):
     for thread in threads:
         thread.join(max(0.0, deadline - time.monotonic()))
         if thread.is_alive():
+            refused.set()
             failures[thread.name.replace("cybersyn-", "")] = ChatError(
                 f"did not finish within {SCREEN_BUDGET:.0f}s"
             )
@@ -234,7 +228,7 @@ def screen(prompt, flags):
     # the message says what to fix instead of blaming the prompt.
     if failures:
         detail = "; ".join(
-            f"{stage}: {exc}" for stage, exc in sorted(failures.items())
+            f"{stage}: {failures[stage]}" for stage in enabled if stage in failures
         )
         raise ChatError(
             "Not sent — " + ("a check could not run" if len(failures) == 1

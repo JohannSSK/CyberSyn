@@ -89,8 +89,9 @@
             }
             if (!passwordsMatch(password, confirm, msg, "a")) return Promise.resolve();
 
-            return Api.post("/api/admin",
-                { method: "add", username: name, password: password.value },
+            return Api.post("ADMIN",
+                { method: "add", username: name, password: password.value,
+                  signup_token: $("#signup-token").value },
                 { member: false, onUnauthorised: false }
             ).then(function () {
                 Loading.toast("Administrator created. Sign in with it now.", "success");
@@ -124,13 +125,12 @@
             }
             // The consequence is spelled out on the page; this asks once more
             // because there is no undo and the name is what is at stake.
-            if (!window.confirm("Delete the administrator '" + name +
-                    "'?\n\nTheir team members, settings and chats are deleted " +
-                    "with them. This cannot be undone.")) {
+            if (!window.confirm(I18n.t("Delete administrator account") + ": " + name + "?\n\n" +
+                    I18n.t("Every team member, every setting and every chat under this administrator is deleted. Statistics are kept."))) {
                 return Promise.resolve();
             }
 
-            return Api.post("/api/admin",
+            return Api.post("ADMIN",
                 { method: "remove", username: name, password: password.value },
                 { member: false, onUnauthorised: false }
             ).then(function () {
@@ -152,10 +152,9 @@
 
     function adminContext() {
         var meta = Session.getAdmin() || {};
-        var token = Session.getAdminToken();
         var parentId = parseInt(meta.parentId, 10);
-        if (!token || !parentId) return null;
-        return { token: token, parentId: parentId, username: meta.username };
+        if (!parentId) return null;
+        return { parentId: parentId, username: meta.username };
     }
 
     function requireAdmin() {
@@ -191,10 +190,9 @@
             }
             if (!passwordsMatch(password, confirm, msg, "a")) return Promise.resolve();
 
-            return Api.post("/api/admin/employee",
+            return Api.post("EMPLOYEE",
                 { method: "add", Parent_id: context.parentId,
-                  username: name, password: password.value,
-                  token: context.token },
+                  username: name, password: password.value },
                 { member: false, onUnauthorised: false }
             ).then(function () {
                 Loading.toast(name + " can sign in now.", "success");
@@ -218,6 +216,12 @@
         var label = $("#active-admin-label");
         if (label && context.username) label.textContent = context.username;
 
+        Api.post("TEAM_LIST", {}, { member: false, onUnauthorised: false }).then(function (data) {
+            var picker = $("#member-picker");
+            (data.members || []).forEach(function (m) { picker.add(new Option(m.username, m.username)); });
+            Dom.on(picker, "change", function () { username.value = picker.value; });
+        }).catch(function (err) { message(msg, err.message); });
+
         onSubmit(button, [username, password], function () {
             message(msg, "");
             var name = username.value.trim();
@@ -227,20 +231,18 @@
                 return Promise.resolve();
             }
             if (!password.value) {
-                message(msg, "Enter that member's password.");
+                message(msg, "Enter the administrator password.");
                 password.focus();
                 return Promise.resolve();
             }
-            if (!window.confirm("Remove '" + name +
-                    "'?\n\nTheir chats and settings are deleted. " +
-                    "Statistics are kept.")) {
+            if (!window.confirm(I18n.t("Remove team member") + ": " + name + "?\n\n" +
+                    I18n.t("Their chats and settings are deleted. Statistics are kept."))) {
                 return Promise.resolve();
             }
 
-            return Api.post("/api/admin/employee",
+            return Api.post("EMPLOYEE",
                 { method: "remove", Parent_id: context.parentId,
-                  username: name, password: password.value,
-                  token: context.token },
+                  username: name, admin_password: password.value },
                 { member: false, onUnauthorised: false }
             ).then(function () {
                 Loading.toast(name + " was removed.", "success");

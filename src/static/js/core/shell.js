@@ -54,19 +54,16 @@
     function signOut() {
         var jobs = [];
         var member = Session.getMember() || {};
-        var adminToken = Session.getAdminToken();
 
         // End the sessions on the server too. Signing out used to clear only
         // localStorage, which left a token that could still be replayed for
         // a week by anyone who had copied it.
         if (member.parentId) {
-            jobs.push(global.Api.post("/api/admin/employee/logout", {},
+            jobs.push(global.Api.post("EMPLOYEE_LOGOUT", {},
                 { onUnauthorised: false }).catch(function () {}));
         }
-        if (adminToken) {
-            jobs.push(global.Api.post("/api/admin/logout", { token: adminToken },
-                { member: false, onUnauthorised: false }).catch(function () {}));
-        }
+        jobs.push(global.Api.post("ADMIN_LOGOUT", {},
+            { member: false, onUnauthorised: false }).catch(function () {}));
 
         var leave = function () {
             Session.clearAll();
@@ -97,18 +94,15 @@
     /* ------------------------------------------------------------------
        Administrator step-up
 
-       Carrying an administrator token is not the same as having just proved
-       who you are. The token sits in localStorage for a week, so anyone at
-       the keyboard — or anything running in the page — holds it too.
-       Anything that exposes other people's activity therefore asks for the
-       password again, and remembers the answer only for this tab (session
-       storage, not local storage) and only for a few minutes.
+       Only the display timestamp is kept in this tab. The short-lived page
+       grant is an HttpOnly cookie; a settings or override approval is used
+       once from memory and never unlocks a page.
 
        Authoritative enforcement is server-side: the token this produces is
        what the API demands. This only decides when to ask.
        ------------------------------------------------------------------ */
 
-    var UNLOCK_KEY = "cybersyn_admin_unlock";
+    var UNLOCK_KEY = "cybersyn_page_hint";
     var UNLOCK_MINUTES = 15;
     var ticker = null;
 
@@ -120,16 +114,21 @@
         }
     }
 
-    function lockAdmin() {
+    function forgetUnlock() {
         try {
             sessionStorage.removeItem(UNLOCK_KEY);
         } catch (err) { /* private mode: the answer is simply not kept */ }
         paintUnlock();
     }
 
-    function writeUnlock(token, username, parentId) {
+    function lockAdmin() {
+        forgetUnlock();
+        return global.Api.post("ADMIN_LOGOUT", { scope: "page" },
+            { member: false, onUnauthorised: false });
+    }
+
+    function writeUnlock(username, parentId) {
         var record = {
-            token: token,
             username: username,
             parentId: parentId,
             until: Date.now() + UNLOCK_MINUTES * 60000
@@ -148,14 +147,14 @@
     /** The live unlock for this tab and workspace, or null. */
     function currentUnlock() {
         var record = readUnlock();
-        if (!record || !record.token || !record.until) return null;
-        if (Date.now() >= record.until) { lockAdmin(); return null; }
+        if (!record || !record.until) return null;
+        if (Date.now() >= record.until) { forgetUnlock(); return null; }
         // An unlock belongs to one workspace; acting as another member's
         // workspace must not inherit it.
         var member = Session.getMember() || {};
         if (record.parentId && member.parentId &&
             String(record.parentId) !== String(member.parentId)) {
-            lockAdmin();
+            forgetUnlock();
             return null;
         }
         return record;
@@ -183,8 +182,10 @@
         slot.appendChild(badge);
 
         global.Dom.on(badge.querySelector("[data-action='lock-admin']"), "click", function () {
-            lockAdmin();
-            global.Loading.toast("Administrator access locked.", "info");
+            lockAdmin().then(function () {
+                global.Loading.toast("Administrator access locked.", "info");
+                if (isAdminOnly(location.pathname)) location.replace("/workspace");
+            }).catch(function (err) { global.Loading.toast(err.message, "error"); });
         });
     }
 
@@ -264,21 +265,16 @@
                 return;
             }
             global.Loading.withButton(unlock, function () {
-                return global.Api.post("/api/admin/login", {
+                return global.Api.post("ADMIN_APPROVE", {
+                    Parent_id: (Session.getMember() || {}).parentId, scope: opts.fresh ? "once" : "page",
                     username: username,
                     password: password
                 }, { member: false, onUnauthorised: false });
             }).then(function (data) {
                 var parentId = parseInt(data.Parent_id, 10);
-                // The token proves the approval to the API; it is kept in
-                // session storage so closing the tab ends it.
-                Session.setAdmin(data.session_token, {
-                    parentId: parentId,
-                    username: data.username
-                });
                 close();
                 onUnlock({
-                    token: data.session_token,
+                    token: data.admin_token,
                     username: data.username,
                     parentId: parentId
                 });
@@ -315,17 +311,24 @@
     function withAdmin(options) {
         var opts = options || {};
         var record = opts.fresh ? null : currentUnlock();
-        if (record) return Promise.resolve(record.token);
-
-        return new Promise(function (resolve, reject) {
-            adminGate(opts, function (data) {
-                writeUnlock(data.token, data.username, data.parentId);
-                resolve(data.token);
-            }, function () {
-                var err = new Error("Administrator approval was cancelled.");
-                err.cancelled = true;
-                reject(err);
+        function ask() {
+            return new Promise(function (resolve, reject) {
+                adminGate(opts, function (data) {
+                    if (!opts.fresh) writeUnlock(data.username, data.parentId);
+                    resolve(data.token);
+                }, function () {
+                    var err = new Error("Administrator approval was cancelled.");
+                    err.cancelled = true;
+                    reject(err);
+                });
             });
+        }
+        if (!record) return ask();
+        return global.Api.post("OVERRIDE_CHECK", { Parent_id: record.parentId },
+            { onUnauthorised: false }).then(function (result) {
+            if (result.allowed) return;
+            forgetUnlock();
+            return ask();
         });
     }
 

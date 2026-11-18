@@ -14,16 +14,12 @@ before giving up, so behaviour degrades rather than breaks.
 import importlib
 import inspect
 import sys
+from pathlib import Path
 
-from config import ML_DIR
+from config import CHECKS, ML_DIR, PATHS
 
-# stage -> (module name, function name). The functions must accept a prompt
-# string and return a verdict dict with a "blocked" field.
-SCANNERS = {
-    "check1": "greek_pii",
-    "check2": "context",
-    "check3": "injection",
-}
+# Import the scanner named by the same registry as the subprocess runner.
+SCANNERS = {stage: Path(PATHS[key]).stem for stage, key in CHECKS}
 
 _cache = {}
 _failures = {}
@@ -69,7 +65,7 @@ def disabled_reason(stage):
     return _failures.get(stage)
 
 
-def run(stage, prompt, stop=None):
+def run(stage, prompt, stop=None, **policy):
     """Run one check and return its verdict dict.
 
     Raises RuntimeError if the check cannot run at all, so the caller can
@@ -87,8 +83,8 @@ def run(stage, prompt, stop=None):
             f"{stage} is unavailable: {_failures.get(stage, 'not loaded')}"
         )
     if stop is not None and _accepts_stop(fn):
-        return fn(prompt, stop=stop)
-    return fn(prompt)
+        policy["stop"] = stop
+    return fn(prompt, **policy)
 
 
 def _accepts_stop(fn):

@@ -7,19 +7,19 @@ of "is this token still valid".
 """
 
 import secrets
+from contextlib import closing
 from datetime import datetime, timedelta, timezone
 
 from flask import Blueprint, jsonify, request
 
-from auth import _connect, _hash
+from auth import ADMIN_COOKIE, PAGE_COOKIE, SESSION_DAYS, _connect, _hash, cookie_token
 from config import ROUTES
 
-SESSION_DAYS = 7
 TABLE_SQL = (
     "CREATE TABLE IF NOT EXISTS ADMIN_SESSIONS ("
     "token_hash TEXT PRIMARY KEY, "
     "admin_id INTEGER NOT NULL, "
-    "expires_at TEXT NOT NULL)"
+    "expires_at TEXT NOT NULL, purpose TEXT NOT NULL DEFAULT 'session')"
 )
 
 admin_session_api = Blueprint("admin_session_api", __name__)
@@ -27,7 +27,10 @@ admin_session_api = Blueprint("admin_session_api", __name__)
 
 def init_table(db_file):
     con = _connect(db_file)
+    con.execute("BEGIN IMMEDIATE")
     con.execute(TABLE_SQL)
+    if "purpose" not in {r[1] for r in con.execute("PRAGMA table_info(ADMIN_SESSIONS)")}:
+        con.execute("ALTER TABLE ADMIN_SESSIONS ADD COLUMN purpose TEXT NOT NULL DEFAULT 'session'")
     con.commit()
     con.close()
 
@@ -38,33 +41,20 @@ def init_table(db_file):
 MAX_SESSIONS_PER_ADMIN = 20
 
 
-def create_session(db_file, admin_id):
-    """Issue a token for an administrator and return it (once)."""
+def create_session(db_file, admin_id, purpose="session", con=None):
+    if con is None:
+        with closing(_connect(db_file)) as con, con:
+            return create_session(db_file, admin_id, purpose, con)
+    lifetime = {"session": timedelta(days=SESSION_DAYS), "approval_once": timedelta(minutes=5),
+                "approval_page": timedelta(minutes=15)}[purpose]
     token = secrets.token_urlsafe(32)
-    expires = datetime.now(timezone.utc) + timedelta(days=SESSION_DAYS)
-    con = _connect(db_file)
-    con.execute(
-        "DELETE FROM ADMIN_SESSIONS WHERE expires_at < ?",
-        (datetime.now(timezone.utc).isoformat(),),
-    )
-    live = con.execute(
-        "SELECT token_hash FROM ADMIN_SESSIONS WHERE admin_id = ? "
-        "ORDER BY expires_at DESC",
-        (admin_id,),
-    ).fetchall()
-    if len(live) >= MAX_SESSIONS_PER_ADMIN:
-        keep = {row["token_hash"] for row in live[:MAX_SESSIONS_PER_ADMIN - 1]}
-        con.executemany(
-            "DELETE FROM ADMIN_SESSIONS WHERE token_hash = ?",
-            [(row["token_hash"],) for row in live if row["token_hash"] not in keep],
-        )
-    con.execute(
-        "INSERT INTO ADMIN_SESSIONS (token_hash, admin_id, expires_at) "
-        "VALUES (?, ?, ?)",
-        (_hash(token), admin_id, expires.isoformat()),
-    )
-    con.commit()
-    con.close()
+    now = datetime.now(timezone.utc)
+    con.execute("DELETE FROM ADMIN_SESSIONS WHERE expires_at <= ?", (now.isoformat(),))
+    con.execute("INSERT INTO ADMIN_SESSIONS (token_hash, admin_id, expires_at, purpose) VALUES (?,?,?,?)",
+                (_hash(token), admin_id, (now + lifetime).isoformat(), purpose))
+    con.execute("DELETE FROM ADMIN_SESSIONS WHERE rowid IN (SELECT rowid FROM ADMIN_SESSIONS "
+                "WHERE admin_id=? AND (purpose='session')=? ORDER BY rowid DESC LIMIT -1 OFFSET ?)",
+                (admin_id, purpose == "session", MAX_SESSIONS_PER_ADMIN))
     return token
 
 
@@ -110,5 +100,14 @@ def logout():
 
     data = request.get_json(silent=True)
     token = data.get("token") if isinstance(data, dict) else None
-    revoke(DB_FILE, token)
-    return jsonify({"success": True})
+    page_only = isinstance(data, dict) and data.get("scope") == "page"
+    cookies = (PAGE_COOKIE,) if page_only else (ADMIN_COOKIE, PAGE_COOKIE)
+    if token is not None:
+        revoke(DB_FILE, token)
+    else:
+        for name in cookies:
+            revoke(DB_FILE, cookie_token(None, name))
+    response = jsonify({"success": True})
+    for name in cookies:
+        response.delete_cookie(name)
+    return response

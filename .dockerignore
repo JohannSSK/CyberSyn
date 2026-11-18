@@ -10,10 +10,9 @@ __pycache__/
 *.egg-info/
 
 # Runtime state — never bake secrets or user data into the image
-src/backend/secret.key
-*.db
-*.sqlite
-*.sqlite3
+src/backend/
+*.db*
+*.sqlite*
 
 # Editor / OS noise
 .DS_Store
@@ -24,3 +23,15 @@ src/backend/secret.key
 # Local scratch copies kept in the repo
 *.bak
 *.before-undo
+
+presentations/
+tools/
+*.md
+setup.sh
+run.sh
+.env
+.env.*
+*.patch
+node_modules/
+secrets/
+*.key

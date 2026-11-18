@@ -1,0 +1,31 @@
+name: Verify container
+
+# Opt in: each native build downloads PyTorch and the model weights.
+on: workflow_dispatch
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-load:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and start the fresh checkout
+        run: |
+          docker compose config --quiet
+          docker compose up --build --detach --wait --wait-timeout 180
+      - name: Classify offline with the non-root runtime image
+        run: docker run --rm --network none cybersyn:2026 python src/MLscripts/model_cache.py
+      - name: Exercise the HTTP routes with disposable accounts
+        run: |
+          export CYBERSYN_SMOKE_PASSWORD="A1$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+          python3 tools/smoke.py
+      - if: always()
+        name: Remove the disposable containers and volumes
+        run: docker compose down --volumes

@@ -18,8 +18,9 @@ const fs = require("fs");
 const path = require("path");
 
 const ROOT = path.resolve(__dirname, "..");
+const ROUTES = require("../includes/constants.json").ROUTES;
 const candidates = [
-    process.env.CYBERSYN_JSDOM,
+    process.env.CYBERSYN_JSDOM, "jsdom",
     path.join(ROOT, "node_modules", "jsdom"),
     "/tmp/jsdomtest/node_modules/jsdom",
 ].filter(Boolean);
@@ -87,22 +88,23 @@ function makePage(options) {
     }
 
     const posted = [];
+    const routes = ROUTES;
     win.Api = {
         Session: {
             getAdmin: () => opts.admin || { username: "boss", parentId: 2 },
-            getAdminToken: () => opts.adminToken || null,
             setAdmin: (token, meta) => { win.__setAdmin = { token, meta }; },
             getMember: () => opts.member || { parentId: 2, employeeId: 5, username: "mia" },
-            getMemberToken: () => "member-token",
             clearAll: () => { win.__cleared = true; },
             ready: () => true,
         },
-        post: (p, body) => {
+        post: (key, body) => {
+            const p = routes[key];
             posted.push({ path: p, body });
-            if (p === "/api/admin/login") {
+            if (p === ROUTES.OVERRIDE_CHECK) return Promise.resolve({ allowed: !opts.revoked });
+            if (p === ROUTES.ADMIN_APPROVE) {
                 if ((body.password || "") === "correct") {
                     return Promise.resolve({
-                        success: true, session_token: "admin-token-1",
+                        success: true, admin_token: body.scope === "once" ? "one-use-test" : undefined,
                         Parent_id: "2", username: body.username || "boss",
                     });
                 }
@@ -188,9 +190,10 @@ console.log("\nAdministrator step-up");
         setTimeout(() => {
             check("the prompt closes once the password is right",
                 !doc.querySelector(".overlay"));
-            check("the login was sent to the right route",
-                posted.some((p) => p.path === "/api/admin/login"),
+            check("the dialog requests a page-only approval",
+                posted.some((p) => p.path === ROUTES.ADMIN_APPROVE && p.body.scope === "page"),
                 JSON.stringify(posted.map((p) => p.path)));
+            check("approval never sets a primary admin session", !win.__setAdmin);
             runRemember();
         }, 10);
     }
@@ -199,8 +202,8 @@ console.log("\nAdministrator step-up");
         /* After one approval the same tab does not ask again for a while,
            but it does ask for an action marked fresh. */
         const remembered = makePage();
-        remembered.win.sessionStorage.setItem("cybersyn_admin_unlock", JSON.stringify({
-            token: "admin-token-1", username: "boss", parentId: 2,
+        remembered.win.sessionStorage.setItem("cybersyn_page_hint", JSON.stringify({
+            username: "boss", parentId: 2,
             until: Date.now() + 600000,
         }));
 
@@ -210,6 +213,7 @@ console.log("\nAdministrator step-up");
         setTimeout(() => {
             check("a recent approval is not asked for again",
                 quiet && !remembered.doc.querySelector(".overlay"));
+            check("remembered access is verified by server", remembered.posted.some(p => p.path.endsWith("override/check")));
 
             let asked = false;
             remembered.win.Shell.withAdmin({
@@ -225,8 +229,8 @@ console.log("\nAdministrator step-up");
 
     function runExpiry() {
         const expired = makePage();
-        expired.win.sessionStorage.setItem("cybersyn_admin_unlock", JSON.stringify({
-            token: "admin-token-1", username: "boss", parentId: 2,
+        expired.win.sessionStorage.setItem("cybersyn_page_hint", JSON.stringify({
+            username: "boss", parentId: 2,
             until: Date.now() - 1000,
         }));
         expired.win.Shell.withAdmin({ title: "Statistics", what: "activity." })
@@ -235,8 +239,8 @@ console.log("\nAdministrator step-up");
             !!expired.doc.querySelector(".overlay"));
 
         const otherWorkspace = makePage({ member: { parentId: 9, employeeId: 1 } });
-        otherWorkspace.win.sessionStorage.setItem("cybersyn_admin_unlock",
-            JSON.stringify({ token: "t", username: "boss", parentId: 2,
+        otherWorkspace.win.sessionStorage.setItem("cybersyn_page_hint",
+            JSON.stringify({ username: "boss", parentId: 2,
                              until: Date.now() + 600000 }));
         otherWorkspace.win.Shell.withAdmin({ title: "Team", what: "roster." })
             .catch(() => {});
@@ -248,8 +252,8 @@ console.log("\nAdministrator step-up");
 
     function runBadge() {
         const p = makePage();
-        p.win.sessionStorage.setItem("cybersyn_admin_unlock", JSON.stringify({
-            token: "admin-token-1", username: "boss", parentId: 2,
+        p.win.sessionStorage.setItem("cybersyn_page_hint", JSON.stringify({
+            username: "boss", parentId: 2,
             until: Date.now() + 600000,
         }));
         p.win.Shell.paintUnlock();
@@ -263,8 +267,9 @@ console.log("\nAdministrator step-up");
         check("locking hides the badge again",
             p.doc.querySelector("[data-admin-lock]").classList.contains("hidden"));
         check("locking forgets the unlock",
-            p.win.sessionStorage.getItem("cybersyn_admin_unlock") === null);
+            p.win.sessionStorage.getItem("cybersyn_page_hint") === null);
 
+        check("Lock now revokes the server page grant", p.posted.some(r => r.path === ROUTES.ADMIN_LOGOUT && r.body.scope === "page"));
         runCancel();
     }
 
@@ -337,7 +342,6 @@ function drawerPage(isNarrow) {
             getAdminToken: () => null,
             setAdmin: () => {},
             getMember: () => ({ parentId: 2, employeeId: 5, username: "mia" }),
-            getMemberToken: () => "member-token",
             clearAll: () => {},
             ready: () => true,
         },
@@ -461,7 +465,7 @@ function runSidebar() {
    The wording on a blocked message
    -------------------------------------------------------------------------- */
 
-function finish() {
+async function finish() {
     console.log("\nBlocked message wording");
     const dom = new JSDOM("<!doctype html><html><body></body></html>",
         { url: BASE + "/workspace", runScripts: "outside-only" });
@@ -496,6 +500,174 @@ function finish() {
     check("a hostile snippet is shown as text",
         card.querySelector("code").textContent === evil);
 
+    testBrowserBoundaries();
+    await testSignedInScreens();
     console.log(`\n${pass} passed, ${fail} failed`);
     process.exit(fail ? 1 : 0);
+}
+
+function testBrowserBoundaries() {
+    const dom = new JSDOM(`<body><h1>Settings</h1><div class="bubble-ai"><p>Settings</p></div>
+      <span data-member-name>Admin</span><code>Open</code><input value="Send"></body>`,
+      {url: BASE, runScripts: "outside-only"});
+    const win = dom.window;
+    win.document.body.dataset.routes = JSON.stringify(ROUTES);
+    win.localStorage.setItem("cybersyn_admin_token", "old-admin");
+    win.localStorage.setItem("cybersyn_member_token", "old-member");
+    ["core/dom.js", "core/i18n.js", "core/markdown.js", "core/api.js"].forEach(f => win.eval(read(f)));
+    win.Api.Session.setAdmin({parentId: 1, username: "owner", token: "not-to-store"});
+    win.Api.Session.setMember({parentId: 1, employeeId: 2, username: "member", session_token: "not-to-store"});
+    check("only non-secret UI metadata is stored", win.Api.Session.ready() &&
+        !/old-admin|old-member|not-to-store|_token/.test(JSON.stringify(win.localStorage)));
+    let req;
+    win.fetch = (url, opts) => { req = {url, opts}; return Promise.resolve({ok:true, status:200, json:() => Promise.resolve({})}); };
+    win.Api.post("SETTINGS", {});
+    check("requests use the route registry and CSRF-protected cookies", req.url === ROUTES.SETTINGS &&
+        req.opts.credentials === "same-origin" && req.opts.headers["X-CyberSyn-Request"] === "1" && !req.opts.body.includes("token"));
+    const rich = win.Markdown.render("**bold** `a * b * c` `**kwargs` `<tag>`");
+    check("code spans preserve operators and HTML escaping", rich.includes("<strong>bold</strong>") &&
+        rich.includes("<code>a * b * c</code>") && rich.includes("<code>**kwargs</code>") && rich.includes("<code>&lt;tag&gt;</code>"));
+    win.I18n.set("el");
+    check("translate chrome, not chats, names, code or input values", win.document.querySelector("h1").textContent === "Ρυθμίσεις" &&
+        win.document.querySelector(".bubble-ai p").textContent === "Settings" && win.document.querySelector("[data-member-name]").textContent === "Admin" &&
+        win.document.querySelector("code").textContent === "Open" && win.document.querySelector("input").value === "Send");
+    check("dollar in translated dynamic text is literal", win.I18n.t("Signed in as $&").endsWith("$&"));
+    win.I18n.set("en");
+    check("English is restored", win.document.querySelector("h1").textContent === "Settings");
+}
+
+// Use the actual form markup and fetch wrapper; only the server is simulated.
+function screenFixture(page, answer, employeeId = 5) {
+    const template = name => fs.readFileSync(path.join(ROOT, "src/templates", name + ".html"), "utf8");
+    const html = template(page).match(/\{% block body %\}([\s\S]*?)\{% endblock %\}/)[1]
+        .replace(/\{% include "([^"]+)\.html" %\}/g, (_, name) => template(name))
+        .replace("{% include sidebar_extra %}", page === "workspace" ? template("partials/chat_list") : "")
+        .replace(/\{#[\s\S]*?#\}|\{%[\s\S]*?%\}/g, "");
+    const win = new JSDOM(html, { url: BASE + "/" + page, runScripts: "outside-only", pretendToBeVisual: true }).window;
+    const routes = ROUTES;
+    win.document.body.dataset.routes = JSON.stringify(routes);
+    const posted = [], approvals = [], messages = [];
+    win.HTMLElement.prototype.scrollTo = function () {};
+    win.HTMLElement.prototype.scrollIntoView = function () { this.dataset.scrolled = "1"; };
+    win.fetch = (url, opts) => {
+        const key = Object.keys(routes).find(k => routes[k] === url);
+        const body = JSON.parse(opts.body);
+        posted.push({ key, body });
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(answer(key, body)) });
+    };
+    for (const f of ["dom", "stages", "icons", "i18n", "markdown", "api"]) win.eval(read("core/" + f + ".js"));
+    win.Api.Session.setMember({ parentId: 2, employeeId, username: "Settings" });
+    win.Shell = { guard: () => true, withAdmin: opts => {
+        approvals.push(opts); return Promise.resolve("test-grant-" + approvals.length);
+    }};
+    win.Loading = { toast: text => messages.push(text), withButton: (_, task) => Promise.resolve().then(task) };
+    win.eval(read(page + ".js"));
+    return {win, posted, approvals, messages, $: s => win.document.querySelector(s)};
+}
+
+async function testSignedInScreens() {
+    const tick = () => new Promise(resolve => setTimeout(resolve, 0));
+    const revoked = makePage({revoked:true});
+    revoked.win.sessionStorage.setItem("cybersyn_page_hint", JSON.stringify({username:"boss",parentId:2,until:Date.now()+60000}));
+    const pending = revoked.win.Shell.withAdmin({title:"Team", what:"the roster"}).catch(() => {});
+    await tick();
+    check("a revoked server grant cannot be restored from a local hint", !!revoked.doc.querySelector(".overlay") && !revoked.win.sessionStorage.getItem("cybersyn_page_hint"));
+    revoked.doc.querySelector("[data-gate-cancel]").click(); await pending; revoked.win.close();
+    const fresh = makePage();
+    const grant = fresh.win.Shell.withAdmin({fresh:true, title:"Settings", what:"a change"});
+    fresh.doc.querySelector("#admin-gate-password").value = "correct";
+    fresh.doc.querySelector("[data-gate-unlock]").click();
+    check("fresh step-up returns only a one-use credential to its caller", await grant === "one-use-test" &&
+        fresh.posted[0].body.scope === "once" && !fresh.win.sessionStorage.length && !fresh.win.localStorage.length);
+    fresh.win.close();
+    const base = "https://models.example/prefix/v1";
+    const records = { 5: true, 6: false };
+    const answer = (key, body) => {
+        if (key === "SETTINGS") {
+            if (typeof body.block_code === "boolean") records[body.Employee_id] = body.block_code;
+            return {check1:true, check2:false, check3:true, block_code:records[body.Employee_id], MODEL_NAME:"Settings",
+                API_KEY_MASK:body.CLEAR_API_KEY ? "" : "****1234", PROVIDER:"openai", API_BASE:base};
+        }
+        if (key === "PROVIDERS") return { providers: ["auto", "openai", "custom"].map(k => ({ key:k, label:k })) };
+        if (key === "MODELS") return { models:["Settings"], provider:body.provider };
+        return {};
+    };
+    const first = screenFixture("settings", answer), other = screenFixture("settings", answer, 6);
+    await tick();
+    check("Settings renders each member's own code toggle", first.$("#setting-block-code").checked && !other.$("#setting-block-code").checked);
+    check("saved named-provider base path survives load and automatic discovery", first.$("#setting-base").value === base &&
+        first.posted.find(r => r.key === "MODELS").body.API_BASE === base);
+    first.win.I18n.set("el");
+    check("model names are data, not interface copy", first.$("#setting-model option:checked").textContent === "Settings");
+    first.$("#setting-block-code").checked = false;
+    first.$("#btn-save-checks").click();
+    await tick();
+    const policy = first.posted.find(r => r.key === "SETTINGS" && "block_code" in r.body).body;
+    check("saving targets this member, not the default or another member", policy.Employee_id === 5 && policy.block_code === false &&
+        !policy.also_default && policy.admin_token === "test-grant-1" && first.approvals[0].fresh);
+    first.$("#setting-base").value = "";
+    first.$("#btn-refresh-models").click();
+    await tick();
+    const refresh = first.posted.filter(r => r.key === "MODELS").pop().body;
+    check("probing a new destination with the stored key asks afresh", refresh.API_BASE === "" && refresh.admin_token === "test-grant-2" &&
+        first.approvals[1].fresh && !("API_KEY" in refresh));
+    first.$("#connection-also-default").checked = true;
+    first.$("#btn-save-connection").click();
+    await tick();
+    const connection = first.posted.find(r => r.key === "SETTINGS" && "API_BASE" in r.body).body;
+    check("a cleared base is sent explicitly; copying to default is opt-in", connection.API_BASE === "" && connection.also_default === true);
+    first.$("#btn-clear-key").click();
+    await tick();
+    check("removing the saved key sends an approved clear operation", first.posted.some(r => r.body.CLEAR_API_KEY && r.body.admin_token === "test-grant-4"));
+    first.win.close(); other.win.close();
+
+    const workspace = screenFixture("workspace", (key, body) => {
+        if (key === "SETTINGS") return {check1:false, check2:false, check3:false, block_code:true};
+        if (key === "CHATS") return {chats: [{id:1, title:"Here"}, {id:2, title:"Settings"}]};
+        if (key === "CHATS_OPEN") return {chat:{id:body.chat_id, title:body.chat_id === 1 ? "Here" : "Settings", messages:[{
+            id:"message-" + body.chat_id, prompt:"needle", answer:"**needle**", created_at:"2026-11-18T09:00:00Z"}]}};
+        if (key === "CHATS_SEARCH") return {results:[1,2].map(id => ({chat_id:id, message_id:"message-"+id, chat_title:"Settings", excerpt:"<em>needle</em>"}))};
+        if (key === "CHAT") return body.bypass ? { chat_id:2, message_id:"granted", reply_message:"ok" } :
+            {blocked:true, block_info:{stage:"check2", main_cause:"computer source code", line:1, snippet:"Settings"}};
+        if (key === "ADMIN_APPROVE") return {admin_token:"inline-once"};
+        return {};
+    });
+    await tick();
+    const search = workspace.$("#chat-search");
+    search.value = "needle"; search.dispatchEvent(new workspace.win.Event("input"));
+    await new Promise(resolve => setTimeout(resolve, 220));
+    check("cross-chat hits are separate, highlighted and never interpreted as HTML", workspace.$("#other-chat-results .search-hit mark").textContent === "needle" &&
+        !workspace.$("#other-chat-results .search-hit em") && workspace.win.document.querySelectorAll(".search-hit").length === 1);
+    workspace.$(".search-hit").click(); await tick();
+    check("a search result opens the other chat and focuses the matching message", workspace.$("#active-chat-title").textContent === "Settings" &&
+        workspace.win.document.activeElement.dataset.id === "message-2" && workspace.$(".msg[data-scrolled] .bubble-ai mark").textContent === "needle");
+    workspace.win.I18n.set("el");
+    check("a chat named Settings keeps its original title", workspace.$("#active-chat-title").textContent === "Settings");
+    for (let i=0; i<2; i++) {
+        workspace.$("#prompt-input").value = "example paste";
+        workspace.$("#form-send").dispatchEvent(new workspace.win.Event("submit", {cancelable:true}));
+        await tick();
+    }
+    const sent = workspace.posted.find(r => r.key === "CHAT").body;
+    check("chat never sends policy toggles or model overrides", !["check1","check2","check3","block_code","MODEL_NAME","API_KEY"].some(k => k in sent));
+    workspace.win.document.querySelectorAll(".override-ask").forEach(b => b.click());
+    const ids = Array.from(workspace.win.document.querySelectorAll("[id]"), el => el.id);
+    check("multiple override forms do not introduce duplicate DOM ids", new Set(ids).size === ids.length);
+    workspace.$(".override-name").value = "another-owner"; workspace.$(".override-pass").value = "  example password 1  ";
+    workspace.$(".override-send").click(); await tick();
+    check("inline override uses the edited username, exact password and one-use approval", workspace.posted.some(r =>
+        r.key === "ADMIN_APPROVE" && r.body.username === "another-owner" && r.body.password === "  example password 1  " && r.body.scope === "once") &&
+        workspace.posted.some(r => r.key === "CHAT" && r.body.bypass && r.body.admin_token === "inline-once"));
+    check("no override token survives in either browser storage", !/inline-once/.test(JSON.stringify(workspace.win.localStorage) + JSON.stringify(workspace.win.sessionStorage)));
+    workspace.win.close();
+
+    const profile = screenFixture("profile", key => key === "ADMIN_APPROVE" ? {admin_token:"profile-once"} : {});
+    await tick();
+    const form = profile.$("#form-admin-password");
+    form.elements.username.value = "owner";
+    form.elements.current_password.value = "  old 123  "; form.elements.new_password.value = "  new 456  ";
+    form.dispatchEvent(new profile.win.Event("submit", {cancelable:true})); await tick();
+    check("Profile uses a fresh approval to change the administrator password", profile.posted.some(r => r.key === "ADMIN_PASSWORD" &&
+        r.body.token === "profile-once" && r.body.new_password === "  new 456  " && r.body.current_password === "  old 123  "));
+    profile.win.close();
 }

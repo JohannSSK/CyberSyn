@@ -116,7 +116,7 @@
         head.innerHTML =
             '<span class="avatar">' + Dom.esc(member.username.charAt(0).toUpperCase()) + "</span>" +
             '<span class="member-id"><strong>' + Dom.esc(member.username) + "</strong>" +
-            "<small>" + member.checks_on + " of 3 checks on · " + Dom.esc(member.model) + "</small></span>";
+            "<small>" + member.checks_on + ' of 3 checks on<span data-no-i18n> · ' + Dom.esc(member.model) + "</span></small></span>";
 
         var donut = Dom.el("div", "donut");
         donut.style.setProperty("--pct", member.block_rate);
@@ -181,8 +181,8 @@
                 : (item.stage ? Dom.esc(Stages.label(item.stage) || item.stage) : "");
             row.innerHTML =
                 '<span class="tl-mark">' + Icons.html(info.icon) + "</span>" +
-                '<span class="tl-body"><strong>' + Dom.esc(who) + " · " +
-                Dom.esc(info.label) + "</strong>" +
+                '<span class="tl-body"><strong><span data-no-i18n>' + Dom.esc(who) + "</span> · <span>" +
+                Dom.esc(info.label) + "</span></strong>" +
                 (detail ? "<small>" + detail + "</small>" : "") + "</span>" +
                 '<span class="tl-time">' + Dom.stamp(item.at) + "</span>";
             node.appendChild(row);
@@ -195,9 +195,7 @@
 
     function load(button) {
         var task = function () {
-            return Api.post("/api/admin/team", {
-                token: Api.Session.getAdminToken()
-            }, { member: false, onUnauthorised: false });
+            return Api.post("TEAM", {}, { member: false, onUnauthorised: false });
         };
 
         var request = button ? Loading.withButton(button, task) : task();
