@@ -487,7 +487,11 @@
 
 .icon-btn .icon { width: var(--icon-sm); height: var(--icon-sm); }
 
-.icon-btn.is-loading { pointer-events: none; }
+.icon-btn.is-loading {
+    pointer-events: none;
+    background: var(--surface-2);
+    border-color: var(--border);
+}
 .icon-btn.is-loading .icon { opacity: 0; }
 
 /* --------------------------------------------------------------------------
