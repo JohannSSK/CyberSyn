@@ -19,36 +19,44 @@
                     <div>
                         <span class="eyebrow">Administrator</span>
                         <h1>Team</h1>
-                        <p class="dim">Everyone in this workspace and how their gate is configured.</p>
+                        <p class="dim">Everyone in this workspace, their active checks and their model setup.</p>
                     </div>
-                    <button type="button" class="btn btn-sm" id="btn-refresh">Refresh</button>
+                    <div class="page-head-actions no-print">
+                        <button type="button" class="btn btn-sm" id="btn-refresh">Refresh</button>
+                    </div>
                 </div>
             </header>
 
-            <div class="page-body">
-                <div class="tiles">
-                    <div class="tile tile-accent">
-                        <div class="tile-label"><span data-icon="team"></span> Members</div>
+            <div class="page-body page-body-wide">
+                <div class="tiles tiles-4">
+                    <div class="tile">
+                        <div class="tile-label"><span data-icon="team"></span><span>Members</span></div>
                         <div class="tile-value" id="tile-count">—</div>
-                    </div>
-                    <div class="tile tile-danger">
-                        <div class="tile-label"><span data-icon="warning"></span> Blocked</div>
-                        <div class="tile-value" id="tile-blocked">—</div>
-                    </div>
-                    <div class="tile tile-success">
-                        <div class="tile-label"><span data-icon="shield"></span> Block rate</div>
-                        <div class="tile-value" id="tile-rate">—</div>
+                        <div class="tile-foot">Active seats</div>
                     </div>
                     <div class="tile">
-                        <div class="tile-label"><span data-icon="key"></span> Keys configured</div>
+                        <div class="tile-label"><span data-icon="warning"></span><span>Blocked</span></div>
+                        <div class="tile-value" id="tile-blocked">—</div>
+                        <div class="tile-foot">Held back locally</div>
+                    </div>
+                    <div class="tile">
+                        <div class="tile-label"><span data-icon="shield"></span><span>Block rate</span></div>
+                        <div class="tile-value" id="tile-rate">—</div>
+                        <div class="tile-foot">Share of messages</div>
+                    </div>
+                    <div class="tile">
+                        <div class="tile-label"><span data-icon="key"></span><span>Keys configured</span></div>
                         <div class="tile-value" id="tile-keys">—</div>
+                        <div class="tile-foot">Stored encrypted</div>
                     </div>
                 </div>
 
                 <section class="card">
-                    <div class="card-title"><span data-icon="profile"></span> Members</div>
-                    <div id="team-list" class="stack-sm"></div>
+                    <div class="card-title"><span data-icon="profile"></span><span>Members</span></div>
+                    <div id="team-list" class="stack"></div>
                 </section>
+
+                <footer class="print-footer" id="print-footer" aria-hidden="true"></footer>
             </div>
         </main>
     </div>

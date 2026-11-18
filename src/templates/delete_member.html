@@ -3,20 +3,21 @@
 
 {% block title %}Remove team member — CyberSyn{% endblock %}
 
-{% set brand_title = "Their workspace goes with them." %}
-{% set brand_lead = "Removing a team member deletes their chats and their settings. "
-                    "Team statistics are kept, so the audit trail stays whole." %}
-{% set eyebrow = "Danger zone" %}
+{% set brand_title = "Close a member seat cleanly." %}
+{% set brand_lead = "Removing a team member ends their active sessions and removes their account, chats and settings. Block and activity logs stay intact." %}
+{% set eyebrow = "Remove member" %}
 {% set title = "Remove team member" %}
 {% set lead = "Select a member and confirm with your administrator password." %}
 {% set back_href = "/" %}
 {% set back_label = "Back to sign in" %}
-{% set footnote = "Their sessions are ended immediately." %}
+{% set footnote = "Any open sessions for this member end straight away." %}
 
 {% block form %}
 <div class="auth-field">
     <label for="member-picker">Team members</label>
     <select id="member-picker" class="select" data-no-i18n><option value="">—</option></select>
+</div>
+<div class="auth-field">
     <label for="del-member-username">Member username</label>
     <input type="text" id="del-member-username" placeholder="The member to remove"
            autocomplete="off" autofocus>
@@ -29,10 +30,10 @@
 
 <div class="auth-warning">
     <span data-icon="warning"></span>
-    <span>Their chats and settings are deleted. Statistics are kept.</span>
+    <span>Their chats and settings are deleted. Statistics and audit logs stay intact.</span>
 </div>
 
-<div id="delete-member-msg" class="auth-inline-msg"></div>
+<div id="delete-member-msg" class="auth-inline-msg" role="alert"></div>
 <button type="button" id="btn-delete-member" class="auth-btn-danger">Remove this member</button>
 {% endblock %}
 

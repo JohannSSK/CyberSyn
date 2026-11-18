@@ -1,37 +1,95 @@
 /* ==========================================================================
-   stats.css — the administrator statistics screen.
-   Charts are drawn with plain elements (bars, lines, donuts) so there is no
-   charting library to load and nothing to break offline.
+   stats.css — administrator statistics and team roster, plus A4 print sheet.
+   All charts use flat HTML and SVG strokes — no charting library, no
+   gradients, and every datum is reachable by keyboard and screen reader.
    ========================================================================== */
+
+/* ---- Range selector (compact visually, 44px touch target) -------------- */
 
 .range-bar {
     display: inline-flex;
+    align-items: center;
     gap: 2px;
-    padding: 3px;
-    border-radius: var(--r-pill);
-    background: var(--surface);
-    border: 1px solid var(--border-soft);
+    padding: 4px;
+    border-radius: var(--r-sm);
+    background: transparent;
+    border: 1px solid var(--border);
 }
 
 .range-bar button {
-    padding: 6px 13px;
-    border-radius: var(--r-pill);
-    font-size: 12px;
+    position: relative;
+    min-width: 44px;
+    padding: 4px 12px;
+    border-radius: var(--r-sm);
+    font-size: var(--text-xs);
     font-weight: 600;
     color: var(--text-muted);
-    transition: all var(--fast) var(--ease);
+    transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
 }
 
-.range-bar button:hover { color: var(--text); }
-.range-bar button.is-active { color: var(--text-strong); background: var(--surface-3); }
+.range-bar button::before {
+    content: "";
+    position: absolute;
+    top: -8px;
+    bottom: -8px;
+    left: 0;
+    right: 0;
+}
 
-/* ---- member cards ---- */
+.range-bar button:hover:not(:disabled),
+.range-bar button:focus-visible { color: var(--text); }
+
+.range-bar button.is-active {
+    color: var(--text-strong);
+    background: var(--surface-3);
+}
+
+.stats-section-title { margin: 8px 0 12px; }
+
+/* ---- Accessible flat tooltip (shared by bars, trend columns and rings) -- */
+
+.has-tip { position: relative; }
+
+.chart-tip {
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 8px);
+    transform: translateX(-50%);
+    z-index: 30;
+    width: max-content;
+    max-width: 240px;
+    padding: 8px 12px;
+    border-radius: var(--r-sm);
+    background: var(--code-bg);
+    border: 1px solid var(--border-strong);
+    font-family: var(--font);
+    font-size: var(--text-xs);
+    font-weight: 500;
+    line-height: 1.45;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-strong);
+    text-align: left;
+    white-space: normal;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity var(--fast) var(--ease);
+}
+
+.has-tip:hover > .chart-tip,
+.has-tip:focus-visible > .chart-tip {
+    opacity: 1;
+    visibility: visible;
+}
+
+.trend-col:first-child > .chart-tip { left: 0; transform: none; }
+.trend-col:last-child > .chart-tip  { left: auto; right: 0; transform: none; }
+.donut.has-tip > .chart-tip         { left: auto; right: 0; transform: none; }
+
+/* ---- Member cards & team roster rows ----------------------------------- */
 
 .member-grid {
     display: grid;
-    /* min(), not a bare 380px: a track with a fixed floor cannot go below it,
-       so on a phone the cards carried on at full width and the row ran off
-       the side of the page. */
     grid-template-columns: repeat(auto-fill, minmax(min(380px, 100%), 1fr));
     gap: 16px;
 }
@@ -39,104 +97,161 @@
 .member-card {
     display: flex;
     flex-direction: column;
-    gap: 14px;
-    padding: 18px;
+    gap: 16px;
+    padding: 16px;
     border-radius: var(--r-lg);
-    background: var(--surface-2);
+    background: transparent;
     border: 1px solid var(--border-soft);
-    animation: rise-in var(--med) var(--ease) both;
+    min-width: 0;
 }
 
-.member-head { display: flex; align-items: center; gap: 13px; }
+.member-card-roster {
+    background: transparent;
+    border: none;
+    border-top: 1px solid var(--border-soft);
+    border-radius: 0;
+    padding: 16px 0 0;
+}
 
-.member-head .avatar { width: 40px; height: 40px; font-size: 15px; }
+.member-card-roster:first-child {
+    border-top: none;
+    padding-top: 0;
+}
+
+.member-head { display: flex; align-items: center; gap: 12px; }
 
 .member-id { min-width: 0; flex: 1; }
-.member-id strong { display: block; font-size: 15px; }
-.member-id small { font-size: 11.5px; color: var(--text-muted); }
 
-/* --pct is set per card from JS. Registering it gives it a type, which is
-   what lets the ring animate instead of jumping. */
-@property --pct {
-    syntax: "<number>";
-    inherits: false;
-    initial-value: 0;
+.member-id strong {
+    display: block;
+    font-size: var(--text-md);
+    font-weight: 600;
+    color: var(--text-strong);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-/* Donut: a conic-gradient ring driven by --pct */
+.member-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+    margin-top: 2px;
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+}
+
+.member-meta .mono {
+    color: var(--text-dim);
+    overflow-wrap: anywhere;
+}
+
+/* ---- Flat SVG donut ring (zero gradients, prints cleanly) -------------- */
+
 .donut {
     position: relative;
     width: 56px;
     height: 56px;
     flex: none;
-    border-radius: 50%;
-    background:
-        conic-gradient(var(--donut-color, var(--accent)) calc(var(--pct, 0) * 1%),
-                       var(--surface-3) 0);
     display: grid;
     place-items: center;
-    transition: --pct var(--slow) var(--ease);
+    border-radius: var(--r-pill);
 }
 
-.donut::after {
-    content: "";
+.donut svg {
     position: absolute;
-    inset: 6px;
-    border-radius: 50%;
-    background: var(--surface);
+    inset: 0;
+    width: 56px;
+    height: 56px;
+    transform: rotate(-90deg);
 }
 
-.donut span {
+.donut-track {
+    fill: none;
+    stroke: var(--surface-3);
+    stroke-width: 5;
+}
+
+.donut-arc {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 5;
+    stroke-linecap: round;
+}
+
+.donut-label {
     position: relative;
-    font-size: 12.5px;
-    font-weight: 700;
     font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-strong);
 }
 
-/* ---- bars ---- */
+/* ---- Ranking bars ------------------------------------------------------ */
 
-.bars { display: flex; flex-direction: column; gap: 9px; }
+.bars { display: flex; flex-direction: column; gap: 12px; }
 
-.bar-row { display: flex; flex-direction: column; gap: 5px; }
+.bar-row {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 4px 8px;
+    margin: 0 -8px;
+    border-radius: var(--r-sm);
+    transition: background var(--fast) var(--ease);
+}
+
+.bar-row:hover,
+.bar-row:focus-visible { background: var(--surface-3); }
 
 .bar-top {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    gap: 10px;
-    font-size: 12.5px;
+    gap: 12px;
+    font-size: var(--text-sm);
+    color: var(--text);
 }
 
-.bar-top .bar-value { font-family: var(--font-mono); color: var(--text-muted); font-size: 11.5px; }
+.bar-top .bar-value {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    font-variant-numeric: tabular-nums;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
 
 .bar-track {
-    height: 7px;
-    border-radius: var(--r-pill);
+    height: 8px;
+    border-radius: var(--r-sm);
     background: var(--surface-3);
     overflow: hidden;
 }
 
 .bar-fill {
     height: 100%;
-    border-radius: var(--r-pill);
-    background: var(--accent-deep);
-    transition: width var(--slow) var(--ease);
+    border-radius: var(--r-sm);
+    background: var(--neutral-bar);
 }
 
-.bar-fill.warn { background: var(--warn); }
-.bar-fill.danger { background: var(--danger); }
-.bar-fill.violet { background: var(--success); }
-.bar-fill.success { background: var(--success); }
+.bar-row:first-child .bar-fill { background: var(--accent); }
 
-/* ---- trend chart ---- */
+/* ---- Trend chart (neutral luminance marks + quiet baseline gridlines) -- */
 
 .trend {
+    position: relative;
     display: flex;
     align-items: flex-end;
-    gap: 3px;
-    height: 68px;
+    gap: 4px;
+    height: 80px;
     padding: 8px 0 0;
+    border-top: 1px dashed var(--border-soft);
+    border-bottom: 1px solid var(--border);
 }
+
+.trend-compact { height: 52px; }
 
 .trend-col {
     position: relative;
@@ -144,31 +259,78 @@
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
+    gap: 2px;
     height: 100%;
     min-width: 0;
+    padding: 0 1px;
+    border-radius: var(--r-sm);
+    cursor: pointer;
 }
 
 .trend-bar {
     width: 100%;
-    border-radius: 3px 3px 0 0;
-    background: var(--accent-deep);
+    border-radius: var(--r-sm) var(--r-sm) 0 0;
+    background: var(--accent);
     min-height: 2px;
-    transition: height var(--slow) var(--ease);
+    transition: opacity var(--fast) var(--ease);
 }
 
-.trend-bar.override { background: var(--surface-4); }
+.trend-bar.is-zero {
+    background: var(--surface-3);
+    border-radius: var(--r-sm);
+}
 
-.trend-col:hover .trend-bar { background: var(--accent); }
+.trend-bar.override {
+    background: var(--chart-muted);
+    border-radius: var(--r-sm) var(--r-sm) 0 0;
+}
+
+.trend-col:hover .trend-bar,
+.trend-col:focus-visible .trend-bar { opacity: 0.85; }
+
+.trend-col:hover .trend-bar.is-zero,
+.trend-col:focus-visible .trend-bar.is-zero { background: var(--border-strong); }
 
 .trend-axis {
     display: flex;
     justify-content: space-between;
-    margin-top: 6px;
-    font-size: 10.5px;
+    margin-top: 8px;
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    font-variant-numeric: tabular-nums;
     color: var(--text-muted);
 }
 
-/* ---- timeline ---- */
+.trend-note {
+    margin-top: 12px;
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+}
+
+/* ---- Legend ------------------------------------------------------------ */
+
+.legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-top: 12px;
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+}
+
+.legend span { display: inline-flex; align-items: center; gap: 8px; }
+
+.swatch {
+    width: 8px;
+    height: 8px;
+    border-radius: var(--r-sm);
+    flex: none;
+}
+
+.swatch-blocked  { background: var(--accent); }
+.swatch-override { background: var(--chart-muted); }
+
+/* ---- Activity timeline (avatar + kind icon + mono 80-char log prefix) -- */
 
 .timeline {
     display: flex;
@@ -180,47 +342,281 @@
 
 .tl-item {
     display: grid;
-    grid-template-columns: 18px minmax(0, 1fr) auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: start;
     gap: 12px;
-    padding: 10px 0;
+    padding: 12px 0;
     border-bottom: 1px solid var(--border-soft);
-    font-size: 13px;
+    font-size: var(--text-sm);
+    cursor: text;
 }
 
 .tl-item:last-child { border-bottom: none; }
 
+.tl-lead {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 1px;
+}
+
 .tl-mark {
     display: grid;
     place-items: center;
-    width: 18px;
-    height: 18px;
-    margin-top: 2px;
-    border-radius: 50%;
-    background: var(--surface-2);
+    width: 24px;
+    height: 24px;
+    border-radius: var(--r-pill);
+    background: transparent;
     border: 1px solid var(--border);
 }
 
-.tl-mark .icon { width: 10px; height: 10px; }
-.tl-item.kind-blocked .tl-mark { color: var(--danger); border-color: var(--border); }
-.tl-item.kind-override .tl-mark { color: var(--warn); border-color: var(--border); }
-.tl-item.kind-prompt .tl-mark { color: var(--accent); border-color: var(--border); }
-.tl-item.kind-login .tl-mark { color: var(--success); border-color: var(--border); }
+.tl-mark .icon { width: var(--icon-xs); height: var(--icon-xs); color: var(--text-muted); }
 
 .tl-body { min-width: 0; }
-.tl-body strong { font-weight: 600; }
-.tl-body small { display: block; color: var(--text-muted); font-size: 12px; overflow-wrap: anywhere; }
-.tl-time { font-size: 11.5px; color: var(--text-muted); white-space: nowrap; font-family: var(--font-mono); }
 
-/* ---- legend ---- */
-
-.legend {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 14px;
-    font-size: 11.5px;
-    color: var(--text-muted);
+.tl-body strong {
+    display: block;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--text-strong);
 }
 
-.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.tl-detail {
+    display: block;
+    margin-top: 2px;
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    overflow-wrap: anywhere;
+}
 
-.swatch { width: 9px; height: 9px; border-radius: 2px; }
+.tl-prefix {
+    display: block;
+    margin-top: 4px;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--text-dim);
+}
+
+.tl-time {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    font-variant-numeric: tabular-nums;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+@media (max-width: 620px) {
+    .tl-item {
+        grid-template-columns: auto minmax(0, 1fr);
+    }
+    .tl-time {
+        grid-column: 2;
+        margin-top: -4px;
+    }
+}
+
+/* ---- Print footer (hidden on screen, rendered on A4 print) ------------- */
+
+.print-footer { display: none; }
+
+/* --------------------------------------------------------------------------
+   A4 board-ready print sheet for statistics and team pages.
+   Drops all chrome and controls, renders black on white, and hides every
+   stored prompt excerpt so sensitive prefixes never reach paper.
+   -------------------------------------------------------------------------- */
+
+@media print {
+    @page {
+        size: A4 portrait;
+        margin: 12mm 14mm;
+    }
+
+    :root { color-scheme: light; }
+
+    html, body, .app-shell {
+        height: auto !important;
+        min-height: 0 !important;
+        background: var(--print-bg) !important;
+        color: var(--print-ink) !important;
+        font-size: var(--text-xs);
+        line-height: 1.4;
+        overflow: visible !important;
+    }
+
+    .sidebar,
+    .sidebar-scrim,
+    .page-bar,
+    .page-head-actions,
+    .no-print,
+    .toast-container,
+    .overlay,
+    .chart-tip,
+    .tl-prefix {
+        display: none !important;
+    }
+
+    .layout {
+        display: block !important;
+        min-height: 0 !important;
+    }
+
+    .page-head {
+        padding: 0 0 8px !important;
+        margin-bottom: 12px;
+        border-bottom: 1px solid var(--print-ink) !important;
+    }
+
+    .page-head h1 {
+        font-size: var(--text-xl) !important;
+        color: var(--print-ink) !important;
+        margin: 2px 0 !important;
+    }
+
+    .page-head .dim,
+    .eyebrow,
+    .muted,
+    .tile-label,
+    .tile-foot,
+    .tile-delta,
+    .bar-top .bar-value,
+    .member-meta,
+    .tl-detail,
+    .tl-time,
+    .trend-axis,
+    .legend {
+        color: var(--print-muted) !important;
+    }
+
+    .page-body,
+    .page-body-wide {
+        max-width: 100% !important;
+        padding: 0 !important;
+        gap: 12px !important;
+    }
+
+    .tiles,
+    .tiles-5 {
+        grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+        gap: 8px !important;
+    }
+
+    .tiles-4 {
+        grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+        gap: 8px !important;
+    }
+
+    .tile,
+    .tile-compact,
+    .card,
+    .member-card,
+    .empty-inline {
+        background: var(--print-bg) !important;
+        color: var(--print-ink) !important;
+        border: 1px solid var(--print-rule) !important;
+        box-shadow: none !important;
+        padding: 8px 12px !important;
+        border-radius: var(--r-sm) !important;
+        break-inside: avoid;
+    }
+
+    .tile-value {
+        font-size: var(--text-lg) !important;
+        color: var(--print-ink) !important;
+    }
+
+    .tile-value-sm {
+        font-size: var(--text-md) !important;
+    }
+
+    .card-title,
+    .bar-top,
+    .member-id strong,
+    .tl-body strong,
+    .donut-label {
+        color: var(--print-ink) !important;
+    }
+
+    .card-title .icon,
+    .tile-label .icon,
+    .tl-mark {
+        display: none !important;
+    }
+
+    .avatar {
+        background: var(--print-soft) !important;
+        color: var(--print-ink) !important;
+        border: 1px solid var(--print-rule) !important;
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+    }
+
+    .bar-track {
+        background: var(--print-soft) !important;
+        border: 1px solid var(--print-rule) !important;
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+    }
+
+    .bar-fill,
+    .trend-bar,
+    .swatch {
+        background: var(--print-ink) !important;
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+    }
+
+    .trend-bar.override,
+    .swatch-override {
+        background: var(--print-muted) !important;
+    }
+
+    .trend-bar.is-zero {
+        background: var(--print-rule) !important;
+    }
+
+    .donut-track { stroke: var(--print-rule) !important; }
+    .donut-arc   { stroke: var(--print-ink) !important; }
+
+    .trend {
+        height: 44px !important;
+        border-color: var(--print-rule) !important;
+    }
+    .trend-compact { display: none !important; }
+
+    .stats-split {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 8px !important;
+    }
+
+    .member-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 8px !important;
+    }
+
+    .timeline {
+        max-height: none !important;
+        overflow: visible !important;
+    }
+
+    .tl-item {
+        padding: 4px 0 !important;
+        border-bottom-color: var(--print-rule) !important;
+    }
+
+    /* Keep print sheets concise: cap long activity logs to the latest 10 rows. */
+    .tl-item:nth-child(n + 11) { display: none !important; }
+
+    .print-footer {
+        display: block !important;
+        margin-top: 12px;
+        padding-top: 8px;
+        border-top: 1px solid var(--print-rule);
+        font-family: var(--font-mono);
+        font-size: var(--text-xs);
+        color: var(--print-muted) !important;
+    }
+}

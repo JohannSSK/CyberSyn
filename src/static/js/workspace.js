@@ -1,9 +1,9 @@
 /* ==========================================================================
    workspace.js — the chat screen.
 
-   Owns: the conversation list, the message stream, sending a prompt through
-   the three checks, admin override, and per-message edit / delete /
-   regenerate / copy, plus in-chat search.
+   Owns: the conversation list, first-run starter prompts, live three-stage
+   screening tracker, teaching-moment blocked cards, one-off administrator
+   override, post-block grace note, per-message actions and in-chat search.
    ========================================================================== */
 
 (function () {
@@ -15,15 +15,36 @@
     var Dom = window.Dom;
     var Icons = window.Icons;
     var Loading = window.Loading;
+    var Shell = window.Shell;
+    var Stages = window.Stages;
     var $ = Dom.$;
+
+    function t(text) {
+        return window.I18n && typeof window.I18n.t === "function"
+            ? window.I18n.t(text)
+            : text;
+    }
+
+    function reducedMotion() {
+        return !!(window.matchMedia &&
+            window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    }
+
+    var DRAFT_CHAT_KEY = "__draft__";
 
     var state = {
         chats: [],
+        chatsLoaded: false,
         chatId: null,
         messages: [],
         settings: { check1: true, check2: true, check3: true },
         query: "",
-        busy: false
+        busy: false,
+        // Per-chat session memory for D4 grace note and override receipts.
+        blockedChats: {},
+        gracedChats: {},
+        gracedMessages: {},
+        overriddenMessages: {}
     };
 
     var nodes = {
@@ -43,18 +64,26 @@
         searchCount: $("#search-count"),
         otherResults: $("#other-chat-results"),
         checksSummary: $("#checks-summary"),
-        checksStatus: $("#checks-status")
+        checksStatus: $("#checks-status"),
+        missingKeyNote: $("#missing-key-note"),
+        dismissKeyNote: $("#btn-dismiss-key-note"),
+        firstRunTpl: $("#first-run-template")
     };
+
+    function currentChatKey() {
+        return state.chatId ? String(state.chatId) : DRAFT_CHAT_KEY;
+    }
 
     /* ------------------------------------------------------------------
        Helpers
        ------------------------------------------------------------------ */
 
     function iconButton(name, title, action, danger) {
+        var label = t(title);
         var btn = Dom.el("button", "icon-btn" + (danger ? " danger" : ""));
         btn.type = "button";
-        btn.title = title;
-        btn.setAttribute("aria-label", title);
+        btn.title = label;
+        btn.setAttribute("aria-label", label);
         btn.innerHTML = Icons.html(name);
         Dom.on(btn, "click", action);
         return btn;
@@ -65,59 +94,131 @@
         nodes.input.style.height = Math.min(nodes.input.scrollHeight, 180) + "px";
     }
 
-    /* ------------------------------------------------------------------
-       Waiting indicator
+    function fillComposer(text) {
+        nodes.input.value = text;
+        autoGrow();
+        nodes.input.focus();
+        nodes.input.setSelectionRange(text.length, text.length);
+        if (typeof nodes.input.scrollIntoView === "function") {
+            nodes.input.scrollIntoView({
+                block: "nearest",
+                behavior: reducedMotion() ? "auto" : "smooth"
+            });
+        }
+    }
 
-       The server runs every check and then the model call inside one request,
-       so there is no real progress to report. What is honest is to say which
-       stage is being worked through and cycle through the ones that are
-       actually switched on, rather than freezing on one word or claiming
-       completion it cannot know about.
+    function scrollToEnd(smooth) {
+        var useSmooth = smooth && !reducedMotion();
+        requestAnimationFrame(function () {
+            nodes.viewport.scrollTo({
+                top: nodes.viewport.scrollHeight,
+                behavior: useSmooth ? "smooth" : "auto"
+            });
+        });
+    }
+
+    /* ------------------------------------------------------------------
+       In-flight waiting card — anonymous copy with no stage names,
+       resolving straight from the server verdict with no fake timers.
        ------------------------------------------------------------------ */
 
-    var Stages = window.Stages;
-
+    var LONG_WAIT_MS = 8000;
     var pending = null;
-
 
     function showPending(promptText, bypass) {
         hidePending();
 
-        var order = ["check1", "check2", "check3"].filter(function (id) {
+        var enabled = ["check1", "check2", "check3"].filter(function (id) {
             return state.settings[id] !== false;
         });
-        var script = order.map(function (id) { return Stages.checking(id); });
-        script.unshift("Thinking");
-        script.push(bypass ? "Sending with approval" : "Waiting for the model");
+        var checking = !bypass && enabled.length > 0;
 
         var wrap = Dom.el("div", "msg");
         var head = Dom.el("div", "msg-head");
-        head.innerHTML = Icons.html("profile") + '<span class="who">You</span>';
+        head.innerHTML = Icons.html("profile") +
+            '<span class="who">' + Dom.esc(t("You")) + "</span>";
         wrap.appendChild(head);
         wrap.appendChild(Dom.el("div", "bubble bubble-user", promptText));
 
         var note = Dom.el("div", "msg-pending");
-        note.innerHTML =
-            '<span class="pending-dots" aria-hidden="true">' +
-            "<i></i><i></i><i></i></span>" +
-            '<span class="pending-text"></span>';
-        wrap.appendChild(note);
 
+        var line = Dom.el("div", "pending-line");
+        var dots = null;
+        if (checking) {
+            dots = Dom.el("span", "pending-dots");
+            dots.setAttribute("aria-hidden", "true");
+            for (var d = 0; d < 3; d++) {
+                dots.appendChild(Dom.el("span", "pending-dot"));
+            }
+            line.appendChild(dots);
+        }
+
+        var label = Dom.el("span", "pending-text");
+        label.setAttribute("role", "status");
+        label.setAttribute("aria-live", "polite");
+
+        var labelKey = bypass
+            ? "Sending once with administrator approval."
+            : (!enabled.length
+                ? "Waiting for the AI reply."
+                : "Checking…");
+        var slowKey = "Still working — normal on a long paste.";
+        var resolvedClean = false;
+
+        label.textContent = t(labelKey);
+        line.appendChild(label);
+
+        var elapsed = Dom.el("span", "pending-elapsed", "0.0s");
+        elapsed.setAttribute("aria-hidden", "true");
+        elapsed.setAttribute("data-no-i18n", "");
+        line.appendChild(elapsed);
+
+        var slow = Dom.el("span", "pending-slow hidden");
+        slow.setAttribute("aria-hidden", "true");
+        line.appendChild(slow);
+
+        note.appendChild(line);
+        wrap.appendChild(note);
         nodes.stream.appendChild(wrap);
         scrollToEnd(true);
 
-        var label = note.querySelector(".pending-text");
-        var index = 0;
-        var tick = setInterval(function () {
-            label.textContent = script[index % script.length] + "…";
-            index += 1;
-        }, 900);
-        label.textContent = script[0] + "…";
+        var startedAt = Date.now();
+        var slowShown = false;
+        var elapsedTimer = setInterval(function () {
+            var ms = Math.max(0, Date.now() - startedAt);
+            elapsed.textContent = (ms / 1000).toFixed(1) + "s";
+            if (!slowShown && ms >= LONG_WAIT_MS) {
+                slowShown = true;
+                slow.textContent = t(slowKey);
+                slow.classList.remove("hidden");
+            }
+        }, 100);
+
+        function stopTimer() {
+            if (elapsedTimer !== null) {
+                clearInterval(elapsedTimer);
+                elapsedTimer = null;
+            }
+        }
 
         pending = {
             wrap: wrap,
+            relocalise: function () {
+                label.textContent = t(resolvedClean ? "All checks passed." : labelKey);
+                if (slowShown) slow.textContent = t(slowKey);
+            },
+            resolve: function (blockedStage) {
+                stopTimer();
+                slow.classList.add("hidden");
+                if (dots) dots.remove();
+                if (!checking) return;
+                if (!blockedStage) {
+                    resolvedClean = true;
+                    label.textContent = t("All checks passed.");
+                }
+            },
             stop: function () {
-                clearInterval(tick);
+                stopTimer();
                 if (wrap.parentNode) wrap.remove();
             }
         };
@@ -129,27 +230,69 @@
         pending = null;
     }
 
-    function scrollToEnd(smooth) {
-        requestAnimationFrame(function () {
-            nodes.viewport.scrollTo({
-                top: nodes.viewport.scrollHeight,
-                behavior: smooth ? "smooth" : "auto"
-            });
-        });
+    /* ------------------------------------------------------------------
+       Flat local-checks status indicator
+       ------------------------------------------------------------------ */
+
+    function checksSummaryText(on) {
+        if (on === 3) return t("All checks on");
+        if (on === 0) return t("All checks off");
+        return t("Checks: " + on + " of 3 on");
     }
 
     function updateChecksBadge() {
         var on = ["check1", "check2", "check3"].filter(function (k) {
             return state.settings[k];
         }).length;
-        nodes.checksSummary.textContent = on + " of 3 checks active";
-        nodes.checksStatus.classList.toggle("off", on === 0);
-        if (on === 0) {
-            nodes.checksStatus.querySelector(".dot").style.color = "var(--warn)";
-        } else {
-            nodes.checksStatus.querySelector(".dot").style.color = "var(--success)";
+        var summary = checksSummaryText(on);
+        nodes.checksSummary.textContent = summary;
+        nodes.checksStatus.removeAttribute("title");
+        nodes.checksStatus.setAttribute("aria-label", summary);
+        nodes.checksStatus.classList.toggle("is-all-on", on === 3);
+        nodes.checksStatus.classList.toggle("is-partial", on > 0 && on < 3);
+        nodes.checksStatus.classList.toggle("is-off", on === 0);
+    }
+
+    /* ------------------------------------------------------------------
+       Missing provider key callout (v3 Item 2)
+
+       Inferred strictly from the existing /api/admin/employee/settings
+       API_KEY_MASK field (empty when no key is stored). Non-blocking and
+       dismissible for the current browser session.
+       ------------------------------------------------------------------ */
+
+    function missingKeyStorageKey() {
+        var m = Api.Session.getMember() || {};
+        return "cybersyn_missing_key_dismissed_" +
+            (m.parentId || "0") + "_" + (m.employeeId || "0");
+    }
+
+    function isMissingKeyDismissed() {
+        try {
+            return sessionStorage.getItem(missingKeyStorageKey()) === "1";
+        } catch (err) {
+            return false;
         }
     }
+
+    function updateMissingKeyNote(data) {
+        if (!nodes.missingKeyNote || !data || typeof data.API_KEY_MASK !== "string") {
+            return;
+        }
+        var hasKey = data.API_KEY_MASK.length > 0;
+        if (hasKey) {
+            try { sessionStorage.removeItem(missingKeyStorageKey()); } catch (err) {}
+            nodes.missingKeyNote.classList.add("hidden");
+            return;
+        }
+        nodes.missingKeyNote.classList.toggle("hidden", isMissingKeyDismissed());
+    }
+
+    Dom.on(nodes.dismissKeyNote, "click", function () {
+        try { sessionStorage.setItem(missingKeyStorageKey(), "1"); } catch (err) {}
+        if (nodes.missingKeyNote) nodes.missingKeyNote.classList.add("hidden");
+        nodes.input.focus();
+    });
 
     /* ------------------------------------------------------------------
        Conversation list
@@ -158,16 +301,21 @@
     function renderChatList() {
         nodes.list.innerHTML = "";
         if (!state.chats.length) {
-            nodes.list.appendChild(Dom.el("p", "tiny muted", "No conversations yet."));
+            nodes.list.appendChild(Dom.el(
+                "p",
+                "chat-list-empty",
+                t("No conversations yet — your chats appear here once you send a message.")
+            ));
             return;
         }
         state.chats.forEach(function (chat) {
             var item = Dom.el("button", "chat-item");
             item.type = "button";
+            item.title = chat.title || t("New chat");
             if (chat.id === state.chatId) item.classList.add("is-active");
             item.innerHTML = Icons.html("chat") +
-                '<span class="chat-item-title">' + Dom.esc(chat.title) + "</span>" +
-                '<span class="chat-item-meta">' + Dom.timeAgo(chat.updated_at) + "</span>";
+                '<span class="chat-item-title" data-no-i18n>' + Dom.esc(chat.title) + "</span>" +
+                '<span class="chat-item-meta">' + Dom.esc(Dom.timeAgo(chat.updated_at)) + "</span>";
             Dom.on(item, "click", function () { openChat(chat.id); });
             nodes.list.appendChild(item);
         });
@@ -176,12 +324,13 @@
     function loadChats() {
         return Api.post("CHATS", {}).then(function (data) {
             state.chats = data.chats || [];
+            state.chatsLoaded = true;
             renderChatList();
         });
     }
 
     /* ------------------------------------------------------------------
-       Message rendering
+       Message rendering & empty states (D1, D4, D5)
        ------------------------------------------------------------------ */
 
     function renderMessage(message) {
@@ -190,13 +339,11 @@
 
         var head = Dom.el("div", "msg-head");
         head.innerHTML = Icons.html("profile") +
-            '<span class="who">You</span>' +
-            '<span>·</span><span>' + Dom.stamp(message.created_at) + "</span>" +
-            (message.edited ? "<span>· edited</span>" : "");
+            '<span class="who">' + Dom.esc(t("You")) + "</span>" +
+            "<span>·</span><span>" + Dom.esc(Dom.stamp(message.created_at)) + "</span>" +
+            (message.edited ? "<span>· " + Dom.esc(t("edited")) + "</span>" : "");
         wrap.appendChild(head);
 
-        // Your message. The prompt is set as text, never as HTML, so search
-        // highlighting has no markup to break.
         var mine = Dom.el("div", "bubble bubble-user");
         var mineText = Dom.el("p");
         mineText.textContent = message.prompt || "";
@@ -204,42 +351,75 @@
         Dom.highlightText(mineText, state.query);
         wrap.appendChild(mine);
 
-        // The model's answer (absent when the prompt was blocked)
+        var hasPrompt = !!(message.prompt && String(message.prompt).trim() !== "");
+        if (hasPrompt) {
+            var userActions = Dom.el("div", "msg-actions msg-actions-user");
+            var editBtn = iconButton("edit", "Edit this message", function () {
+                beginEdit(wrap, message, editBtn);
+            });
+            userActions.appendChild(editBtn);
+            wrap.appendChild(userActions);
+        }
+
         var hasAnswer = message.answer && String(message.answer).trim() !== "" &&
             String(message.answer) !== "NULL";
+        var reply = null;
+        var copyTintTimer = null;
         if (hasAnswer) {
-            var reply = Dom.el("div", "bubble bubble-ai");
+            reply = Dom.el("div", "bubble bubble-ai");
             reply.innerHTML = window.Markdown.render(message.answer);
             Dom.highlightText(reply, state.query);
             wrap.appendChild(reply);
         }
 
-        // Actions: edit and delete apply to your prompt, regenerate to the answer
-        var actions = Dom.el("div", "msg-actions");
-        actions.appendChild(iconButton("copy", "Copy the answer", function () {
+        // Approved override amber receipt (Section 6)
+        if (message.id && state.overriddenMessages[message.id]) {
+            wrap.appendChild(Dom.el(
+                "p",
+                "msg-receipt msg-receipt-override",
+                t("Sent once with administrator approval — this was logged.")
+            ));
+        } else if (message.id && state.gracedMessages[message.id]) {
+            // Once-per-chat grace note after rewriting a blocked prompt (D4)
+            wrap.appendChild(Dom.el(
+                "p",
+                "msg-receipt msg-receipt-grace",
+                t("Nicely rewritten — that went through cleanly.")
+            ));
+        }
+
+        var actionsAi = Dom.el("div", "msg-actions msg-actions-ai");
+        actionsAi.appendChild(iconButton("copy", "Copy the answer", function () {
             Dom.copyText(message.answer || "")
-                .then(function () { Loading.toast("Copied to clipboard.", "success"); })
-                .catch(function () { Loading.toast("Could not copy.", "error"); });
-        }));
-        actions.appendChild(iconButton("edit", "Edit this message", function () {
-            beginEdit(wrap, message);
+                .then(function () {
+                    if (reply) {
+                        if (copyTintTimer) clearTimeout(copyTintTimer);
+                        reply.classList.add("is-copied");
+                        copyTintTimer = setTimeout(function () {
+                            reply.classList.remove("is-copied");
+                            copyTintTimer = null;
+                        }, 700);
+                    }
+                    Loading.toast("Answer copied.", "success");
+                })
+                .catch(function () {
+                    Loading.toast("Clipboard access was blocked — select the text to copy it.", "error");
+                });
         }));
         if (hasAnswer) {
-            actions.appendChild(iconButton("regenerate", "Generate a different answer", function () {
-                regenerate(message, actions);
-            }));
+            var regenBtn = iconButton("regenerate", "Generate a different answer", function () {
+                regenerate(message, regenBtn);
+            });
+            actionsAi.appendChild(regenBtn);
         }
-        actions.appendChild(iconButton("delete", "Delete this message", function () {
-            removeMessage(message, actions);
+        actionsAi.appendChild(iconButton("delete", "Delete this message", function () {
+            removeMessage(message, actionsAi);
         }, true));
-        wrap.appendChild(actions);
+        wrap.appendChild(actionsAi);
 
         return wrap;
     }
 
-    /* A message matches when either side of the exchange contains the query.
-       Rendering decides visibility, rather than hiding nodes afterwards, so a
-       re-render can never drop the filter. */
     function matchesQuery(message) {
         if (!state.query) return true;
         var needle = state.query.toLowerCase();
@@ -247,10 +427,25 @@
             String(message.answer || "").toLowerCase().indexOf(needle) !== -1;
     }
 
+    function renderFirstRun() {
+        if (!nodes.firstRunTpl || !nodes.firstRunTpl.content) return false;
+        var fragment = nodes.firstRunTpl.content.cloneNode(true);
+        Dom.$$("[data-starter]", fragment).forEach(function (chip) {
+            Dom.on(chip, "click", function () {
+                fillComposer(chip.textContent.trim());
+            });
+        });
+        nodes.stream.appendChild(fragment);
+        if (window.I18n && typeof window.I18n.apply === "function") {
+            window.I18n.apply();
+        }
+        return true;
+    }
+
     function emptyStream(title, body, icon) {
         nodes.stream.innerHTML =
             '<div class="empty">' + Icons.html(icon, "icon") +
-            "<h3>" + Dom.esc(title) + "</h3><p>" + Dom.esc(body) + "</p></div>";
+            "<h2>" + Dom.esc(title) + "</h2><p>" + Dom.esc(body) + "</p></div>";
     }
 
     function renderMessages() {
@@ -260,15 +455,25 @@
 
         if (!visible.length) {
             if (query) {
-                emptyStream(
-                    "No messages match",
-                    'Nothing in this chat contains "' + query + '".',
-                    "search"
-                );
+                var missBody = (window.I18n && window.I18n.current() === "el")
+                    ? "Κανένα μήνυμα σε αυτή τη συνομιλία δεν περιέχει «" + query +
+                      "». Δοκιμάστε άλλη λέξη ή πατήστε Esc."
+                    : 'No message in this chat mentions "' + query +
+                      '". Try another word or press Esc to show all messages.';
+                emptyStream(t("No messages match"), missBody, "search");
+            } else if (state.chatsLoaded && state.chats.length === 0) {
+                // D1: shown only when the member has zero conversations at all.
+                if (!renderFirstRun()) {
+                    emptyStream(
+                        t("What are we working on today?"),
+                        t("Every message is checked on this computer through three local checks before it reaches the AI."),
+                        "chat"
+                    );
+                }
             } else {
                 emptyStream(
-                    "Start the conversation",
-                    "Write a message below. Your enabled checks run here before the prompt is sent to the provider.",
+                    t("Start the conversation"),
+                    t("Write a message below. Every line is checked on this computer before it reaches the AI."),
                     "chat"
                 );
             }
@@ -276,17 +481,14 @@
             visible.forEach(function (message) {
                 nodes.stream.appendChild(renderMessage(message));
             });
-            // Only jump to the newest message when everything is on screen.
             if (!query) scrollToEnd(false);
         }
 
         nodes.searchCount.classList.toggle("hidden", !query);
         nodes.searchClear.classList.toggle("hidden", !query);
-        // The count floats over the field, so the field reserves room for it
-        // only while there is a count to show.
         if (nodes.searchBox) nodes.searchBox.classList.toggle("has-count", !!query);
         if (query) {
-            nodes.searchCount.textContent = visible.length + " " + Dom.plural(visible.length, "message");
+            nodes.searchCount.textContent = t(Dom.plural(visible.length, "message"));
         }
     }
 
@@ -294,34 +496,72 @@
        Per-message actions
        ------------------------------------------------------------------ */
 
-    function beginEdit(wrap, message) {
+    function beginEdit(wrap, message, trigger) {
+        if (wrap.classList.contains("is-editing")) return;
+        var bubble = wrap.querySelector(".bubble-user");
+        if (!bubble) return;
+
         wrap.classList.add("is-editing");
-        var editor = Dom.el("div", "msg-edit");
-        editor.innerHTML =
-            '<textarea class="msg-edit-input"></textarea>' +
-            '<div class="msg-edit-actions">' +
-            '  <button type="button" class="btn btn-sm btn-ghost msg-edit-cancel">Cancel</button>' +
-            '  <button type="button" class="btn btn-sm btn-primary msg-edit-save">Save</button>' +
+        bubble.classList.add("is-editing");
+        bubble.innerHTML =
+            '<textarea class="bubble-textarea" rows="1" aria-label="' +
+            Dom.esc(t("Edit this message")) + '"></textarea>' +
+            '<div class="bubble-edit-actions">' +
+            '  <kbd class="kbd bubble-edit-hint" aria-hidden="true">⌘↵</kbd>' +
+            '  <button type="button" class="btn btn-sm btn-ghost bubble-edit-cancel">' +
+            Dom.esc(t("Cancel")) + "</button>" +
+            '  <button type="button" class="btn btn-sm btn-primary bubble-edit-save">' +
+            Dom.esc(t("Save")) + "</button>" +
             "</div>";
 
-        var textarea = editor.querySelector("textarea");
-        textarea.value = message.prompt;
-        editor.querySelector("textarea").focus();
+        var textarea = bubble.querySelector(".bubble-textarea");
+        textarea.value = message.prompt || "";
 
-        var cancel = editor.querySelector(".msg-edit-cancel");
-        var save = editor.querySelector(".msg-edit-save");
+        var cancel = bubble.querySelector(".bubble-edit-cancel");
+        var save = bubble.querySelector(".bubble-edit-save");
 
-        Dom.on(cancel, "click", function () {
+        function sizeEditor() {
+            textarea.style.height = "auto";
+            if (textarea.scrollHeight > 0) {
+                var cap = Math.max(120, Math.round((window.innerHeight || 800) * 0.5));
+                textarea.style.height = Math.min(textarea.scrollHeight, cap) + "px";
+            }
+        }
+
+        function onBubbleKeydown(event) {
+            if (event.key === "Escape") {
+                event.preventDefault();
+                event.stopPropagation();
+                closeEditor();
+            } else if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+                event.preventDefault();
+                event.stopPropagation();
+                submitEdit();
+            }
+        }
+
+        function closeEditor() {
+            bubble.removeEventListener("keydown", onBubbleKeydown);
             wrap.classList.remove("is-editing");
-            editor.remove();
-        });
+            bubble.classList.remove("is-editing");
+            bubble.innerHTML = "";
+            var p = Dom.el("p");
+            p.textContent = message.prompt || "";
+            bubble.appendChild(p);
+            Dom.highlightText(p, state.query);
+            if (trigger && trigger.isConnected) trigger.focus();
+        }
 
-        Dom.on(save, "click", function () {
+        function submitEdit() {
+            if (save.disabled) return;
             var next = textarea.value.trim();
-            if (!next) { Loading.toast("The message cannot be empty.", "warn"); return; }
+            if (!next) {
+                Loading.toast("That message was empty — type a line first.", "warn");
+                textarea.focus();
+                return;
+            }
             if (next === message.prompt) {
-                wrap.classList.remove("is-editing");
-                editor.remove();
+                closeEditor();
                 return;
             }
             Loading.withButton(save, function () {
@@ -331,117 +571,214 @@
                     text: next
                 });
             }).then(function (data) {
+                bubble.removeEventListener("keydown", onBubbleKeydown);
                 state.messages = data.messages || [];
                 renderMessages();
+                if (message.id !== undefined && message.id !== null) {
+                    var targetId = String(message.id);
+                    var rows = nodes.stream.querySelectorAll(".msg");
+                    for (var i = 0; i < rows.length; i++) {
+                        if (rows[i].dataset.id === targetId) {
+                            var nextTrigger = rows[i].querySelector(".msg-actions-user .icon-btn");
+                            if (nextTrigger) nextTrigger.focus();
+                            break;
+                        }
+                    }
+                }
                 loadChats();
                 Loading.toast("Message updated.", "success");
             }).catch(function (err) {
                 Loading.toast(err.message, "error");
             });
-        });
+        }
 
-        wrap.appendChild(editor);
+        Dom.on(textarea, "input", sizeEditor);
+        Dom.on(cancel, "click", closeEditor);
+        Dom.on(save, "click", submitEdit);
+        bubble.addEventListener("keydown", onBubbleKeydown);
+
+        sizeEditor();
         textarea.focus();
+        textarea.setSelectionRange(textarea.value.length, textarea.value.length);
     }
 
     function removeMessage(message, button) {
-        if (!confirm(I18n.t("Delete this message? It is removed from the chat history."))) return;
-        Loading.withButton(button, function () {
-            return Api.post("MESSAGE_DELETE", {
-                chat_id: state.chatId,
-                message_id: message.id
+        Shell.confirm({
+            eyebrow: "Remove message",
+            title: "Delete this message?",
+            lost: "Removed: this message and its reply leave the conversation.",
+            kept: "Kept: workspace block and activity logs stay intact.",
+            confirmLabel: "Delete message",
+            cancelLabel: "Keep message",
+            danger: true
+        }).then(function (accepted) {
+            if (!accepted) return null;
+            return Loading.withButton(button, function () {
+                return Api.post("MESSAGE_DELETE", {
+                    chat_id: state.chatId,
+                    message_id: message.id
+                });
+            }).then(function (data) {
+                state.messages = data.messages || [];
+                renderMessages();
+                loadChats();
+                Loading.toast("Message deleted.", "success");
+            }).catch(function (err) {
+                Loading.toast(err.message, "error");
             });
-        }).then(function (data) {
-            state.messages = data.messages || [];
-            renderMessages();
-            loadChats();
-            Loading.toast("Message deleted.", "success");
-        }).catch(function (err) {
-            Loading.toast(err.message, "error");
         });
     }
 
     function regenerate(message, button) {
+        if (button && button.dataset && button.dataset.busy === "1") return;
         Loading.withButton(button, function () {
             return Api.post("CHAT_REGENERATE", {
                 chat_id: state.chatId,
                 message_id: message.id
             }, { timeout: requestBudget() });
         }).then(function (data) {
+            if (data.blocked) {
+                renderBlocked(data.block_info || {}, message.prompt || "");
+                return;
+            }
             state.messages = data.messages || [];
             renderMessages();
-            Loading.toast("Answer regenerated.", "success");
+            Loading.toast("New answer ready.", "success");
         }).catch(function (err) {
             Loading.toast(err.message, "error");
         });
     }
 
     /* ------------------------------------------------------------------
-       Blocked message card + admin override
+       Blocked message card + "Why?" trace expander + one-off override (D3)
        ------------------------------------------------------------------ */
 
     function renderBlocked(blockInfo, promptText) {
+        // Clear any empty-state notice if this was the chat's first attempt.
+        var emptyNode = nodes.stream.querySelector(".first-run, .empty");
+        if (emptyNode) emptyNode.remove();
+
         var wrap = Dom.el("div", "msg");
 
         var head = Dom.el("div", "msg-head");
-        head.innerHTML = Icons.html("profile") + '<span class="who">You</span>';
+        head.innerHTML = Icons.html("profile") +
+            '<span class="who">' + Dom.esc(t("You")) + "</span>";
         wrap.appendChild(head);
         wrap.appendChild(Dom.el("div", "bubble bubble-user", promptText));
 
         var card = Dom.el("div", "bubble bubble-blocked");
-        card.innerHTML =
-            '<div class="blocked-head">' + Icons.html("warning") +
-            "<span>Not sent — stopped by " + Dom.esc(Stages.name(blockInfo.stage)) + "</span></div>" +
-            '<p class="blocked-what">Nothing left this machine. The message was screened ' +
-            "on this computer, matched a rule, and was refused before it reached any " +
-            "AI provider.</p>" +
-            '<p class="blocked-why">' + Dom.esc(Stages.reason(blockInfo)) + "</p>";
 
-        // Everything the scanner flagged, not just the first thing.
-        var summary = Dom.el("div", "blocked-matches");
-        var found = Array.isArray(blockInfo.matches) ? blockInfo.matches : [];
-        if (!found.length) {
-            found = [{
+        var header = Dom.el("div", "blocked-head");
+        header.innerHTML = Icons.svg("warning", "icon") +
+            '<h3 class="blocked-verdict">' +
+            Dom.esc(Stages.verdict(blockInfo.stage)) + "</h3>";
+        card.appendChild(header);
+
+        card.appendChild(Dom.el(
+            "p",
+            "blocked-what",
+            t("Nothing left this computer. Your message stayed here and was not sent to the AI.")
+        ));
+        card.appendChild(Dom.el("p", "blocked-why", Stages.reason(blockInfo)));
+
+        // Every item the check flagged, with its category, line and snippet.
+        var found = Array.isArray(blockInfo.matches) && blockInfo.matches.length
+            ? blockInfo.matches
+            : [{
                 main_cause: blockInfo.main_cause,
                 line: blockInfo.line,
+                start_offset: blockInfo.start_offset,
+                end_offset: blockInfo.end_offset,
                 snippet: blockInfo.snippet
             }];
-        }
+
+        var summary = Dom.el("div", "blocked-matches");
         summary.innerHTML = found.map(function (match) {
+            var lineText = match.line
+                ? "<span>" + Dom.esc(t("line " + match.line)) + "</span>"
+                : "";
+            var snippetText = match.snippet
+                ? "<code>" + Dom.esc(match.snippet) + "</code>"
+                : "";
             return '<div class="blocked-match">' +
                 '<span class="badge badge-danger">' +
-                Dom.esc(match.main_cause || "match") + "</span>" +
-                "<span>line " + Dom.esc(match.line) + "</span>" +
-                "<code>" + Dom.esc(match.snippet || "") + "</code>" +
+                Dom.esc(match.main_cause || t("match")) + "</span>" +
+                lineText +
+                snippetText +
                 "</div>";
         }).join("");
         card.appendChild(summary);
 
-        /* Bypass: a button, not a password box sitting in every blocked card.
-           Pressing it asks who is approving, and the server is what enforces
-           it — the browser only collects the approval. */
+        // "Why?" expander with labelled mono trace rows (cause, line, offsets).
+        var expander = Dom.el("details", "blocked-expander");
+        var expSummary = Dom.el("summary", "blocked-summary", t("Why was this stopped?"));
+        var details = Dom.el("div", "blocked-details");
+        found.forEach(function (match) {
+            details.appendChild(Dom.el(
+                "div",
+                "blocked-detail-row",
+                Stages.detailLine(blockInfo.stage, {
+                    main_cause: match.main_cause || match.cause || blockInfo.main_cause,
+                    line: match.line || blockInfo.line,
+                    start_offset: typeof match.start_offset === "number"
+                        ? match.start_offset
+                        : blockInfo.start_offset,
+                    end_offset: typeof match.end_offset === "number"
+                        ? match.end_offset
+                        : blockInfo.end_offset
+                })
+            ));
+        });
+        expander.appendChild(expSummary);
+        expander.appendChild(details);
+        card.appendChild(expander);
+
+        // Constructive next step: restore the message to edit, or approve once.
+        var hasPrompt = typeof promptText === "string" && promptText.length > 0;
         var panel = Dom.el("div", "override-panel");
         panel.innerHTML =
-            '<button type="button" class="btn btn-sm override-ask">Send anyway</button>' +
-            '<p class="override-note">Needs an administrator password, and is ' +
-            "recorded in the audit trail.</p>";
+            '<p class="blocked-next">' +
+            Dom.esc(t("Ask an administrator to approve this once, or rephrase without the flagged details.")) +
+            "</p>" +
+            '<div class="blocked-cta-row">' +
+            (hasPrompt
+                ? '  <button type="button" class="btn btn-sm btn-ghost rephrase-btn">' +
+                  Dom.esc(t("Put my text back in the message box")) + "</button>"
+                : "") +
+            '  <button type="button" class="btn btn-sm btn-outline override-ask">' +
+            Dom.esc(t("Approve once")) + "</button>" +
+            "</div>" +
+            '<p class="override-note">' +
+            Dom.esc(t("One-off approvals need the administrator password and are recorded in the audit log.")) +
+            "</p>";
 
+        var ctaRow = panel.querySelector(".blocked-cta-row");
+        var rephrase = panel.querySelector(".rephrase-btn");
         var ask = panel.querySelector(".override-ask");
+
+        if (rephrase) {
+            Dom.on(rephrase, "click", function () {
+                fillComposer(promptText);
+            });
+        }
 
         Dom.on(ask, "click", function () {
             var form = Dom.el("div", "override-form");
             form.innerHTML =
-                '<label class="override-label">Administrator username' +
-                '<input class="input override-name" autocomplete="username"></label>' +
-                '<label class="override-label">Administrator password' +
-                '<input type="password" class="input override-pass" autocomplete="off"></label>' +
+                '<label class="override-label"><span>' +
+                Dom.esc(t("Administrator username")) + "</span>" +
+                '<input type="text" class="input override-name" autocomplete="username"></label>' +
+                '<label class="override-label"><span>' +
+                Dom.esc(t("Administrator password")) + "</span>" +
+                '<input type="password" class="input override-pass" ' +
+                'placeholder="' + Dom.esc(t("Administrator password")) + '" autocomplete="off"></label>' +
                 '<div class="override-actions">' +
                 '<button type="button" class="btn btn-sm btn-primary override-send">' +
-                "Approve &amp; send</button>" +
+                Dom.esc(t("Approve & send")) + "</button>" +
                 '<button type="button" class="btn btn-sm btn-ghost override-cancel">' +
-                "Cancel</button>" +
+                Dom.esc(t("Cancel")) + "</button>" +
                 "</div>";
-            panel.replaceChild(form, ask);
+            panel.replaceChild(form, ctaRow);
 
             var username = form.querySelector(".override-name");
             username.value = (Api.Session.getAdmin() || {}).username || "";
@@ -450,7 +787,8 @@
             (username.value ? input : username).focus();
 
             Dom.on(form.querySelector(".override-cancel"), "click", function () {
-                panel.replaceChild(ask, form);
+                panel.replaceChild(ctaRow, form);
+                ask.focus();
             });
 
             function submit() {
@@ -461,25 +799,41 @@
                     return;
                 }
                 if (!password) {
-                    Loading.toast("Enter the administrator password.", "warn");
+                    Loading.toast("Enter the administrator password to continue.", "warn");
                     input.focus();
                     return;
                 }
                 Loading.withButton(approve, function () {
                     return Api.post("ADMIN_APPROVE", {
-                        username: username.value.trim(), password: password, scope: "once"
+                        username: username.value.trim(),
+                        password: password,
+                        scope: "once"
                     }, { onUnauthorised: false });
                 }).then(function (data) {
                     var token = data.admin_token;
                     wrap.remove();
-                    send(promptText, true, token);
+                    send(promptText.trim(), true, token, promptText);
                 }).catch(function (err) {
-                    Loading.toast(err.message || "That password was not accepted.", "error");
+                    Loading.toast(
+                        err.message || "That password did not match. Check it and try again.",
+                        "error"
+                    );
                     input.select();
                 });
             }
 
             Dom.on(approve, "click", submit);
+            Dom.on(form, "keydown", function (e) {
+                if (e.key === "Escape") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    panel.replaceChild(ctaRow, form);
+                    ask.focus();
+                }
+            });
+            Dom.on(username, "keydown", function (e) {
+                if (e.key === "Enter") { e.preventDefault(); input.focus(); }
+            });
             Dom.on(input, "keydown", function (e) {
                 if (e.key === "Enter") { e.preventDefault(); submit(); }
             });
@@ -495,13 +849,6 @@
        Sending
        ------------------------------------------------------------------ */
 
-    /** How long to wait for a reply before giving up.
-
-        The server answers within its screening budget plus the model call,
-        both published on <body> by the route so the two cannot drift apart.
-        A hardcoded number here would silently become too short the moment
-        either of those changed.
-    */
     function requestBudget() {
         var body = document.body || {};
         var seconds = parseInt(body.getAttribute("data-request-timeout"), 10);
@@ -509,10 +856,15 @@
         return seconds * 1000;
     }
 
-    function send(text, bypass, adminToken) {
+    function send(text, bypass, adminToken, rawPrompt) {
         if (state.busy) return;
         state.busy = true;
         nodes.send.disabled = true;
+
+        var originalPrompt = typeof rawPrompt === "string" ? rawPrompt : text;
+        var preSendKey = currentChatKey();
+        var emptyNode = nodes.stream.querySelector(".first-run, .empty");
+        if (emptyNode) emptyNode.remove();
 
         var waiting = showPending(text, bypass);
 
@@ -525,14 +877,33 @@
 
         Api.post("CHAT", payload, { timeout: requestBudget() })
             .then(function (data) {
-                hidePending();
                 if (data.blocked) {
-                    // The card says everything; nothing should pop up.
-                    renderBlocked(data.block_info || {}, text);
-                    return;
+                    waiting.resolve((data.block_info || {}).stage || "check1");
+                    hidePending();
+                    state.blockedChats[preSendKey] = true;
+                    renderBlocked(data.block_info || {}, originalPrompt);
+                    return null;
                 }
-                state.chatId = data.chat_id || state.chatId;
+
+                waiting.resolve(null);
+
+                var nextChatId = data.chat_id || state.chatId;
+                var nextKey = nextChatId ? String(nextChatId) : preSendKey;
+                // Carry a draft chat's prior block forward once the chat gets its id.
+                if (preSendKey === DRAFT_CHAT_KEY && state.blockedChats[DRAFT_CHAT_KEY]) {
+                    state.blockedChats[nextKey] = true;
+                    delete state.blockedChats[DRAFT_CHAT_KEY];
+                }
+                state.chatId = nextChatId;
+
                 if (data.message_id) {
+                    if (bypass) {
+                        state.overriddenMessages[data.message_id] = true;
+                    } else if (state.blockedChats[nextKey] && !state.gracedChats[nextKey]) {
+                        // D4: fires once per chat, only after a prior block in it.
+                        state.gracedChats[nextKey] = true;
+                        state.gracedMessages[data.message_id] = true;
+                    }
                     state.messages.push({
                         id: data.message_id,
                         prompt: text,
@@ -540,15 +911,25 @@
                         created_at: new Date().toISOString(),
                         edited: false
                     });
-                    renderMessages();
-                } else {
-                    return openChat(state.chatId);
+                    return loadChats().then(function () {
+                        hidePending();
+                        var current = state.chats.filter(function (c) {
+                            return c.id === state.chatId;
+                        })[0];
+                        if (current && current.title) setTitle(current.title);
+                        renderMessages();
+                    });
                 }
-                loadChats();
+
+                return openChat(state.chatId).then(function () {
+                    hidePending();
+                    return loadChats();
+                });
             })
             .catch(function (err) {
                 waiting.stop();
                 pending = null;
+                if (!nodes.stream.children.length) renderMessages();
                 Loading.toast(err.message, "error");
             })
             .finally(function () {
@@ -560,13 +941,18 @@
 
     function onSend(event) {
         event.preventDefault();
-        var text = nodes.input.value.trim();
-        if (!text || state.busy) return;
+        if (state.busy) return;
+        var raw = nodes.input.value;
+        var text = raw.trim();
+        if (!text) {
+            Loading.toast("That message was empty — type a line first.", "info");
+            nodes.input.focus();
+            return;
+        }
         nodes.input.value = "";
         autoGrow();
-        // A filter would hide the very message being sent.
         clearSearch();
-        send(text, false, null);
+        send(text, false, null, raw);
     }
 
     /* ------------------------------------------------------------------
@@ -574,8 +960,9 @@
        ------------------------------------------------------------------ */
 
     function setTitle(title) {
+        if (!nodes.title) return;
         nodes.title.toggleAttribute("data-no-i18n", !!title);
-        nodes.title.textContent = title || "New chat";
+        nodes.title.textContent = title || t("New chat");
     }
 
     function openChat(chatId) {
@@ -583,7 +970,7 @@
             .then(function (data) {
                 state.chatId = chatId;
                 state.messages = (data.chat && data.chat.messages) || [];
-                var chat = (data.chat || {});
+                var chat = data.chat || {};
                 setTitle(chat.title);
                 state.chats.forEach(function (c) {
                     if (c.id === chatId) c.title = chat.title || c.title;
@@ -597,6 +984,7 @@
     function newChat() {
         state.chatId = null;
         state.messages = [];
+        delete state.blockedChats[DRAFT_CHAT_KEY];
         setTitle(null);
         renderChatList();
         renderMessages();
@@ -604,52 +992,84 @@
     }
 
     function deleteChat(button) {
-        if (!state.chatId) { Loading.toast("This chat has not been saved yet.", "info"); return; }
-        if (!confirm(I18n.t("Delete this chat? Its messages are removed. Team statistics are kept."))) return;
-        Loading.withButton(button, function () {
-            return Api.post("CHATS_DELETE", { chat_id: state.chatId });
-        }).then(function () {
-            Loading.toast("Chat deleted.", "success");
-            return loadChats();
-        }).then(function () {
-            newChat();
-        }).catch(function (err) { Loading.toast(err.message, "error"); });
+        if (!state.chatId) {
+            Loading.toast("Nothing to delete yet — this chat has no saved messages.", "info");
+            return;
+        }
+        Shell.confirm({
+            eyebrow: "Remove conversation",
+            title: "Delete this chat?",
+            lost: "Removed: every message in this conversation is deleted.",
+            kept: "Kept: workspace block and activity logs stay intact.",
+            confirmLabel: "Delete chat",
+            cancelLabel: "Keep chat",
+            danger: true
+        }).then(function (accepted) {
+            if (!accepted) return null;
+            return Loading.withButton(button, function () {
+                return Api.post("CHATS_DELETE", { chat_id: state.chatId });
+            }).then(function () {
+                Loading.toast("Chat deleted.", "success");
+                return loadChats();
+            }).then(function () {
+                newChat();
+            }).catch(function (err) { Loading.toast(err.message, "error"); });
+        });
     }
 
     function renameChat() {
-        var current = nodes.title.hasAttribute("data-no-i18n") ? nodes.title.textContent : "";
-        var next = prompt(I18n.t("Rename this chat"), current);
-        if (next === null) return;
-        next = next.trim().slice(0, 80);
-        if (!next || next === current) return;
-        if (!state.chatId) { setTitle(next); return; }
-        Api.post("CHATS_RENAME", { chat_id: state.chatId, title: next })
-            .then(function () {
+        var current = nodes.title.hasAttribute("data-no-i18n")
+            ? nodes.title.textContent.trim()
+            : "";
+        Shell.prompt({
+            eyebrow: "Conversation",
+            title: "Rename this chat",
+            label: "Chat title",
+            value: current,
+            placeholder: "Short title for this conversation",
+            maxLength: 80,
+            confirmLabel: "Save title",
+            cancelLabel: "Cancel"
+        }).then(function (raw) {
+            if (raw === null) return null;
+            var next = raw.trim().slice(0, 80);
+            if (!next || next === current) return null;
+            if (!state.chatId) { setTitle(next); return null; }
+            return Api.post("CHATS_RENAME", {
+                chat_id: state.chatId,
+                title: next
+            }).then(function () {
                 setTitle(next);
                 return loadChats();
-            })
-            .then(function () { Loading.toast("Chat renamed.", "success"); })
-            .catch(function (err) { Loading.toast(err.message, "error"); });
+            }).then(function () {
+                Loading.toast("Chat renamed.", "success");
+            }).catch(function (err) { Loading.toast(err.message, "error"); });
+        });
     }
 
     /* ------------------------------------------------------------------
-       Search within the current chat
+       Search within the open chat and across other conversations
        ------------------------------------------------------------------ */
 
     var searchVersion = 0;
+
     function applySearch() {
         var version = ++searchVersion;
         var query = nodes.search.value.trim();
         state.query = query;
         renderMessages();
-        nodes.otherResults.replaceChildren();
-        nodes.otherResults.hidden = true;
-        if (!query) return;
+        if (nodes.otherResults) {
+            nodes.otherResults.replaceChildren();
+            nodes.otherResults.hidden = true;
+        }
+        if (!query || !nodes.otherResults) return;
         Api.post("CHATS_SEARCH", { query: query }).then(function (data) {
             if (version !== searchVersion || query !== nodes.search.value.trim()) return;
-            var hits = (data.results || []).filter(function (hit) { return hit.chat_id !== state.chatId; });
+            var hits = (data.results || []).filter(function (hit) {
+                return hit.chat_id !== state.chatId;
+            });
             if (!hits.length) return;
-            nodes.otherResults.appendChild(Dom.el("strong", "eyebrow", "Other conversations"));
+            nodes.otherResults.appendChild(Dom.el("strong", "eyebrow", t("Other conversations")));
             hits.forEach(function (hit) {
                 var button = Dom.el("button", "search-hit", hit.chat_title + " — " + hit.excerpt);
                 button.type = "button";
@@ -659,7 +1079,7 @@
                     nodes.otherResults.hidden = true;
                     openChat(hit.chat_id).then(function () {
                         var match = Dom.$$(".msg", nodes.stream).find(function (node) {
-                            return node.dataset.id === hit.message_id;
+                            return node.dataset.id === String(hit.message_id);
                         });
                         if (match) {
                             match.tabIndex = -1;
@@ -676,7 +1096,10 @@
 
     function clearSearch() {
         searchVersion++;
-        nodes.otherResults.hidden = true;
+        if (nodes.otherResults) {
+            nodes.otherResults.replaceChildren();
+            nodes.otherResults.hidden = true;
+        }
         if (!nodes.search.value && !state.query) return;
         nodes.search.value = "";
         state.query = "";
@@ -698,14 +1121,23 @@
     Dom.on(nodes.rename, "click", renameChat);
 
     Dom.on(nodes.search, "input", Dom.debounce(applySearch, 180));
-
     Dom.on(nodes.search, "keydown", function (e) {
         if (e.key === "Escape") clearSearch();
     });
-
     Dom.on(nodes.searchClear, "click", function () {
         clearSearch();
         nodes.search.focus();
+    });
+
+    Dom.on(document, "cybersyn:lang", function () {
+        updateChecksBadge();
+        renderChatList();
+        if (pending && pending.relocalise) pending.relocalise();
+        if (!state.busy &&
+            !nodes.stream.querySelector(".bubble-blocked") &&
+            !nodes.stream.querySelector(".is-editing")) {
+            renderMessages();
+        }
     });
 
     /* ------------------------------------------------------------------
@@ -713,18 +1145,19 @@
        ------------------------------------------------------------------ */
 
     (function start() {
-        // Settings drive the checks badge; they are owned by the settings page.
         Api.post("SETTINGS", {}).then(function (data) {
             state.settings.check1 = data.check1 !== false;
-            state.settings.check2 = data.check2 !== false || data.block_code;
+            state.settings.check2 = data.check2 !== false || !!data.block_code;
             state.settings.check3 = data.check3 !== false;
             updateChecksBadge();
-        }).catch(function () { /* badge keeps its default */ });
+            updateMissingKeyNote(data);
+        }).catch(function () { updateChecksBadge(); });
 
         loadChats()
             .then(function () {
                 if (state.chats.length) return openChat(state.chats[0].id);
                 renderMessages();
+                return null;
             })
             .catch(function (err) { Loading.toast(err.message, "error"); });
 

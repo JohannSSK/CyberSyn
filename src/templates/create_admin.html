@@ -1,20 +1,17 @@
-{# Create an administrator account. Separate from sign-in, because reusing
-   the same boxes for both meant a typo could create an account instead of
-   opening one, and neither action explained itself. #}
+{# Create an administrator account — kept separate from sign-in so each
+   field has one clear job. #}
 {% extends "auth_page.html" %}
 
 {% block title %}Create administrator — CyberSyn{% endblock %}
 
 {% set brand_title = "One administrator per workspace." %}
-{% set brand_lead = "The administrator holds the workspace: they add team members, "
-                    "set the privacy policy, and approve anything the gate blocks." %}
-{% set eyebrow = "New account" %}
+{% set brand_lead = "Your administrator account holds this workspace: you add team members, choose which checks run, and approve one-off exceptions." %}
+{% set eyebrow = "New workspace" %}
 {% set title = "Create administrator account" %}
-{% set lead = "Choose a username and a password. This account owns the workspace, "
-              "so keep the password somewhere safe — losing it means losing the team." %}
+{% set lead = "Pick a username and a password for this workspace. Store the password somewhere safe — there is no reset link on a local server." %}
 {% set back_href = "/" %}
 {% set back_label = "Back to sign in" %}
-{% set footnote = "Accounts are stored on this machine only." %}
+{% set footnote = "Your account lives only on this computer." %}
 
 {% block form %}
 <div class="auth-field">
@@ -33,13 +30,13 @@
     <input type="password" id="new-admin-confirm" placeholder="Type the password again"
            autocomplete="new-password">
 </div>
-
 <div class="auth-field">
     <label for="signup-token">Registration token (if required)</label>
     <input type="password" id="signup-token" autocomplete="off">
     <span class="auth-hint">Leave empty for the first administrator.</span>
 </div>
-<div id="create-admin-msg" class="auth-inline-msg"></div>
+
+<div id="create-admin-msg" class="auth-inline-msg" role="alert"></div>
 <button type="button" id="btn-create-admin" class="auth-btn-primary">Create account</button>
 {% endblock %}
 

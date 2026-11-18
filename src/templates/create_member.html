@@ -3,16 +3,14 @@
 
 {% block title %}Add team member — CyberSyn{% endblock %}
 
-{% set brand_title = "One seat per person." %}
-{% set brand_lead = "Each team member signs in on their own and gets their own "
-                    "chats, their own history, and the policy you set for them." %}
+{% set brand_title = "One seat per colleague." %}
+{% set brand_lead = "Each person gets their own sign-in, private conversations, and the safety checks you set for this workspace." %}
 {% set eyebrow = "New team member" %}
 {% set title = "Add team member" %}
-{% set lead = "Give them a username and a password to sign in with. They can "
-              "change both later from their own profile." %}
+{% set lead = "Set a username and password for your colleague. They will use both on step 2 of the sign-in screen." %}
 {% set back_href = "/" %}
 {% set back_label = "Back to sign in" %}
-{% set footnote = "They inherit this workspace's privacy policy." %}
+{% set footnote = "New members start with this workspace's default safety checks." %}
 
 {% block form %}
 <div class="auth-field">
@@ -32,7 +30,7 @@
            autocomplete="new-password">
 </div>
 
-<div id="create-member-msg" class="auth-inline-msg"></div>
+<div id="create-member-msg" class="auth-inline-msg" role="alert"></div>
 <button type="button" id="btn-create-member" class="auth-btn-primary">Add team member</button>
 {% endblock %}
 

@@ -17,29 +17,28 @@
                 <div>
                     <span class="eyebrow">Workspace</span>
                     <h1>Profile</h1>
-                    <p class="dim">Your account and the workspace you belong to.</p>
+                    <p class="dim">Your account, active safety checks and sign-in details.</p>
                 </div>
             </header>
 
             <div class="page-body">
 
                 <section class="card">
-                    <div class="row" style="gap:16px">
-                        <span class="avatar" style="width:56px;height:56px;font-size:22px"
-                              data-member-avatar>M</span>
-                        <div>
-                            <h2 style="font-size:20px" data-member-name>Member</h2>
-                            <p class="small muted" data-workspace></p>
+                    <div class="profile-head">
+                        <span class="avatar avatar-lg" data-member-avatar aria-hidden="true">M</span>
+                        <div class="profile-id">
+                            <strong data-member-name>Member</strong>
+                            <p class="profile-meta" data-workspace></p>
                         </div>
                     </div>
                 </section>
 
                 <section class="card">
-                    <div class="card-title"><span data-icon="history"></span> Account</div>
+                    <div class="card-title"><span data-icon="shield"></span><span>Account details</span></div>
                     <div class="rows">
                         <div class="row-item">
                             <span class="row-label">Username</span>
-                            <span class="row-value" id="info-username">—</span>
+                            <span class="row-value" id="info-username" data-no-i18n>—</span>
                         </div>
                         <div class="row-item">
                             <span class="row-label">Member ID</span>
@@ -50,12 +49,12 @@
                             <span class="row-value mono" id="info-parent-id">—</span>
                         </div>
                         <div class="row-item">
-                            <span class="row-label">Safety checks enabled</span>
+                            <span class="row-label">Local safety checks</span>
                             <span class="row-value" id="info-checks">—</span>
                         </div>
                         <div class="row-item">
                             <span class="row-label">Model</span>
-                            <span class="row-value mono" id="info-model">—</span>
+                            <span class="row-value mono" id="info-model" data-no-i18n>—</span>
                         </div>
                         <div class="row-item">
                             <span class="row-label">API key</span>
@@ -65,8 +64,8 @@
                 </section>
 
                 <section class="card">
-                    <div class="card-title"><span data-icon="edit"></span> Change username</div>
-                    <form class="inline-form" id="form-username">
+                    <div class="card-title"><span data-icon="edit"></span><span>Change username</span></div>
+                    <form class="inline-form" id="form-username" novalidate>
                         <div class="field">
                             <label for="input-username-new">New username</label>
                             <input type="text" id="input-username-new" class="input"
@@ -79,12 +78,12 @@
                         </div>
                         <button type="submit" class="btn btn-primary" id="btn-save-username">Save</button>
                     </form>
-                    <div class="form-msg" id="msg-username"></div>
+                    <div class="form-msg" id="msg-username" role="status" aria-live="polite"></div>
                 </section>
 
                 <section class="card">
-                    <div class="card-title"><span data-icon="lock"></span> Change password</div>
-                    <form class="inline-form" id="form-password">
+                    <div class="card-title"><span data-icon="lock"></span><span>Change password</span></div>
+                    <form class="inline-form" id="form-password" novalidate>
                         <div class="field">
                             <label for="input-password-current">Current password</label>
                             <input type="password" id="input-password-current" class="input"
@@ -98,18 +97,31 @@
                         </div>
                         <button type="submit" class="btn btn-primary" id="btn-save-password">Save</button>
                     </form>
-                    <div class="form-msg" id="msg-password"></div>
+                    <div class="form-msg" id="msg-password" role="status" aria-live="polite"></div>
                 </section>
 
                 <section class="card">
-                    <div class="card-title"><span data-icon="lock"></span> Administrator password</div>
-                    <form class="inline-form" id="form-admin-password">
-                        <label class="field">Administrator username<input name="username" class="input" autocomplete="username" required></label>
-                        <label class="field">Current password<input name="current_password" class="input" type="password" autocomplete="current-password" required></label>
-                        <label class="field">New password<input name="new_password" class="input" type="password" autocomplete="new-password" minlength="8" maxlength="256" required></label>
-                        <button type="submit" class="btn btn-primary">Change administrator password</button>
+                    <div class="card-title"><span data-icon="lock"></span><span>Administrator password</span></div>
+                    <form class="inline-form" id="form-admin-password" novalidate>
+                        <div class="field">
+                            <label for="input-admin-username">Administrator username</label>
+                            <input type="text" id="input-admin-username" name="username" class="input"
+                                   autocomplete="username" required>
+                        </div>
+                        <div class="field">
+                            <label for="input-admin-password-current">Current password</label>
+                            <input type="password" id="input-admin-password-current" name="current_password"
+                                   class="input" autocomplete="current-password" required>
+                        </div>
+                        <div class="field">
+                            <label for="input-admin-password-new">New password</label>
+                            <input type="password" id="input-admin-password-new" name="new_password"
+                                   class="input" autocomplete="new-password" minlength="8" maxlength="256" required>
+                            <span class="hint">At least 8 characters, including a letter and a number.</span>
+                        </div>
+                        <button type="submit" class="btn btn-primary" id="btn-save-admin-password">Change administrator password</button>
                     </form>
-                    <div class="form-msg" id="msg-admin-password"></div>
+                    <div class="form-msg" id="msg-admin-password" role="status" aria-live="polite"></div>
                 </section>
 
             </div>

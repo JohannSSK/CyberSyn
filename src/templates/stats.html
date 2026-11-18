@@ -19,78 +19,91 @@
                     <div>
                         <span class="eyebrow">Administrator</span>
                         <h1>Team statistics</h1>
-                        <p class="dim">Who sent what, what was stopped, and when.</p>
+                        <p class="dim">Volume, stopped messages and approvals across this workspace.</p>
                     </div>
-                    <div class="row">
-                        <div class="range-bar" id="range-bar">
-                            <button type="button" data-days="7">7 days</button>
-                            <button type="button" data-days="14" class="is-active">14 days</button>
-                            <button type="button" data-days="30">30 days</button>
+                    <div class="page-head-actions no-print">
+                        <div class="range-bar" id="range-bar" role="group" aria-label="Trend window">
+                            <button type="button" data-days="7" aria-pressed="false">7 days</button>
+                            <button type="button" data-days="14" class="is-active" aria-pressed="true">14 days</button>
+                            <button type="button" data-days="30" aria-pressed="false">30 days</button>
                         </div>
+                        <button type="button" class="btn btn-sm" id="btn-export-csv">
+                            <span data-icon="download"></span><span>Download CSV</span>
+                        </button>
                         <button type="button" class="btn btn-sm" id="btn-refresh">Refresh</button>
                     </div>
                 </div>
             </header>
 
-            <div class="page-body">
+            <div class="page-body page-body-wide">
 
-                <div class="tiles" id="tiles">
-                    <div class="tile tile-accent">
-                        <div class="tile-label"><span data-icon="team"></span> Members</div>
+                <div class="tiles tiles-5" id="tiles">
+                    <div class="tile">
+                        <div class="tile-label"><span data-icon="team"></span><span>Members</span></div>
                         <div class="tile-value" id="tile-members">—</div>
+                        <div class="tile-foot" id="delta-members">Active seats</div>
                     </div>
                     <div class="tile">
-                        <div class="tile-label"><span data-icon="send"></span> Messages sent</div>
+                        <div class="tile-label"><span data-icon="send"></span><span>Messages sent</span></div>
                         <div class="tile-value" id="tile-sent">—</div>
+                        <div class="tile-foot" id="delta-sent">All time</div>
                     </div>
-                    <div class="tile tile-danger">
-                        <div class="tile-label"><span data-icon="warning"></span> Blocked</div>
+                    <div class="tile">
+                        <div class="tile-label"><span data-icon="warning"></span><span>Blocked</span></div>
                         <div class="tile-value" id="tile-blocked">—</div>
+                        <div class="tile-delta" id="delta-blocked"></div>
                     </div>
-                    <div class="tile tile-warn">
-                        <div class="tile-label"><span data-icon="key"></span> Overrides</div>
+                    <div class="tile">
+                        <div class="tile-label"><span data-icon="key"></span><span>Overrides</span></div>
                         <div class="tile-value" id="tile-overrides">—</div>
+                        <div class="tile-delta" id="delta-overrides"></div>
                     </div>
-                    <div class="tile tile-success">
-                        <div class="tile-label"><span data-icon="shield"></span> Block rate</div>
+                    <div class="tile">
+                        <div class="tile-label"><span data-icon="shield"></span><span>Block rate</span></div>
                         <div class="tile-value" id="tile-rate">—</div>
+                        <div class="tile-foot" id="delta-rate">Share of messages</div>
                     </div>
                 </div>
 
-                <section class="card">
-                    <div class="card-title"><span data-icon="stats"></span> Blocked and overridden, per day</div>
-                    <div class="trend" id="trend"></div>
-                    <div class="trend-axis">
+                <section class="card" id="trend-card">
+                    <div class="card-title"><span data-icon="stats"></span><span>Blocked and approved, per day</span></div>
+                    <div class="trend" id="trend" role="list" aria-label="Daily blocks and approvals"></div>
+                    <div class="trend-axis tabular">
                         <span id="trend-from">—</span>
-                        <span id="trend-to">today</span>
+                        <span id="trend-to">today · UTC</span>
                     </div>
-                    <div class="legend" style="margin-top:12px">
-                        <span><i class="swatch" style="background:var(--accent)"></i> Blocked</span>
-                        <span><i class="swatch" style="background:var(--warn)"></i> Approved override</span>
+                    <div id="trend-empty" class="trend-note hidden"></div>
+                    <div class="legend">
+                        <span><i class="swatch swatch-blocked" aria-hidden="true"></i><span>Blocked</span></span>
+                        <span><i class="swatch swatch-override" aria-hidden="true"></i><span>Approved override</span></span>
                     </div>
                 </section>
 
-                <section class="card">
-                    <div class="card-title"><span data-icon="filter"></span> Why messages were stopped</div>
-                    <div class="bars" id="reasons"></div>
-                </section>
+                <div class="grid-2 stats-split">
+                    <section class="card">
+                        <div class="card-title"><span data-icon="filter"></span><span>Why messages were stopped</span></div>
+                        <div class="bars" id="reasons"></div>
+                    </section>
 
-                <section class="card">
-                    <div class="card-title"><span data-icon="shield"></span> Which check stopped them</div>
-                    <div class="bars" id="stages"></div>
-                </section>
+                    <section class="card">
+                        <div class="card-title"><span data-icon="shield"></span><span>Which check stopped them</span></div>
+                        <div class="bars" id="stages"></div>
+                    </section>
+                </div>
 
-                <div>
-                    <div class="card-title" style="margin:8px 0 14px">
-                        <span data-icon="profile"></span> Per team member
+                <section class="stats-section">
+                    <div class="card-title stats-section-title">
+                        <span data-icon="profile"></span><span>Per team member</span>
                     </div>
                     <div class="member-grid" id="members"></div>
-                </div>
+                </section>
 
                 <section class="card">
-                    <div class="card-title"><span data-icon="history"></span> Every step, with a timestamp</div>
+                    <div class="card-title"><span data-icon="history"></span><span>Activity log (UTC)</span></div>
                     <div class="timeline" id="timeline"></div>
                 </section>
+
+                <footer class="print-footer" id="print-footer" aria-hidden="true"></footer>
 
             </div>
         </main>

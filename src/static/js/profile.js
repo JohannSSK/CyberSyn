@@ -1,8 +1,8 @@
 /* ==========================================================================
    profile.js — account details, username and password changes.
 
-   Both changes require the current password: a stolen session alone cannot
-   lock the real owner out by changing their credentials.
+   Member changes require the current password so a session alone cannot alter
+   credentials; administrator password changes ask for a fresh once approval.
    ========================================================================== */
 
 (function () {
@@ -13,8 +13,17 @@
     var Api = window.Api;
     var Dom = window.Dom;
     var Loading = window.Loading;
+    var Shell = window.Shell;
     var Session = Api.Session;
     var $ = Dom.$;
+
+    function t(text) {
+        return window.I18n && typeof window.I18n.t === "function"
+            ? window.I18n.t(text)
+            : text;
+    }
+
+    var cachedSettings = null;
 
     var nodes = {
         username: $("#info-username"),
@@ -34,12 +43,27 @@
         currentPassword: $("#input-password-current"),
         newPassword: $("#input-password-new"),
         savePassword: $("#btn-save-password"),
-        msgPassword: $("#msg-password")
+        msgPassword: $("#msg-password"),
+
+        formAdminPassword: $("#form-admin-password"),
+        msgAdminPassword: $("#msg-admin-password")
     };
 
     function showMessage(node, message, ok) {
-        node.textContent = message || "";
+        if (!node) return;
+        node.textContent = message ? t(message) : "";
         node.classList.toggle("ok", !!ok);
+    }
+
+    function paintSettings() {
+        if (!cachedSettings) return;
+        var data = cachedSettings;
+        var on = [data.check1, data.check2 || data.block_code, data.check3].filter(Boolean).length;
+        nodes.checks.innerHTML = "";
+        var cls = on === 0 ? "badge badge-warn" : (on === 3 ? "badge badge-accent" : "badge");
+        nodes.checks.appendChild(Dom.el("span", cls, t(on + " of 3 active")));
+        nodes.model.textContent = data.MODEL_NAME || "gpt-4o-mini";
+        nodes.key.textContent = data.API_KEY_MASK || t("No key saved");
     }
 
     function load() {
@@ -49,10 +73,8 @@
         nodes.parentId.textContent = member.parentId || "—";
 
         return Api.post("SETTINGS", {}).then(function (data) {
-            var on = [data.check1, data.check2 || data.block_code, data.check3].filter(Boolean).length;
-            nodes.checks.textContent = on + " of 3";
-            nodes.model.textContent = data.MODEL_NAME || "gpt-4o-mini";
-            nodes.key.textContent = data.API_KEY_MASK || "not set";
+            cachedSettings = data || {};
+            paintSettings();
         });
     }
 
@@ -62,7 +84,7 @@
         var next = nodes.newUsername.value.trim();
         var password = nodes.usernamePassword.value;
         if (!next || !password) {
-            showMessage(nodes.msgUsername, "Both fields are required.");
+            showMessage(nodes.msgUsername, "Fill in both the new username and your current password.");
             return;
         }
 
@@ -76,6 +98,7 @@
             var member = Session.getMember() || {};
             member.username = next;
             Session.setMember(member);
+            nodes.username.textContent = next;
             Shell.paintMember();
             nodes.newUsername.value = "";
             nodes.usernamePassword.value = "";
@@ -93,11 +116,11 @@
         var current = nodes.currentPassword.value;
         var next = nodes.newPassword.value;
         if (!current || !next) {
-            showMessage(nodes.msgPassword, "Both fields are required.");
+            showMessage(nodes.msgPassword, "Fill in both your current password and a new password.");
             return;
         }
         if (next === current) {
-            showMessage(nodes.msgPassword, "The new password must differ from the current one.");
+            showMessage(nodes.msgPassword, "Pick a new password that differs from your current one.");
             return;
         }
 
@@ -118,27 +141,47 @@
         });
     }
 
-    Dom.on(nodes.formUsername, "submit", saveUsername);
-    Dom.on(nodes.formPassword, "submit", savePassword);
-
-    var adminForm = $("#form-admin-password");
-    Dom.on(adminForm, "submit", function (event) {
+    function saveAdminPassword(event) {
         event.preventDefault();
+        var adminForm = nodes.formAdminPassword;
+        if (!adminForm) return;
+        showMessage(nodes.msgAdminPassword, "");
+        var username = adminForm.elements.username.value.trim();
         var current = adminForm.elements.current_password.value;
         var next = adminForm.elements.new_password.value;
-        var msg = $("#msg-admin-password");
-        showMessage(msg, "");
+        if (!username || !current || !next) {
+            showMessage(nodes.msgAdminPassword, "Fill in administrator username, current password and a new password.");
+            return;
+        }
+
         Loading.withButton(adminForm.querySelector("button"), function () {
-            return Api.post("ADMIN_APPROVE", { username: adminForm.elements.username.value.trim(),
-                password: current, scope: "once" }, { onUnauthorised: false }).then(function (data) {
-                return Api.post("ADMIN_PASSWORD", { token: data.admin_token,
-                    current_password: current, new_password: next }, { onUnauthorised: false });
+            return Api.post("ADMIN_APPROVE", {
+                username: username,
+                password: current,
+                scope: "once"
+            }, { onUnauthorised: false }).then(function (data) {
+                return Api.post("ADMIN_PASSWORD", {
+                    token: data.admin_token,
+                    current_password: current,
+                    new_password: next
+                }, { onUnauthorised: false });
             });
         }).then(function () {
             adminForm.reset();
-            showMessage(msg, "Administrator password updated. Previous sessions have ended.", true);
-        }).catch(function (err) { showMessage(msg, err.message); });
-    });
+            showMessage(nodes.msgAdminPassword, "Administrator password updated. Previous sessions have ended.", true);
+            Loading.toast("Administrator password updated. Previous sessions have ended.", "success");
+        }).catch(function (err) {
+            showMessage(nodes.msgAdminPassword, err.message);
+            Loading.toast(err.message, "error");
+        });
+    }
+
+    Dom.on(nodes.formUsername, "submit", saveUsername);
+    Dom.on(nodes.formPassword, "submit", savePassword);
+    if (nodes.formAdminPassword) {
+        Dom.on(nodes.formAdminPassword, "submit", saveAdminPassword);
+    }
+    Dom.on(document, "cybersyn:lang", paintSettings);
 
     load().catch(function (err) { Loading.toast(err.message, "error"); });
 })();

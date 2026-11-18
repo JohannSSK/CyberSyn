@@ -8,393 +8,116 @@
 {% endblock %}
 
 {% block body %}
-<div class="app-shell">
+<div class="app-shell" data-guard="member">
     <div class="layout">
         {% include "partials/sidebar.html" %}
 
         <main class="layout-main">
             {% include "partials/page_bar.html" %}
             <header class="page-head">
-                <div class="row-between wrap">
+                <div class="help-hero">
+                    <span class="help-hero-icon" data-icon="shield"></span>
                     <div>
-                        <span class="eyebrow">Reference</span>
-                        <h1>Help &amp; info</h1>
-                        <p class="dim">How the gate works, what each check looks for, and the
-                        software that makes it run.</p>
+                        <span class="eyebrow">Guide</span>
+                        <h1>How CyberSyn works</h1>
+                        <p class="dim">What runs before a message reaches the AI, what stays on this computer, and what administrators can and cannot see.</p>
                     </div>
-                    <a href="https://github.com/JohannSSK/CyberSyn"
-                       class="btn btn-sm" target="_blank" rel="noopener">Source on GitHub</a>
                 </div>
             </header>
 
-            <div class="page-body help">
+            <div class="page-body">
 
-                <nav class="help-toc card" aria-label="On this page">
-                    <div class="card-title">On this page</div>
-                    <ol>
-                        <li><a href="#start">Quick start</a></li>
-                        <li><a href="#checks">The three checks</a></li>
-                        <li><a href="#chat">Using the chat</a></li>
-                        <li><a href="#roles">Accounts and roles</a></li>
-                        <li><a href="#local">What stays local</a></li>
-                        <li><a href="#failclosed">When a check cannot run</a></li>
-                        <li><a href="#data">What is stored, and how</a></li>
-                        <li><a href="#config">Configuration</a></li>
-                        <li><a href="#trouble">Troubleshooting</a></li>
-                        <li><a href="#licences">Licences</a></li>
-                    </ol>
-                </nav>
+                <section class="card stack">
+                    <div class="card-title"><span data-icon="info"></span><span>The short version</span></div>
+                    <p>CyberSyn sits between your team and the AI provider you choose. Every message goes through local safety checks on this computer first — only messages that pass are forwarded over the network.</p>
 
-                <section class="card" id="start">
-                    <div class="card-title"><span data-icon="spark"></span> Quick start</div>
-                    <ol class="help-steps">
-                        <li><span class="badge">1</span>
-                            Create an administrator account from the sign-in screen.</li>
-                        <li><span class="badge">2</span>
-                            Sign in as administrator, then add your team members.</li>
-                        <li><span class="badge">3</span>
-                            Sign in as the member whose settings you want to configure.</li>
-                        <li><span class="badge">4</span>
-                            In Settings, select the provider, enter a key and save the model and checks with administrator approval.</li>
-                        <li><span class="badge">5</span>
-                            Open <strong>Statistics</strong> as the administrator to see who was
-                            blocked, why, and when.</li>
-                    </ol>
-                </section>
-
-                <section class="card" id="checks">
-                    <div class="card-title"><span data-icon="shield"></span> The three checks</div>
-                    <p class="help-lead">Enabled checks run in parallel under one time budget. Blocks are reported in stage order.</p>
-
-                    <div class="help-checks">
-                        <article>
-                            <h4><span class="badge">1</span> Personal &amp; Greek IDs</h4>
-                            <p>Greek tax numbers and IBANs are checked by checksum; Greek IDs by format and context. Checks also cover AMKA dates, phones, emails, modern API keys and company names.</p>
-                            <p class="muted small">Local English and Greek name-recognition models check for personal names.</p>
-                        </article>
-
-                        <article>
-                            <h4><span class="badge">2</span> Confidential context</h4>
-                            <p>Patterns and IBAN/card checksums detect credentials, banking data and strong indicators of confidential records. A local zero-shot model classifies ambiguous text.</p>
-                            <p class="muted small">Source code is allowed by default. An administrator can switch on code blocking for an individual member in Settings without changing anyone else’s policy.</p>
-                        </article>
-
-                        <article>
-                            <h4><span class="badge">3</span> Prompt injection</h4>
-                            <p>Instructions trying to override the model's rules, jailbreaks, and
-                            payloads hidden inside code comments.</p>
-                            <p class="muted small">The scanner examines adjacent lines, Python, SQL and JavaScript comments, block and HTML comments, quoted strings and docstrings.</p>
-                        </article>
-                    </div>
-                </section>
-
-                <section class="card" id="chat">
-                    <div class="card-title"><span data-icon="chat"></span> Using the chat</div>
-
-                    <div class="rows">
-                        <div class="row-item">
-                            <span class="row-label">Search messages</span>
-                            <span class="row-value">Type in the top bar to highlight matches or open a result from another chat</span>
+                    <div class="step-list">
+                        <div class="step">
+                            <span class="step-num">1</span>
+                            <div>
+                                <strong>Write your message as usual</strong>
+                                <p>Draft an email, paste code, summarise a note or ask a question in Chat. Nothing leaves this computer while you type.</p>
+                            </div>
                         </div>
-                        <div class="row-item">
-                            <span class="row-label">Edit a message</span>
-                            <span class="row-value">Pencil icon under a message you sent</span>
+                        <div class="step">
+                            <span class="step-num">2</span>
+                            <div>
+                                <strong>Three checks inspect it locally</strong>
+                                <p>In order, CyberSyn checks for personal data, sensitive workplace context and hidden prompt-injection instructions.</p>
+                            </div>
                         </div>
-                        <div class="row-item">
-                            <span class="row-label">Delete a message</span>
-                            <span class="row-value">Bin icon under a message</span>
-                        </div>
-                        <div class="row-item">
-                            <span class="row-label">Regenerate an answer</span>
-                            <span class="row-value">Circular arrow icon, when a reply exists</span>
-                        </div>
-                        <div class="row-item">
-                            <span class="row-label">Send anyway</span>
-                            <span class="row-value">On a blocked card — needs the administrator password</span>
-                        </div>
-                    </div>
-
-                    <p class="help-lead" style="margin-top:18px">Keyboard</p>
-                    <div class="rows">
-                        <div class="row-item">
-                            <span class="row-label"><kbd>Enter</kbd></span>
-                            <span class="row-value">Send the message</span>
-                        </div>
-                        <div class="row-item">
-                            <span class="row-label"><kbd>Shift</kbd> + <kbd>Enter</kbd></span>
-                            <span class="row-value">New line inside the message</span>
-                        </div>
-                        <div class="row-item">
-                            <span class="row-label"><kbd>Esc</kbd></span>
-                            <span class="row-value">Clear the chat search box</span>
+                        <div class="step">
+                            <span class="step-num">3</span>
+                            <div>
+                                <strong>Sent if clear — held back if not</strong>
+                                <p>Clear messages go to your configured model. Flagged messages stay on this computer and show you exactly what matched so you can edit or ask for a one-off approval.</p>
+                            </div>
                         </div>
                     </div>
                 </section>
 
-                <section class="card" id="roles">
-                    <div class="card-title"><span data-icon="team"></span> Accounts and roles</div>
-                    <p class="help-lead">Two-step sign-in: the administrator signs in first, then
-                    picks which team member to work as.</p>
+                <section class="card stack">
+                    <div class="card-title"><span data-icon="shield"></span><span>The three local checks</span></div>
 
-                    <div class="rows">
-                        <div class="row-item">
-                            <span class="row-label">Administrator</span>
-                            <span class="row-value">Adds and removes members, sets policy,
-                            approves overrides, sees statistics and the roster</span>
-                        </div>
-                        <div class="row-item">
-                            <span class="row-label">Team member</span>
-                            <span class="row-value">Their own chats, their own settings.
-                            Statistics and the roster are not shown to members</span>
-                        </div>
+                    <div class="check-card">
+                        <strong>1. Personal data</strong>
+                        <p>Catches names, email addresses, phone numbers, payment cards, IBANs and Greek national numbers such as AFM and AMKA before they reach an external model.</p>
                     </div>
 
-                    <p class="muted small" style="margin-top:14px">A member's session only ever
-                    reads that member's own chats. Opening another member's chat is refused by
-                    the server, not merely hidden in the interface.</p>
-                    <p>Member sign-in ends the browser’s administrator session. A single-use approval lasts five minutes. A read-only page unlock lasts fifteen minutes; Lock now revokes it on the server.</p>
-                </section>
+                    <div class="check-card">
+                        <strong>2. Context</strong>
+                        <p>Reads the surrounding sentence to spot confidential plans, internal credentials or client information that does not follow a fixed number format.</p>
+                    </div>
 
-                <section class="card" id="local">
-                    <div class="card-title"><span data-icon="lock"></span> What stays local</div>
-                    <div class="rows">
-                        <div class="row-item">
-                            <span class="row-label">Your prompts</span>
-                            <span class="row-value">Screened locally; allowed prompts are sent to the selected provider</span>
-                        </div>
-                        <div class="row-item">
-                            <span class="row-label">Your API key</span>
-                            <span class="row-value">Stored encrypted; used to authenticate to the selected provider</span>
-                        </div>
-                        <div class="row-item">
-                            <span class="row-label">Blocked messages</span>
-                            <span class="row-value">Not sent unless a workspace administrator approves an exception</span>
-                        </div>
-                        <div class="row-item">
-                            <span class="row-label">Inspection itself</span>
-                            <span class="row-value">No third-party classifier is consulted</span>
-                        </div>
-                        <div class="row-item">
-                            <span class="row-label">Detected items</span>
-                            <span class="row-value">Matching snippets are returned to the sender for editing, never stored in the block or activity log as block evidence</span>
-                        </div>
+                    <div class="check-card">
+                        <strong>3. Prompt injection</strong>
+                        <p>Detects hidden instructions trying to override how the model behaves — common in pasted web pages, forwarded emails and shared documents.</p>
                     </div>
                 </section>
 
-                <section class="card" id="failclosed">
-                    <div class="card-title"><span data-icon="warning"></span> When a check cannot run</div>
-                    <p>The gate fails closed: if a scanner errors, times out or returns no
-                    verdict, the prompt is refused rather than forwarded. You will see an error
-                    naming the check instead of a reply.</p>
-                    <p class="muted small">This is deliberate. A gateway that waves traffic
-                    through when it is unwell is worse than no gateway, because it looks like
-                    protection while providing none.</p>
+                <section class="card stack">
+                    <div class="card-title"><span data-icon="warning"></span><span>When a message is held back</span></div>
+                    <p>A stopped message is never sent to the AI provider. The card in your chat names the check that held it back, highlights every matched phrase, and includes a “Why was this stopped?” panel with the category, line number and character offsets.</p>
+                    <p>From there you have two options: select <strong>Edit in message box</strong> to replace the flagged detail with a placeholder and send again, or select <strong>Approve once</strong> so an administrator can enter their password to send that single message and record the approval.</p>
                 </section>
 
-                <section class="card" id="data">
-                    <div class="card-title"><span data-icon="history"></span> What is stored, and how</div>
-                    <div class="rows">
-                        <div class="row-item">
-                            <span class="row-label">Chats and messages</span>
-                            <span class="row-value">SQLite, on the server</span>
-                        </div>
-                        <div class="row-item">
-                            <span class="row-label">Provider API keys</span>
-                            <span class="row-value">Encrypted at rest (Fernet), shown masked</span>
-                        </div>
-                        <div class="row-item">
-                            <span class="row-label">Passwords</span>
-                            <span class="row-value">Hashed — never stored in a readable form</span>
-                        </div>
-                        <div class="row-item">
-                            <span class="row-label">Block log</span>
-                            <span class="row-value">Stage and category, with a timestamp</span>
-                        </div>
-                        <div class="row-item">
-                            <span class="row-label">Sessions</span>
-                            <span class="row-value">HttpOnly session cookies; server-side expiry and revocation</span>
-                        </div>
-                    </div>
-                    <p class="muted small" style="margin-top:14px">Discovery contacts the selected provider. Deleting a chat removes its messages, not audit events. Prompt previews are off by default and never recorded for blocked or overridden sends.</p>
-                </section>
+                <section class="card stack" id="privacy-storage">
+                    <div class="card-title"><span data-icon="lock"></span><span>Privacy, visibility and deletion</span></div>
+                    <p>CyberSyn runs on a computer managed by your organisation. Here is what is stored locally and who can read it:</p>
 
-                <section class="card" id="config">
-                    <div class="card-title"><span data-icon="settings"></span> Configuration</div>
-                    <p class="help-lead">Every setting has a default; set an environment variable
-                    only when you need to override it.</p>
-                    <div class="rows">
-                        <div class="row-item">
-                            <span class="row-label"><code>CYBERSYN_HOST</code> / <code>CYBERSYN_PORT</code></span>
-                            <span class="row-value">Bind address — default 127.0.0.1:5000</span>
+                    <div class="privacy-list">
+                        <div class="privacy-row">
+                            <strong>Conversations and AI replies</strong>
+                            <p>Full messages and model replies are stored in this workspace’s local database for your account. Administrator screens do not load full chat threads or AI answers.</p>
                         </div>
-                        <div class="row-item">
-                            <span class="row-label"><code>CYBERSYN_DB_FILE</code></span>
-                            <span class="row-value">Where the SQLite database lives</span>
+                        <div class="privacy-row">
+                            <strong>What administrators can see</strong>
+                            <p>After entering the administrator password on Statistics or Team, an administrator can view message counts, block rates, which check and category triggered, and UTC timestamps. Prompt previews are off by default; when enabled via CYBERSYN_LOG_PROMPT_PREVIEW=1, only ordinary sent messages keep an 80-character preview (never blocked or overridden prompts).</p>
                         </div>
-                        <div class="row-item">
-                            <span class="row-label"><code>CYBERSYN_KEY</code></span>
-                            <span class="row-value">The Fernet key that decrypts stored API keys.
-                            Without it, a fresh key is generated and saved</span>
+                        <div class="privacy-row">
+                            <strong>Deleting messages, chats and accounts</strong>
+                            <p>Deleting a message or a chat removes it from your conversation history straight away; append-only block records, activity log entries and message counters remain in the local database for auditing. Removing a member or administrator deletes their sign-in, active sessions and saved model/key settings immediately; historical audit entries remain in the database file until wiped on disk.</p>
                         </div>
-                        <div class="row-item">
-                            <span class="row-label"><code>CYBERSYN_AI_TIMEOUT</code></span>
-                            <span class="row-value">Seconds to wait for the provider — default 60</span>
-                        </div>
-                        <div class="row-item">
-                            <span class="row-label"><code>CYBERSYN_CHECK_TIMEOUT</code></span>
-                            <span class="row-value">Seconds to wait for a scanner — default 60</span>
-                        </div>
-                        <div class="row-item">
-                            <span class="row-label"><code>CYBERSYN_SCANNER_FALLBACK</code></span>
-                            <span class="row-value">Fallback can start one subprocess if a scanner cannot be imported. It is off in Docker. A scanner that throws at runtime fails closed.</span>
-                        </div>
-                        <div class="row-item">
-                            <span class="row-label"><code>CYBERSYN_WARM_MODELS</code></span>
-                            <span class="row-value">Enabled by default. Set to 0 to skip background warm-up.</span>
-                        </div>
-                        {% for variable, description in [
-                            ("CYBERSYN_THREADS", "Gunicorn uses one worker and eight threads by default"),
-                            ("CYBERSYN_ALLOW_PRIVATE_BASE", "Set to 0 to refuse LAN and loopback provider destinations; metadata addresses are always refused"),
-                            ("CYBERSYN_COOKIE_SECURE", "Set to 1 when terminating HTTPS at a trusted reverse proxy"),
-                            ("CYBERSYN_MAX_BODY_BYTES", "Maximum JSON body size; default 256 KiB"),
-                            ("CYBERSYN_RATE_LIMIT", "Failed credential attempts are limited per IP and username; enabled by default"),
-                            ("CYBERSYN_TRUST_PROXY", "Trust forwarded client IPs only behind a proxy that replaces the header; off by default"),
-                            ("CYBERSYN_ALLOW_OPEN_SIGNUP", "Set to 1 only to allow unrestricted administrator signup"),
-                            ("CYBERSYN_KEY_FILE", "Path to the encryption key file; a separate secrets volume in Docker"),
-                            ("CYBERSYN_ADMIN_SIGNUP_TOKEN", "Registration token for additional administrators"),
-                            ("CYBERSYN_MAX_PROMPT_CHARS", "Maximum prompt or edit length; default 16000 characters"),
-                            ("CYBERSYN_LOG_PROMPT_PREVIEW", "Set to 1 to include short previews of ordinary messages in the activity log"),
-                            ("CYBERSYN_SCREEN_BUDGET", "Seconds shared by all enabled checks; default 45")
-                        ] %}
-                        <div class="row-item"><span class="row-label"><code>{{ variable }}</code></span>
-                            <span class="row-value">{{ description }}</span></div>
-                        {% endfor %}
-                        <div class="row-item">
-                            <span class="row-label"><code>CYBERSYN_DEBUG</code></span>
-                            <span class="row-value">Flask debug mode — leave off in production</span>
+                        <div class="privacy-row">
+                            <strong>API keys, sessions and external requests</strong>
+                            <p>Provider API keys are encrypted before they are saved and shown masked everywhere on screen. Sessions use HttpOnly cookies stored as SHA-256 hashes on the server with server-side expiry and revocation. Typefaces are bundled locally (Instrument Serif, Noto Serif Display, Inter and JetBrains Mono under the SIL Open Font License 1.1) — CyberSyn makes outbound requests only to the AI provider configured for your seat.</p>
                         </div>
                     </div>
                 </section>
 
-                <section class="card" id="trouble">
-                    <div class="card-title"><span data-icon="help"></span> Troubleshooting</div>
-                    <div class="help-checks">
-                        <article>
-                            <h4>“No usable models” when refreshing models</h4>
-                            <p>The key was accepted but no chat-capable model came back. Check
-                            the key has access to a chat model on that provider, and that the
-                            provider is reachable from the server.</p>
-                        </article>
-                        <article>
-                            <h4>Model discovery names the wrong provider</h4>
-                            <p>Automatic discovery uses recognized key prefixes only. Select your provider explicitly for unfamiliar or ambiguous formats; your key is not tried against unrelated services.</p>
-                        </article>
-                        <article>
-                            <h4>Every message is refused</h4>
-                            <p>That is the gate failing closed. The check named in the error is
-                            the one that could not run — usually a model that failed to load.</p>
-                        </article>
-                        <article>
-                            <h4>The first message is slow</h4>
-                            <p>Background warm-up is enabled by default. Set CYBERSYN_WARM_MODELS=0 only if you prefer loading models on first use.</p>
-                        </article>
-                        <article>
-                            <h4>Statistics will not load</h4>
-                            <p>Statistics are for administrators. Sign in as the administrator,
-                            then open the page.</p>
-                        </article>
-                    </div>
+                <section class="card stack">
+                    <div class="card-title"><span data-icon="key"></span><span>Models and API keys</span></div>
+                    <p>CyberSyn works with OpenAI, Anthropic Claude, Google Gemini, Mistral, Cohere, Groq, DeepSeek and xAI Grok. Automatic discovery uses recognized key prefixes only; select your provider explicitly for unfamiliar formats. An administrator selects the model and saves the matching provider API key for each signed-in member on the <a href="/settings">Settings</a> page.</p>
                 </section>
 
-                <section class="card" id="licences">
-                    <div class="card-title"><span data-icon="copy"></span> Licences</div>
-                    <p class="help-lead">CyberSyn is built on other people's work. This is what
-                    each part is licensed under.</p>
-
-                    <h4 class="help-sub">The application</h4>
-                    <p><strong>No licence declared yet.</strong> This repository does not carry a
-                    <code>LICENSE</code> file, so in law the default applies: all rights
-                    reserved. If you intend to publish or distribute CyberSyn, add one — the
-                    dependency licences below are all permissive except where noted, so MIT,
-                    Apache-2.0 or BSD-3-Clause would each be a straightforward choice.</p>
-
-                    <h4 class="help-sub">Runtime dependencies</h4>
-                    <div class="licence-table" role="table">
-                        <div class="licence-row licence-head" role="row">
-                            <span role="columnheader">Component</span>
-                            <span role="columnheader">Licence</span>
-                            <span role="columnheader">Notes</span>
-                        </div>
-                        <div class="licence-row" role="row">
-                            <span>Flask</span><span>BSD-3-Clause</span>
-                            <span>Web framework</span>
-                        </div>
-                        <div class="licence-row" role="row">
-                            <span>Gunicorn</span><span>MIT</span><span>Threaded production WSGI server</span>
-                        </div>
-                        <div class="licence-row" role="row">
-                            <span>Werkzeug</span><span>BSD-3-Clause</span>
-                            <span>WSGI toolkit under Flask</span>
-                        </div>
-                        <div class="licence-row" role="row">
-                            <span>LiteLLM</span><span>MIT</span>
-                            <span>Provider-agnostic model calls. The
-                            <code>litellm/enterprise/</code> directory is separately licensed
-                            and is not used here</span>
-                        </div>
-                        <div class="licence-row" role="row">
-                            <span>cryptography</span><span>Apache-2.0 OR BSD-3-Clause</span>
-                            <span>Your choice of either; Fernet key encryption</span>
-                        </div>
-                        <div class="licence-row" role="row">
-                            <span>spaCy</span><span>MIT</span>
-                            <span>Name recognition</span>
-                        </div>
-                        <div class="licence-row" role="row">
-                            <span>transformers</span><span>Apache-2.0</span>
-                            <span>Zero-shot classification</span>
-                        </div>
-                        <div class="licence-row" role="row">
-                            <span>PyTorch</span><span>BSD-3-Clause</span>
-                            <span>Model runtime (CPU build)</span>
-                        </div>
-                    </div>
-
-                    <h4 class="help-sub">Models</h4>
-                    <div class="licence-table" role="table">
-                        <div class="licence-row licence-head" role="row">
-                            <span role="columnheader">Model</span>
-                            <span role="columnheader">Licence</span>
-                            <span role="columnheader">Notes</span>
-                        </div>
-                        <div class="licence-row" role="row">
-                            <span><code>en_core_web_sm</code></span><span>MIT</span>
-                            <span>English names</span>
-                        </div>
-                        <div class="licence-row licence-warn" role="row">
-                            <span><code>el_core_news_sm</code></span>
-                            <span>CC BY-NC-SA 3.0</span>
-                            <span><strong>Non-commercial.</strong> Greek names. Read this one
-                            before any commercial deployment — it is the only component here
-                            that restricts commercial use, and it restricts derivative works
-                            too. A commercially licensed Greek NER model would replace it</span>
-                        </div>
-                        <div class="licence-row" role="row">
-                            <span><code>distilbart-mnli-12-1</code></span>
-                            <span>Check model card</span>
-                            <span>Classification weights derived from
-                            <code>facebook/bart-large-mnli</code>. Confirm on the model card
-                            before redistributing</span>
-                        </div>
-                    </div>
-
-                    <h4 class="help-sub">Fonts and icons</h4>
-                    <p class="small">Inter, Instrument Serif and JetBrains Mono are each licensed
-                    under the SIL Open Font License 1.1 and are served locally. No font CDN is contacted. The
-                    interface icons in <code>assets/icons/</code> are drawn for this project and
-                    follow the application's licence.</p>
-
-                    <p class="muted small" style="margin-top:16px">Check the upstream licence for each exact package or model version before redistributing it. A library licence does not automatically cover its model weights.</p>
+                <section class="card stack">
+                    <div class="card-title"><span data-icon="check"></span><span>Everyday shortcuts and tips</span></div>
+                    <ul class="help-list">
+                        <li>Press <span class="kbd">Enter</span> to send a message and <span class="kbd">Shift</span> + <span class="kbd">Enter</span> to add a new line.</li>
+                        <li>Use the search box at the top of Chat to filter the open conversation and search across other chats; press <span class="kbd">Esc</span> to clear it.</li>
+                        <li>Administrator pages stay unlocked in the current tab for 15 minutes after entering the password. Use <strong>Lock</strong> in the sidebar to close that window immediately.</li>
+                        <li>On Statistics, use <strong>Download CSV</strong> to export workspace totals and trends, or print either Statistics or Team cleanly to A4 — API keys and prompt excerpts are omitted on paper.</li>
+                    </ul>
                 </section>
 
             </div>

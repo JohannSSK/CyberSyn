@@ -17,68 +17,86 @@
                 <div>
                     <span class="eyebrow">Workspace</span>
                     <h1>Settings</h1>
-                    <p class="dim">Policy, model connection and how your prompts are screened.</p>
+                    <p class="dim">Local safety checks, provider connection and the model answering your messages.</p>
                 </div>
             </header>
 
             <div class="page-body">
 
-                <section class="card">
-                    <div class="card-title"><span data-icon="shield"></span> Local safety checks</div>
-                    <p class="small muted" style="margin-bottom:16px">
-                        Each check runs on this machine before a prompt is sent. Turn one off only
-                        with a reason — the setting is applied to every message you send.
-                    </p>
-
-                    <div class="stack-sm" id="toggle-list">
-                        <label class="toggle" data-toggle="check1">
-                            <input type="checkbox" id="setting-check1">
-                            <span class="toggle-track"></span>
-                            <span class="toggle-body">
-                                <strong>Personal &amp; Greek IDs</strong>
-                                <small>AFM with checksum, AMKA, Greek phone numbers, emails and names (EN + EL)</small>
-                            </span>
-                        </label>
-                        <label class="toggle" data-toggle="check2">
-                            <input type="checkbox" id="setting-check2">
-                            <span class="toggle-track"></span>
-                            <span class="toggle-body">
-                                <strong>Confidential context</strong>
-                                <small>Confidential contracts, internal financials, HR and payroll records, and credentials</small>
-                            </span>
-                        </label>
-                        <label class="toggle" data-toggle="check3">
-                            <input type="checkbox" id="setting-check3">
-                            <span class="toggle-track"></span>
-                            <span class="toggle-body">
-                                <strong>Prompt injection</strong>
-                                <small>Jailbreaks, hidden instructions and override attempts</small>
-                            </span>
-                        </label>
-                        <label class="toggle" data-toggle="block_code">
-                            <input type="checkbox" id="setting-block-code">
-                            <span class="toggle-track"></span>
-                            <span class="toggle-body">
-                                <strong>Block proprietary source code</strong>
-                                <small>Block source-code pastes from this member. Off allows code review; other enabled checks still apply.</small>
-                            </span>
-                        </label>
+                <section class="card stack">
+                    <div>
+                        <div class="card-title"><span data-icon="shield"></span><span>Local safety checks</span></div>
+                        <p class="small muted settings-intro">Each check runs on this computer in order before a message reaches the AI. Changing these checks requires the administrator password and is recorded in the audit log.</p>
                     </div>
 
-                    <label class="small"><input type="checkbox" id="also-default">
-                        Also save these checks as the workspace default for new team members</label>
-                    <div class="row" style="margin-top:18px">
-                        <button type="button" class="btn btn-primary" id="btn-save-checks">
-                            Save checks
-                        </button>
-                        <span class="tiny muted" id="checks-state"></span>
+                    <div id="toggle-list">
+                        <div class="toggle-row" data-toggle="check1">
+                            <div class="toggle-text">
+                                <strong>1. Personal data</strong>
+                                <p>AFM with checksum, AMKA, IBANs, phone numbers, email addresses, payment cards and names in English and Greek.</p>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" id="setting-check1" checked aria-label="Personal data check">
+                                <span class="switch-track"></span>
+                            </label>
+                        </div>
+
+                        <div class="toggle-row" data-toggle="check2">
+                            <div class="toggle-text">
+                                <strong>2. Context</strong>
+                                <p>Confidential contracts, internal financials, HR and payroll records, and credentials</p>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" id="setting-check2" checked aria-label="Context check">
+                                <span class="switch-track"></span>
+                            </label>
+                        </div>
+
+                        <div class="toggle-row" data-toggle="check3">
+                            <div class="toggle-text">
+                                <strong>3. Prompt injection</strong>
+                                <p>Hidden instructions and override attempts — especially common in pasted emails, web pages and documents.</p>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" id="setting-check3" checked aria-label="Prompt injection check">
+                                <span class="switch-track"></span>
+                            </label>
+                        </div>
+
+                        <div class="toggle-row" data-toggle="block_code">
+                            <div class="toggle-text">
+                                <strong>Block proprietary source code</strong>
+                                <p>Block source-code pastes from this member. Off allows code review; other enabled checks still apply.</p>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" id="setting-block-code" aria-label="Block proprietary source code">
+                                <span class="switch-track"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <label class="check-option">
+                        <input type="checkbox" id="also-default">
+                        <span>Also save these checks as the workspace default for new team members</span>
+                    </label>
+
+                    <div id="checks-consequence" class="callout callout-warn checks-consequence hidden"
+                         role="status" aria-live="polite"></div>
+
+                    <div id="all-checks-off-note" class="callout callout-warn hidden" role="status">
+                        All checks are turned off. Messages from this account will go straight to the AI provider until at least one check is turned back on.
+                    </div>
+
+                    <div class="row">
+                        <button type="button" class="btn btn-primary" id="btn-save-checks">Save checks</button>
+                        <span class="tiny muted" id="checks-state" role="status" aria-live="polite"></span>
                     </div>
                 </section>
 
-                <section class="card">
-                    <div class="card-title"><span data-icon="key"></span> AI connection</div>
+                <section class="card stack">
+                    <div class="card-title"><span data-icon="key"></span><span>AI connection</span></div>
 
-                    <div class="field" style="margin-bottom:16px">
+                    <div class="field">
                         <label for="setting-provider">Provider</label>
                         <select id="setting-provider" class="select">
                             <option value="auto">Detect automatically</option>
@@ -86,46 +104,47 @@
                         <span class="hint" id="provider-state">Automatic detection uses the key prefix. For unfamiliar or shared formats, select your provider before entering a key.</span>
                     </div>
 
-                    <div class="field" id="field-base" style="margin-bottom:16px">
+                    <div class="field" id="field-base">
                         <label for="setting-base">Base URL</label>
-                        <input type="text" id="setting-base" class="input"
+                        <input type="text" id="setting-base" class="input mono"
                                placeholder="https://gateway.example/v1" autocomplete="off"
                                spellcheck="false">
-                        <span class="hint">Where that provider is reached. Leave empty for the
-                            hosted address.</span>
+                        <span class="hint">Where that provider is reached. Leave empty for the hosted address.</span>
                     </div>
 
-                    <div class="field" style="margin-bottom:16px">
+                    <div class="field">
                         <label for="setting-model">Model</label>
                         <div class="row">
-                            <select id="setting-model" class="select grow">
+                            <select id="setting-model" class="select mono grow">
                                 <option value="gpt-4o-mini">gpt-4o-mini</option>
                             </select>
-                            <button type="button" class="btn" id="btn-refresh-models">
-                                Refresh list
-                            </button>
+                            <button type="button" class="btn" id="btn-refresh-models">Refresh list</button>
                         </div>
-                        <span class="hint" id="model-state">Paste a key and the models it can reach are listed automatically.</span>
+                        <span class="hint" id="model-state">Paste a key first to load the models it can reach.</span>
                     </div>
 
                     <div class="field">
                         <label for="setting-api-key">API key</label>
                         <div class="input-icon">
                             <span data-icon="key"></span>
-                            <input type="password" id="setting-api-key" class="input"
+                            <input type="password" id="setting-api-key" class="input mono"
                                    placeholder="Paste your API key…" autocomplete="off" spellcheck="false">
                         </div>
-                        <button type="button" class="btn btn-sm hidden" id="btn-clear-key">Remove saved key</button>
-                        <span class="hint" id="key-state">No key saved yet.</span>
+                        <div class="row wrap">
+                            <button type="button" class="btn btn-sm btn-danger hidden" id="btn-clear-key">Remove saved key</button>
+                            <span class="hint mono" id="key-state">No key saved yet.</span>
+                        </div>
                     </div>
 
-                    <label class="small"><input type="checkbox" id="connection-also-default">
-                        Also save this connection, including its key, as the default for new team members</label>
-                    <div class="row" style="margin-top:18px">
-                        <button type="button" class="btn btn-primary" id="btn-save-connection">
-                            Save connection
-                        </button>
-                        <span class="tiny muted">The key is encrypted on the server and never sent back to the browser.</span>
+                    <label class="check-option">
+                        <input type="checkbox" id="connection-also-default">
+                        <span>Also save this connection, including its key, as the default for new team members</span>
+                    </label>
+
+                    <div class="row wrap">
+                        <button type="button" class="btn btn-primary" id="btn-save-connection">Save connection</button>
+                        <span class="tiny muted" id="connection-state" role="status" aria-live="polite"></span>
+                        <span class="tiny muted">Encrypted on this computer and never sent back in full to the browser.</span>
                     </div>
                 </section>
 

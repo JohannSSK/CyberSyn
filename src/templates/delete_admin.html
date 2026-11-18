@@ -1,15 +1,13 @@
-{# Delete an administrator account, and everything under it. #}
+{# Delete an administrator account and its workspace members. #}
 {% extends "auth_page.html" %}
 
 {% block title %}Delete administrator — CyberSyn{% endblock %}
 
-{% set brand_title = "This cannot be undone." %}
-{% set brand_lead = "Deleting an administrator removes their team members, their "
-                    "settings and their chat history with it. Team statistics are kept." %}
-{% set eyebrow = "Danger zone" %}
+{% set brand_title = "This removes the workspace." %}
+{% set brand_lead = "Deleting an administrator account removes its team member accounts and settings. Block and activity logs remain in the local database." %}
+{% set eyebrow = "Remove account" %}
 {% set title = "Delete administrator account" %}
-{% set lead = "Sign in with the account you want to delete. It is removed as soon "
-              "as the password is confirmed." %}
+{% set lead = "Enter the username and password of the administrator account you want to remove. You will be asked to confirm once more before anything changes." %}
 {% set back_href = "/" %}
 {% set back_label = "Back to sign in" %}
 {% set footnote = "Chat history is deleted; statistics and audit events are retained." %}
@@ -17,22 +15,21 @@
 {% block form %}
 <div class="auth-field">
     <label for="del-admin-username">Username</label>
-    <input type="text" id="del-admin-username" placeholder="The account to delete"
+    <input type="text" id="del-admin-username" placeholder="The administrator username"
            autocomplete="off" autofocus>
 </div>
 <div class="auth-field">
     <label for="del-admin-password">Password</label>
-    <input type="password" id="del-admin-password" placeholder="Its password"
+    <input type="password" id="del-admin-password" placeholder="That account's password"
            autocomplete="current-password">
 </div>
 
 <div class="auth-warning">
     <span data-icon="warning"></span>
-    <span>Every team member, every setting and every chat under this
-          administrator is deleted. Statistics are kept.</span>
+    <span>Every team member account, setting and access to its chats under this administrator is deleted. Block and activity log rows are kept.</span>
 </div>
 
-<div id="delete-admin-msg" class="auth-inline-msg"></div>
+<div id="delete-admin-msg" class="auth-inline-msg" role="alert"></div>
 <button type="button" id="btn-delete-admin" class="auth-btn-danger">Delete this account</button>
 {% endblock %}
 

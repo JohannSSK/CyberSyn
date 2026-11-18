@@ -1,14 +1,9 @@
 /* ==========================================================================
-   sidebar.css — the shared navigation.
+   sidebar.css — shared navigation chrome.
 
-   The sidebar markup lives in templates/partials/sidebar.html and is included
-   by every signed-in page, so its styles belong to every page too. They used
-   to sit in workspace.css, which only the chat screen loads — which is why
-   the navigation looked unstyled everywhere else. Loaded from base.html.
-
-   Entries are deliberately large, quiet buttons: no border until they are
-   active, no colour beyond the neutral ramp, and the icon sits small beside
-   the label rather than competing with it.
+   Loaded on every page from base.html. Entries stay quiet warm charcoal;
+   the active page earns a subtle surface step-up and a crisp 3px warm-grey
+   rail on its leading edge — never a coloured wash.
    ========================================================================== */
 
 .sidebar {
@@ -16,85 +11,124 @@
     flex-direction: column;
     min-height: 0;
     background: var(--surface);
-    border-right: 1px solid var(--border-soft);
 }
 
 .sidebar-brand {
     display: flex;
     align-items: center;
-    gap: 11px;
+    gap: 8px;
     height: var(--topbar-h);
-    padding: 0 18px;
+    padding: 0 16px;
     border-bottom: 1px solid var(--border-soft);
     flex: none;
 }
 
-.sidebar-brand .icon { width: 22px; height: 22px; opacity: 0.9; }
+.sidebar-brand .icon {
+    width: var(--icon-lg);
+    height: var(--icon-lg);
+    color: var(--accent);
+    flex: none;
+}
 
 .sidebar-brand span {
-    font-size: 16px;
-    font-weight: 700;
-    letter-spacing: -0.01em;
+    font-size: var(--text-lg);
+    font-weight: 600;
+    letter-spacing: -0.015em;
     color: var(--text-strong);
 }
 
-.sidebar-nav { padding: 14px 12px 6px; flex: none; }
+.sidebar-nav { padding: 12px 12px 8px; flex: none; }
 
-/* ---- Navigation entries ------------------------------------------------ */
+/* ---- Navigation entries (38px visual height, 44px hit target via ::after) */
 
 .nav-item {
+    position: relative;
     display: flex;
     align-items: center;
-    gap: 13px;
+    gap: 12px;
     width: 100%;
-    padding: 12px 14px;
+    min-height: 38px;
+    padding: 8px 12px;
     margin-bottom: 4px;
     border-radius: var(--r-md);
-    font-size: 14px;
+    font-size: var(--text-md);
     font-weight: 500;
+    line-height: 1.3;
     color: var(--text-dim);
     background: transparent;
     border: 1px solid transparent;
-    transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
+    text-decoration: none;
     text-align: left;
     cursor: pointer;
+    transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
 }
 
-.nav-item:hover { color: var(--text); background: var(--surface-2); }
+.nav-item::after {
+    content: "";
+    position: absolute;
+    inset: -3px 0;
+}
 
-/* Active is a solid step up in elevation, not a coloured outline. */
+.nav-item:hover:not(:disabled),
+.nav-item:focus-visible {
+    color: var(--text);
+    background: var(--surface-2);
+    text-decoration: none;
+}
+
+/* Active item: subtle neutral step-up plus a 3px warm-grey rail on the left. */
 .nav-item.is-active {
     color: var(--text-strong);
-    background: var(--surface-3);
+    font-weight: 600;
+    background: var(--surface-2);
     border-color: transparent;
 }
 
-/* Sidebar icons are PNGs, so they carry their own colour and ignore
-   `color`. Dimming is what separates resting from active. */
-.nav-item .icon {
-    width: 15px;
-    height: 15px;
-    flex: none;
-    opacity: 0.5;
-    transition: opacity var(--fast) var(--ease);
+.nav-item.is-active::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 8px;
+    bottom: 8px;
+    width: 3px;
+    border-radius: var(--r-sm);
+    background: var(--accent);
 }
 
-.nav-item:hover .icon { opacity: 0.75; }
-.nav-item.is-active .icon { opacity: 1; }
+.nav-item .icon {
+    width: var(--icon-sm);
+    height: var(--icon-sm);
+    flex: none;
+    color: var(--text-muted);
+    transition: color var(--fast) var(--ease);
+}
 
-.nav-item .count { margin-left: auto; font-size: 11px; color: var(--text-muted); }
+.nav-item:hover:not(:disabled) .icon,
+.nav-item:focus-visible .icon { color: var(--text); }
 
-/* ---- Conversation list (the chat screen's extra section) --------------- */
+.nav-item.is-active .icon { color: var(--text-strong); }
+
+.nav-item .count {
+    margin-left: auto;
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+}
+
+/* ---- Conversation list (workspace sidebar extra) ----------------------- */
 
 .sidebar-section-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 18px 12px 8px;
+    padding: 12px 12px 8px 16px;
     flex: none;
 }
 
-.sidebar-section-head .eyebrow { font-size: 10.5px; color: var(--text-muted); }
+/* Single surviving all-caps tier app-wide: sidebar section headings. */
+.sidebar-section-head .eyebrow {
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
 
 .chat-list {
     flex: 1;
@@ -103,31 +137,69 @@
     padding: 0 12px 12px;
 }
 
+.chat-list-empty {
+    padding: 8px;
+    font-size: var(--text-sm);
+    line-height: 1.5;
+    color: var(--text-muted);
+}
+
 .chat-item {
+    position: relative;
     display: flex;
     align-items: center;
-    gap: 11px;
+    gap: 8px;
     width: 100%;
-    padding: 10px 12px;
+    min-height: 38px;
+    padding: 8px 12px;
     margin-bottom: 4px;
     border-radius: var(--r-md);
     border: 1px solid transparent;
     background: transparent;
     color: var(--text-dim);
-    font-size: 13px;
+    font-size: var(--text-sm);
     text-align: left;
     transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
 }
 
-.chat-item:hover { background: var(--surface-2); color: var(--text); }
-
-.chat-item.is-active {
-    background: var(--surface-3);
-    border-color: transparent;
-    color: var(--text-strong);
+.chat-item::after {
+    content: "";
+    position: absolute;
+    inset: -3px 0;
 }
 
-.chat-item .icon { width: 14px; height: 14px; flex: none; opacity: 0.55; }
+.chat-item:hover:not(:disabled),
+.chat-item:focus-visible {
+    background: var(--surface-2);
+    color: var(--text);
+}
+
+.chat-item.is-active {
+    background: var(--surface-2);
+    border-color: transparent;
+    color: var(--text-strong);
+    font-weight: 500;
+}
+
+.chat-item.is-active::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 8px;
+    bottom: 8px;
+    width: 3px;
+    border-radius: var(--r-sm);
+    background: var(--accent);
+}
+
+.chat-item .icon {
+    width: var(--icon-xs);
+    height: var(--icon-xs);
+    flex: none;
+    color: var(--text-muted);
+}
+
+.chat-item.is-active .icon { color: var(--text-strong); }
 
 .chat-item-title {
     flex: 1;
@@ -137,7 +209,12 @@
     white-space: nowrap;
 }
 
-.chat-item .chat-item-meta { font-size: 10.5px; color: var(--text-muted); flex: none; }
+.chat-item .chat-item-meta {
+    font-size: var(--text-xs);
+    font-variant-numeric: tabular-nums;
+    color: var(--text-muted);
+    flex: none;
+}
 
 /* ---- Footer ------------------------------------------------------------ */
 
@@ -157,44 +234,49 @@
 .sidebar-user {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 10px 11px;
+    gap: 8px;
+    padding: 8px 12px;
     border-radius: var(--r-md);
-    background: var(--surface-2);
+    background: transparent;
     border: 1px solid var(--border-soft);
 }
 
-.avatar {
-    display: grid;
-    place-items: center;
-    width: 32px;
-    height: 32px;
-    flex: none;
-    border-radius: 50%;
-    background: var(--surface-4);
-    color: var(--text-strong);
-    font-size: 13px;
-    font-weight: 700;
+.sidebar-user .who {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
 }
-
-.sidebar-user .who { min-width: 0; }
 
 .sidebar-user .who strong {
     display: block;
-    font-size: 13px;
-    color: var(--text);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--text-strong);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.sidebar-user .who small { font-size: 11px; color: var(--text-muted); }
+.sidebar-user .who small {
+    font-size: var(--text-xs);
+    line-height: 1.4;
+    color: var(--text-muted);
+}
 
-/* The language switch sits above Help, inset to line up with the entries. */
-.sidebar-foot .lang-switch { margin-left: 2px; align-self: flex-start; }
+.sidebar-user .who small:empty { display: none; }
+
+.sidebar-managed {
+    color: var(--text-muted);
+}
+
+.sidebar-foot .lang-switch {
+    margin: 2px 0 2px 2px;
+    align-self: flex-start;
+}
 
 /* --------------------------------------------------------------------------
-   Narrow screens: the sidebar becomes a drawer
+   Narrow screens: drawer over an opaque-feeling warm scrim
    -------------------------------------------------------------------------- */
 
 @media (max-width: 900px) {
@@ -204,14 +286,10 @@
         top: 0;
         left: 0;
         bottom: 0;
-        width: var(--sidebar-w);
+        width: min(var(--sidebar-w), calc(100vw - 44px));
+        border-right: 1px solid var(--border);
         transform: translateX(-100%);
         transition: transform var(--med) var(--ease);
-        box-shadow: var(--shadow-lg);
-        /* The drawer is a viewport-tall box whatever the page is doing, so it
-           has to be able to scroll itself: on a short window (a phone held
-           sideways) the footer used to sit past the bottom edge, out of
-           reach, with no way to scroll to it. */
         overflow-y: auto;
         overscroll-behavior: contain;
     }
@@ -219,23 +297,12 @@
     .sidebar.is-open { transform: none; }
 }
 
-/* --------------------------------------------------------------------------
-   Above the breakpoint the sidebar is a column, and the same button puts it
-   away. The class goes on the grid rather than on the sidebar so one rule
-   covers both layouts — .workspace and .layout — and the column closes up
-   instead of leaving a gap where the navigation used to be.
-
-   Underneath the drawer's 500, so the drawer is always above it, and well
-   below the modal (8000) and the toasts (9000).
-   -------------------------------------------------------------------------- */
-
 .sidebar-scrim {
     position: fixed;
     inset: 0;
     z-index: 499;
     display: none;
-    background: rgba(4, 8, 18, 0.6);
-    animation: fade-in var(--fast) var(--ease) both;
+    background: var(--scrim);
 }
 
 .sidebar-scrim.is-open { display: block; }
@@ -248,59 +315,64 @@
 }
 
 /* --------------------------------------------------------------------------
-   Administrator unlock badge
-
-   Shown while this tab holds a recent administrator approval. It has to be
-   visible — an unlocked session nobody can see is one nobody can end — and
-   the countdown tells you when the prompt will come back.
+   Administrator unlock badge — shows remaining step-up window and offers
+   an immediate one-tap lock.
    -------------------------------------------------------------------------- */
 
-.sidebar-unlock { padding: 0 16px 10px; }
+.sidebar-unlock { padding: 0 12px 12px; }
 
 .unlock-badge {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 9px 11px;
+    padding: 8px 12px;
     border-radius: var(--r-sm);
-    background: var(--success-soft);
-    border: 1px solid rgba(151, 171, 145, 0.28);
-    font-size: 11.5px;
+    background: transparent;
+    border: 1px solid var(--border);
+    font-size: var(--text-xs);
     color: var(--text-dim);
-    line-height: 1.35;
+    line-height: 1.4;
 }
 
 .unlock-dot {
-    width: 7px;
-    height: 7px;
+    width: 8px;
+    height: 8px;
     flex: none;
-    border-radius: 50%;
-    background: var(--success);
-    animation: unlock-breathe 2.4s var(--ease) infinite;
+    border-radius: var(--r-pill);
+    background: var(--accent);
 }
 
-.unlock-text { flex: 1 1 auto; }
-.unlock-text b { color: var(--text); font-weight: 600; }
+.unlock-text { flex: 1 1 auto; min-width: 0; }
+.unlock-text b { color: var(--text-strong); font-weight: 600; }
 
 .unlock-lock {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     flex: none;
-    padding: 3px 7px;
+    min-width: 44px;
+    padding: 4px 8px;
     border: 1px solid var(--border);
-    border-radius: 5px;
+    border-radius: var(--r-sm);
     background: transparent;
-    color: var(--text-muted);
-    font: inherit;
-    font-size: 11px;
+    color: var(--text);
+    font-size: var(--text-xs);
+    font-weight: 600;
     cursor: pointer;
+    transition: background var(--fast) var(--ease);
 }
 
-.unlock-lock:hover { color: var(--text); border-color: var(--accent-line); }
-
-@keyframes unlock-breathe {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
+.unlock-lock::before {
+    content: "";
+    position: absolute;
+    top: -8px;
+    bottom: -8px;
+    left: 0;
+    right: 0;
 }
 
-@media (prefers-reduced-motion: reduce) {
-    .unlock-dot { animation: none; }
+.unlock-lock:hover:not(:disabled),
+.unlock-lock:focus-visible {
+    background: var(--surface-2);
 }
