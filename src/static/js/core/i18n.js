@@ -231,7 +231,6 @@
         "Removed: this message and its reply leave the conversation.":
             "Διαγράφονται: αυτό το μήνυμα και η απάντησή του αφαιρούνται από τη συνομιλία.",
         "Search this chat": "Αναζήτηση στη συνομιλία",
-        "Search this chat…": "Αναζήτηση στη συνομιλία…",
         "Clear search": "Καθαρισμός αναζήτησης",
         "No conversations yet — your chats appear here once you send a message.":
             "Δεν υπάρχουν ακόμη συνομιλίες — εμφανίζονται εδώ μόλις στείλετε το πρώτο μήνυμα.",
