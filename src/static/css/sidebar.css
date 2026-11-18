@@ -2,8 +2,8 @@
    sidebar.css — shared navigation chrome.
 
    Loaded on every page from base.html. Entries stay quiet warm charcoal;
-   the active page earns a crisp 3px sage rail on its leading edge rather
-   than a saturated background wash.
+   the active page earns a subtle surface step-up and a crisp 3px warm-grey
+   rail on its leading edge — never a coloured wash.
    ========================================================================== */
 
 .sidebar {
@@ -70,11 +70,11 @@
     text-decoration: none;
 }
 
-/* Active item: one neutral step up plus a 3px sage rail on the left. */
+/* Active item: subtle neutral step-up plus a 3px warm-grey rail on the left. */
 .nav-item.is-active {
     color: var(--text-strong);
     font-weight: 600;
-    background: var(--surface-3);
+    background: var(--surface-2);
     border-color: transparent;
 }
 
@@ -159,7 +159,7 @@
 }
 
 .chat-item.is-active {
-    background: var(--surface-3);
+    background: var(--surface-2);
     border-color: transparent;
     color: var(--text-strong);
     font-weight: 500;
@@ -313,8 +313,8 @@
     gap: 8px;
     padding: 8px 10px;
     border-radius: var(--r-sm);
-    background: var(--success-soft);
-    border: 1px solid var(--success-line);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
     font-size: var(--text-xs);
     color: var(--text-dim);
     line-height: 1.4;
@@ -325,7 +325,7 @@
     height: 8px;
     flex: none;
     border-radius: 50%;
-    background: var(--success);
+    background: var(--accent);
 }
 
 .unlock-text { flex: 1 1 auto; min-width: 0; }

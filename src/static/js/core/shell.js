@@ -24,7 +24,7 @@
     /**
      * Fill every <span data-icon="name"> with its icon.
      * Slots carrying `data-icon-svg` render inline SVG so `currentColor`
-     * applies (for instance, dark ink on a sage primary button).
+     * applies (for instance, dark ink on a warm-grey primary button).
      */
     function paintIcons(root) {
         global.Dom.$$("span[data-icon]", root).forEach(function (slot) {
