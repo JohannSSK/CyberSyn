@@ -27,7 +27,7 @@
     transition: background var(--fast) var(--ease),
                 border-color var(--fast) var(--ease),
                 color var(--fast) var(--ease),
-                transform var(--fast) var(--ease);
+                opacity var(--fast) var(--ease);
     user-select: none;
 }
 
@@ -37,9 +37,10 @@
     border-color: var(--border-strong);
 }
 
-.btn:hover:not(:disabled) { transform: translateY(-1px); }
-
-.btn:active:not(:disabled) { transform: translateY(0) scale(0.985); }
+.btn:active:not(:disabled) {
+    background: var(--surface-4);
+    border-color: var(--border-strong);
+}
 
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
@@ -55,6 +56,12 @@
     border-color: transparent;
 }
 
+.btn-primary:active:not(:disabled) {
+    background: var(--accent-deep);
+    border-color: var(--border-strong);
+    opacity: 0.9;
+}
+
 .btn-ghost {
     background: transparent;
     border-color: transparent;
@@ -68,10 +75,21 @@
     border-color: var(--border-soft);
 }
 
+.btn-ghost:active:not(:disabled) {
+    background: var(--surface-3);
+    color: var(--text);
+    border-color: var(--border);
+}
+
 .btn-outline { background: transparent; border-color: var(--border); }
 
 .btn-outline:hover:not(:disabled),
 .btn-outline:focus-visible:not(:disabled) { background: var(--surface-2); }
+
+.btn-outline:active:not(:disabled) {
+    background: var(--surface-3);
+    border-color: var(--border-strong);
+}
 
 /* Destructive actions stay restrained: neutral fill, semantic border and text. */
 .btn-danger {
@@ -83,6 +101,11 @@
 .btn-danger:hover:not(:disabled),
 .btn-danger:focus-visible:not(:disabled) {
     background: var(--danger-soft);
+    border-color: var(--danger);
+}
+
+.btn-danger:active:not(:disabled) {
+    background: var(--surface-3);
     border-color: var(--danger);
 }
 
@@ -149,8 +172,6 @@
 .field > label {
     font-size: var(--text-xs);
     font-weight: 600;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
     color: var(--text-muted);
 }
 
@@ -445,11 +466,23 @@
     border-color: var(--border);
 }
 
+.icon-btn:active:not(:disabled) {
+    color: var(--text);
+    background: var(--surface-3);
+    border-color: var(--border-strong);
+}
+
 .icon-btn.danger:hover:not(:disabled),
 .icon-btn.danger:focus-visible:not(:disabled) {
     color: var(--danger);
     background: var(--danger-soft);
     border-color: var(--danger-line);
+}
+
+.icon-btn.danger:active:not(:disabled) {
+    color: var(--danger);
+    background: var(--surface-3);
+    border-color: var(--danger);
 }
 
 .icon-btn .icon { width: var(--icon-sm); height: var(--icon-sm); }
@@ -489,13 +522,13 @@
     color: var(--text);
     /* Non-interactive so a toast over the topbar never intercepts a click. */
     pointer-events: none;
-    animation: toast-in var(--med) var(--ease) both;
+    animation: toast-in var(--med) var(--ease) both; /* opacity only */
 }
 
-.toast.out { animation: toast-out var(--med) var(--ease) both; }
+.toast.out { animation: toast-out var(--med) var(--ease) both; /* opacity only */ }
 
-@keyframes toast-in  { from { opacity: 0; transform: translateX(20px) scale(0.98); } to { opacity: 1; transform: none; } }
-@keyframes toast-out { to   { opacity: 0; transform: translateX(20px) scale(0.98); } }
+@keyframes toast-in  { from { opacity: 0; } to { opacity: 1; } }
+@keyframes toast-out { from { opacity: 1; } to { opacity: 0; } }
 
 .toast .icon { width: var(--icon-sm); height: var(--icon-sm); flex: none; margin-top: 2px; }
 .toast-success { border-color: var(--success-line); } .toast-success .icon { color: var(--success); }
@@ -532,7 +565,7 @@
     background: var(--surface);
     border: 1px solid var(--border);
     box-shadow: var(--shadow-lg);
-    animation: scale-in var(--med) var(--ease) both;
+    animation: fade-in var(--med) var(--ease) both;
 }
 
 .modal-head {

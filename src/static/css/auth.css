@@ -132,7 +132,6 @@
 .auth-step {
     width: 100%;
     max-width: 408px;
-    animation: rise-in var(--med) var(--ease) both;
 }
 
 .auth-progress {
@@ -154,8 +153,6 @@
     margin-bottom: 8px;
     font-size: var(--text-xs);
     font-weight: 600;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
     color: var(--text-muted);
 }
 
@@ -238,14 +235,18 @@
     border-radius: var(--r-md);
     cursor: pointer;
     transition: background var(--fast) var(--ease),
-                transform var(--fast) var(--ease);
+                border-color var(--fast) var(--ease),
+                opacity var(--fast) var(--ease);
 }
 
 .auth-btn-primary:hover:not(:disabled),
 .auth-btn-primary:focus-visible:not(:disabled) { background: var(--accent-deep); }
 
-.auth-btn-primary:hover:not(:disabled) { transform: translateY(-1px); }
-.auth-btn-primary:active:not(:disabled) { transform: translateY(0) scale(0.985); }
+.auth-btn-primary:active:not(:disabled) {
+    background: var(--accent-deep);
+    border-color: var(--border-strong);
+    opacity: 0.9;
+}
 .auth-btn-primary:disabled { opacity: 0.7; cursor: not-allowed; }
 
 .auth-btn-primary .btn-spinner::after {
@@ -264,7 +265,7 @@
     border-top: 1px solid var(--border-strong);
 }
 
-/* Quiet links with a left-to-right underline sweep and 44px hit height. */
+/* Quiet links with 44px hit height. */
 .auth-link {
     position: relative;
     display: inline-flex;
@@ -283,27 +284,12 @@
     transition: color var(--fast) var(--ease);
 }
 
-.auth-link::after {
-    content: "";
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 8px;
-    height: 1px;
-    background: currentColor;
-    transform: scaleX(0);
-    transform-origin: left center;
-    transition: transform var(--med) var(--ease);
-}
-
 .auth-link:hover,
 .auth-link:focus-visible {
     color: var(--text-strong);
-    text-decoration: none;
+    text-decoration: underline;
+    text-underline-offset: 3px;
 }
-
-.auth-link:hover::after,
-.auth-link:focus-visible::after { transform: scaleX(1); }
 
 .auth-context {
     display: flex;
@@ -329,8 +315,6 @@
 .auth-context-label {
     font-size: var(--text-xs);
     font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
     color: var(--text-muted);
 }
 
@@ -384,8 +368,7 @@
     cursor: pointer;
     transition: background var(--fast) var(--ease),
                 border-color var(--fast) var(--ease),
-                color var(--fast) var(--ease),
-                transform var(--fast) var(--ease);
+                color var(--fast) var(--ease);
 }
 
 .auth-btn-danger:hover:not(:disabled),
@@ -395,8 +378,11 @@
     color: var(--text-strong);
 }
 
-.auth-btn-danger:hover:not(:disabled) { transform: translateY(-1px); }
-.auth-btn-danger:active:not(:disabled) { transform: translateY(0) scale(0.985); }
+.auth-btn-danger:active:not(:disabled) {
+    background: var(--surface-3);
+    border-color: var(--danger);
+    color: var(--text-strong);
+}
 .auth-btn-danger:disabled { opacity: 0.7; cursor: not-allowed; }
 
 .auth-btn-danger .btn-spinner::after {

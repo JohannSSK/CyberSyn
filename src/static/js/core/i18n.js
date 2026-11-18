@@ -231,7 +231,6 @@
         "Removed: this message and its reply leave the conversation.":
             "Διαγράφονται: αυτό το μήνυμα και η απάντησή του αφαιρούνται από τη συνομιλία.",
         "Search this chat": "Αναζήτηση στη συνομιλία",
-        "Search this chat…": "Αναζήτηση στη συνομιλία…",
         "Clear search": "Καθαρισμός αναζήτησης",
         "No conversations yet — your chats appear here once you send a message.":
             "Δεν υπάρχουν ακόμη συνομιλίες — εμφανίζονται εδώ μόλις στείλετε το πρώτο μήνυμα.",
@@ -252,8 +251,8 @@
             "Γράψτε ένα μήνυμα παρακάτω. Κάθε γραμμή ελέγχεται σε αυτόν τον υπολογιστή πριν φτάσει στην ΤΝ.",
         "No messages match": "Δεν βρέθηκαν αντίστοιχα μηνύματα",
         "Message": "Μήνυμα",
-        "Write a message… (Enter to send, Shift+Enter for a new line)":
-            "Γράψτε ένα μήνυμα… (Enter για αποστολή, Shift+Enter για νέα γραμμή)",
+        "Write a message (Enter to send, Shift+Enter for a new line)":
+            "Γράψτε ένα μήνυμα (Enter για αποστολή, Shift+Enter για νέα γραμμή)",
         "Send message": "Αποστολή μηνύματος",
         "Checked on this computer before anything reaches the AI.":
             "Ελέγχεται σε αυτόν τον υπολογιστή πριν φτάσει οτιδήποτε στην ΤΝ.",
@@ -261,26 +260,18 @@
             "Δεν έχει συνδεθεί ακόμη πάροχος ΤΝ σε αυτόν τον χώρο εργασίας — ζητήστε από τον διαχειριστή σας να προσθέσει έναν στις",
         "Dismiss notice": "Απόκρυψη ειδοποίησης",
         "Local safety checks": "Τοπικοί έλεγχοι ασφάλειας",
-        "Checks": "Έλεγχοι",
-        "On": "Ενεργός",
-        "Off": "Ανενεργός",
-        "Manage in Settings": "Διαχείριση στις Ρυθμίσεις",
-        "AFM, AMKA, IBANs, phones, emails, cards and names.":
-            "ΑΦΜ, ΑΜΚΑ, IBAN, τηλέφωνα, email, κάρτες και ονόματα.",
-        "Contracts, NDAs, internal financials, HR, credentials and code.":
-            "Συμβάσεις, NDA, εσωτερικά οικονομικά, HR, διαπιστευτήρια και κώδικας.",
-        "Hidden instructions in pasted emails, web pages and documents.":
-            "Κρυφές εντολές σε επικολλημένα email, ιστοσελίδες και έγγραφα.",
-        "Checking locally before sending…": "Τοπικός έλεγχος πριν την αποστολή…",
+        "All checks on": "Όλοι οι έλεγχοι ενεργοί",
+        "All checks off": "Όλοι οι έλεγχοι ανενεργοί",
+        "Checking locally before sending.": "Τοπικός έλεγχος πριν την αποστολή.",
         "Still checking — normal on a long paste.":
             "Ο έλεγχος συνεχίζεται — φυσιολογικό σε μεγάλο κείμενο.",
         "Still waiting — normal on a long paste.":
             "Η αναμονή συνεχίζεται — φυσιολογικό σε μεγάλο κείμενο.",
         "Checking the message": "Έλεγχος μηνύματος",
         "All checks passed.": "Όλοι οι έλεγχοι ολοκληρώθηκαν.",
-        "Waiting for the AI reply…": "Αναμονή απάντησης από την ΤΝ…",
-        "Sending once with administrator approval…":
-            "Μεμονωμένη αποστολή με έγκριση διαχειριστή…",
+        "Waiting for the AI reply.": "Αναμονή απάντησης από την ΤΝ.",
+        "Sending once with administrator approval.":
+            "Μεμονωμένη αποστολή με έγκριση διαχειριστή.",
         "Sent once with administrator approval — this was logged.":
             "Στάλθηκε μία φορά με έγκριση διαχειριστή — η ενέργεια καταγράφηκε.",
         "Nicely rewritten — that went through cleanly.":
@@ -700,8 +691,8 @@
        Patterns for strings with numbers or names filled in at runtime.
        ---------------------------------------------------------------------- */
     var PATTERNS = [
-        [/^Checks · (\d+) of 3 active$/, function (m) {
-            return "Έλεγχοι · " + m[1] + " από 3 ενεργοί";
+        [/^Checks: (\d+) of 3 on$/, function (m) {
+            return "Έλεγχοι: " + m[1] + " από 3 " + (m[1] === "1" ? "ενεργός" : "ενεργοί");
         }],
         [/^(\d+) of 3 checks active$/, function (m) {
             return m[1] + " από 3 έλεγχοι ενεργοί";
