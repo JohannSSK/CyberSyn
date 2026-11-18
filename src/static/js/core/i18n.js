@@ -317,6 +317,8 @@
         "Ask an administrator to approve this once, or rephrase without the flagged details.":
             "Ζητήστε από έναν διαχειριστή μεμονωμένη έγκριση ή διατυπώστε ξανά το μήνυμα χωρίς τα επισημασμένα στοιχεία.",
         "Edit in message box": "Επεξεργασία στο πεδίο",
+        "Put my text back in the message box":
+            "Επαναφορά του κειμένου μου στο πεδίο μηνύματος",
         "Approve once": "Έγκριση για μία φορά",
         "Approve & send": "Έγκριση & αποστολή",
         "One-off approvals need the administrator password and are recorded in the audit log.":

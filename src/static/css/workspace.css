@@ -720,6 +720,12 @@ html[lang="el"] .bubble { line-height: 1.74; }
     gap: 8px;
 }
 
+.bubble-blocked .rephrase-btn:hover:not(:disabled),
+.bubble-blocked .rephrase-btn:focus-visible:not(:disabled) {
+    background: var(--surface-3);
+    border-color: var(--border);
+}
+
 .override-note {
     margin: 10px 0 0;
     font-size: var(--text-xs);

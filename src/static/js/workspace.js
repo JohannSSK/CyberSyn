@@ -97,6 +97,12 @@
         autoGrow();
         nodes.input.focus();
         nodes.input.setSelectionRange(text.length, text.length);
+        if (typeof nodes.input.scrollIntoView === "function") {
+            nodes.input.scrollIntoView({
+                block: "nearest",
+                behavior: reducedMotion() ? "auto" : "smooth"
+            });
+        }
     }
 
     function scrollToEnd(smooth) {
@@ -638,15 +644,18 @@
         expander.appendChild(details);
         card.appendChild(expander);
 
-        // Constructive next step: edit & rephrase, or request one-off admin approval.
+        // Constructive next step: restore the message to edit, or approve once.
+        var hasPrompt = typeof promptText === "string" && promptText.length > 0;
         var panel = Dom.el("div", "override-panel");
         panel.innerHTML =
             '<p class="blocked-next">' +
             Dom.esc(t("Ask an administrator to approve this once, or rephrase without the flagged details.")) +
             "</p>" +
             '<div class="blocked-cta-row">' +
-            '  <button type="button" class="btn btn-sm rephrase-btn">' +
-            Dom.esc(t("Edit in message box")) + "</button>" +
+            (hasPrompt
+                ? '  <button type="button" class="btn btn-sm btn-ghost rephrase-btn">' +
+                  Dom.esc(t("Put my text back in the message box")) + "</button>"
+                : "") +
             '  <button type="button" class="btn btn-sm btn-outline override-ask">' +
             Dom.esc(t("Approve once")) + "</button>" +
             "</div>" +
@@ -658,9 +667,11 @@
         var rephrase = panel.querySelector(".rephrase-btn");
         var ask = panel.querySelector(".override-ask");
 
-        Dom.on(rephrase, "click", function () {
-            fillComposer(promptText);
-        });
+        if (rephrase) {
+            Dom.on(rephrase, "click", function () {
+                fillComposer(promptText);
+            });
+        }
 
         Dom.on(ask, "click", function () {
             var passId = "override-password-" + Date.now();
@@ -706,7 +717,7 @@
                         username: data.username
                     });
                     wrap.remove();
-                    send(promptText, true, token);
+                    send(promptText.trim(), true, token, promptText);
                 }).catch(function (err) {
                     Loading.toast(
                         err.message || "That password did not match. Check it and try again.",
@@ -745,11 +756,12 @@
         return seconds * 1000;
     }
 
-    function send(text, bypass, adminToken) {
+    function send(text, bypass, adminToken, rawPrompt) {
         if (state.busy) return;
         state.busy = true;
         nodes.send.disabled = true;
 
+        var originalPrompt = typeof rawPrompt === "string" ? rawPrompt : text;
         var preSendKey = currentChatKey();
         var emptyNode = nodes.stream.querySelector(".first-run, .empty");
         if (emptyNode) emptyNode.remove();
@@ -772,7 +784,7 @@
                     waiting.resolve((data.block_info || {}).stage || "check1");
                     hidePending();
                     state.blockedChats[preSendKey] = true;
-                    renderBlocked(data.block_info || {}, text);
+                    renderBlocked(data.block_info || {}, originalPrompt);
                     return null;
                 }
 
@@ -833,7 +845,8 @@
     function onSend(event) {
         event.preventDefault();
         if (state.busy) return;
-        var text = nodes.input.value.trim();
+        var raw = nodes.input.value;
+        var text = raw.trim();
         if (!text) {
             Loading.toast("That message was empty — type a line first.", "info");
             nodes.input.focus();
@@ -842,7 +855,7 @@
         nodes.input.value = "";
         autoGrow();
         clearSearch();
-        send(text, false, null);
+        send(text, false, null, raw);
     }
 
     /* ------------------------------------------------------------------
@@ -973,7 +986,9 @@
         updateChecksBadge();
         renderChatList();
         if (pending && pending.relocalise) pending.relocalise();
-        if (!state.busy) renderMessages();
+        if (!state.busy && !nodes.stream.querySelector(".bubble-blocked")) {
+            renderMessages();
+        }
     });
 
     /* ------------------------------------------------------------------
