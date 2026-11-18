@@ -268,3 +268,7 @@
     font-size: var(--text-sm);
     color: var(--text-muted);
 }
+
+/* Screening action selects share the existing toggle row layout. */
+#toggle-list .toggle-text label { font-weight: 600; }
+#toggle-list .policy-action { width: min(12rem, 45%); flex-shrink: 0; }

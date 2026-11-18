@@ -1,177 +1,139 @@
-/* ==========================================================================
-   auth.js — the two-step sign-in portal.
-
-   Step 1: the administrator signs in. Step 2: a team member signs in to open
-   their workspace. Administrator and member tokens live separately because
-   each grants a different scope of access.
-   ========================================================================== */
-
+/* The portal has two independent forms. Cookies carry all credentials. */
 (function () {
     "use strict";
 
-    var Session = window.Api.Session;
+    var Api = window.Api;
+    var Session = Api.Session;
+    var Dom = window.Dom;
     var Loading = window.Loading;
-    var $ = window.Dom.$;
+    var $ = Dom.$;
+    var options = { member: false, onUnauthorised: false };
+    var tabs = Dom.$$("[data-auth-tab]");
+    var explicit = new URLSearchParams(location.search).get("tab");
+    var selected = explicit === "admin" ? "admin" : "member";
+    var changedTabs = false;
+    var busy = false;
+    var attempted = false;
 
-    function t(text) {
-        return window.I18n && typeof window.I18n.t === "function"
-            ? window.I18n.t(text)
-            : text;
-    }
-
-    var admin = {
-        step: $("#admin-step"),
-        username: $("#admin-username"),
-        password: $("#admin-password"),
-        msg: $("#admin-msg"),
-        login: $("#btn-admin-login")
-    };
-
-    var employee = {
-        step: $("#employee-card"),
-        badge: $("#admin-session-badge"),
-        adminLabel: $("#active-admin-label"),
-        username: $("#employee-username"),
-        password: $("#employee-password"),
-        msg: $("#employee-msg"),
-        login: $("#btn-employee-login")
-    };
-
-    var parentId = null;
-
-    function showError(node, message) {
-        node.textContent = message ? t(message) : "";
-    }
-
-    /* ------------------------------------------------------------------
-       Step 1 — administrator
-       ------------------------------------------------------------------ */
-
-    function adminLogin() {
-        showError(admin.msg, "");
-        var username = admin.username.value.trim();
-        var password = admin.password.value;
-
-        if (!username) {
-            showError(admin.msg, "Type your administrator username to continue.");
-            admin.username.focus();
-            return;
-        }
-        if (!password) {
-            showError(admin.msg, "Type your password to continue.");
-            admin.password.focus();
-            return;
-        }
-
-        Loading.withButton(admin.login, function () {
-            return window.Api.post("ADMIN_LOGIN",
-                { username: username, password: password },
-                { member: false, onUnauthorised: false });
-        }).then(function (data) {
-            parentId = parseInt(data.Parent_id, 10);
-            Session.setAdmin({
-                parentId: parentId,
-                username: data.username || username
-            });
-            admin.password.value = "";
-            revealMemberStep(data.username || username);
-        }).catch(function (err) {
-            showError(admin.msg, err.message);
-            Loading.toast(err.message, "error");
+    function selectTab(name, focus) {
+        selected = name;
+        tabs.forEach(function (tab) {
+            var active = tab.dataset.authTab === name;
+            tab.setAttribute("aria-selected", String(active));
+            tab.tabIndex = active ? 0 : -1;
+            document.getElementById(tab.getAttribute("aria-controls")).hidden = !active;
+            if (active && focus) tab.focus();
         });
     }
 
-    function revealMemberStep(username) {
-        admin.step.classList.add("hidden");
-        employee.step.classList.remove("hidden");
-        employee.badge.classList.remove("hidden");
-        employee.adminLabel.textContent = username;
-        employee.username.focus();
+    function paintAdmin(admin) {
+        $("#admin-sign-in").hidden = !!admin;
+        $("#admin-session-badge").hidden = !admin;
+        $("#active-admin-label").textContent = admin ? admin.username : "";
+        $("#member-ends-admin").hidden = !admin;
     }
 
-    function backToAdmin() {
-        window.Api.post("ADMIN_LOGOUT", {},
-            { member: false, onUnauthorised: false }).catch(function () {});
-        Session.clearAdmin();
-        Session.clearMember();
-        parentId = null;
-        employee.step.classList.add("hidden");
-        employee.badge.classList.add("hidden");
-        showError(employee.msg, "");
-        admin.step.classList.remove("hidden");
-        admin.username.focus();
+    function showError(target, message) {
+        $(target).textContent = message || "";
+        if (window.I18n) window.I18n.apply();
     }
 
-    /* ------------------------------------------------------------------
-       Step 2 — team member
-       ------------------------------------------------------------------ */
+    function run(button, task, onSuccess, onError) {
+        if (busy) return;
+        busy = true;
+        attempted = true;
+        Loading.withButton(button, task).then(onSuccess).catch(onError).finally(function () { busy = false; });
+    }
 
-    function employeeLogin() {
-        showError(employee.msg, "");
-        var username = employee.username.value.trim();
-        var password = employee.password.value;
+    tabs.forEach(function (tab, index) {
+        Dom.on(tab, "click", function () {
+            changedTabs = true;
+            selectTab(tab.dataset.authTab, true);
+        });
+        Dom.on(tab, "keydown", function (event) {
+            var next;
+            if (event.key === "ArrowLeft") next = (index + tabs.length - 1) % tabs.length;
+            else if (event.key === "ArrowRight") next = (index + 1) % tabs.length;
+            else if (event.key === "Home") next = 0;
+            else if (event.key === "End") next = tabs.length - 1;
+            else return;
+            event.preventDefault();
+            changedTabs = true;
+            selectTab(tabs[next].dataset.authTab, true);
+        });
+    });
+    selectTab(selected, false);
 
-        if (!username) {
-            showError(employee.msg, "Type the team member's username first.");
-            employee.username.focus();
+    Dom.on($("#admin-login-form"), "submit", function (event) {
+        event.preventDefault();
+        var username = $("#admin-username").value.trim();
+        var password = $("#admin-password").value;
+        showError("#admin-msg", "");
+        if (!username || !password) {
+            showError("#admin-msg", !username ? "Type your administrator username to continue." : "Type your password to continue.");
             return;
         }
-        if (!password) {
-            showError(employee.msg, "Type the team member's password to open the workspace.");
-            employee.password.focus();
+        run($("#btn-admin-login"), function () {
+            return Api.post("ADMIN_LOGIN", { username: username, password: password }, options);
+        }, function (data) {
+            var admin = { parentId: data.Parent_id, username: data.username || username };
+            Session.setAdmin(admin);
+            window.Shell.forgetAdminPage();
+            $("#admin-password").value = "";
+            paintAdmin(admin);
+            if (selected === "admin") $("#admin-session-badge a").focus();
+        }, function (err) { showError("#admin-msg", err.message); });
+    });
+
+    Dom.on($("#employee-login-form"), "submit", function (event) {
+        event.preventDefault();
+        var username = $("#employee-username").value.trim();
+        var password = $("#employee-password").value;
+        var workspace = $("#employee-workspace").value.trim();
+        showError("#employee-msg", "");
+        if (!username || !password) {
+            showError("#employee-msg", !username ? "Type the team member's username first." : "Type the team member's password to open the workspace.");
             return;
         }
-
-        Loading.withButton(employee.login, function () {
-            return window.Api.post("EMPLOYEE_LOGIN",
-                { Parent_id: parentId, username: username, password: password },
-                { member: false, onUnauthorised: false });
-        }).then(function (data) {
-            Session.setMember({
-                parentId: parentId,
-                employeeId: parseInt(data.Employee_id, 10),
-                username: data.username || username
-            });
-            employee.password.value = "";
-            Loading.toast("Signed in as " + (data.username || username) + ".", "success");
+        var payload = { username: username, password: password };
+        if (workspace) payload.workspace = workspace;
+        run($("#btn-employee-login"), function () {
+            return Api.post("EMPLOYEE_LOGIN", payload, options);
+        }, function (data) {
+            Session.clearAdmin();
+            window.Shell.forgetAdminPage();
+            Session.setMember({ parentId: data.Parent_id, employeeId: data.Employee_id, username: data.username || username });
+            $("#employee-password").value = "";
+            paintAdmin(null);
             location.href = "/workspace";
-        }).catch(function (err) {
-            showError(employee.msg, err.message);
-            Loading.toast(err.message, "error");
-        });
-    }
-
-    /* ------------------------------------------------------------------
-       Wiring
-       ------------------------------------------------------------------ */
-
-    window.Dom.on(admin.login, "click", adminLogin);
-    window.Dom.on(employee.login, "click", employeeLogin);
-    window.Dom.on($("#btn-admin-logout"), "click", backToAdmin);
-
-    [admin.username, admin.password].forEach(function (input) {
-        window.Dom.on(input, "keydown", function (e) {
-            if (e.key === "Enter") { e.preventDefault(); adminLogin(); }
-        });
-    });
-    [employee.username, employee.password].forEach(function (input) {
-        window.Dom.on(input, "keydown", function (e) {
-            if (e.key === "Enter") { e.preventDefault(); employeeLogin(); }
-        });
+        }, function (err) { showError("#employee-msg", err.message); });
     });
 
-    /* A remembered administrator skips straight to step 2. */
-    (function restore() {
-        var meta = Session.getAdmin();
-        if (!meta || !meta.parentId) return;
-        window.Api.post("ADMIN_SESSION", {},
-            { member: false, onUnauthorised: false })
-            .then(function (data) {
-                if (!data.success) { Session.clearAdmin(); return; }
-                parentId = parseInt(data.Parent_id, 10);
-                Session.setAdmin({ parentId: parentId, username: data.username });
-                revealMemberStep(data.username || "Admin");
-            })
-            .catch(function () { Session.clearAdmin(); });
-    })();
+    Dom.on($("#btn-switch-member"), "click", function () {
+        var admin = Session.getAdmin();
+        $("#employee-workspace").value = admin ? admin.username : $("#active-admin-label").textContent;
+        changedTabs = true;
+        selectTab("member", false);
+        $("#employee-username").focus();
+    });
+
+    Dom.on($("#btn-admin-logout"), "click", function () {
+        run($("#btn-admin-logout"), function () {
+            return Api.post("ADMIN_LOGOUT", {}, options);
+        }, function () {
+            Session.clearAdmin();
+            window.Shell.forgetAdminPage();
+            paintAdmin(null);
+            if (selected === "admin") $("#admin-username").focus();
+        }, function (err) { Loading.toast(err.message, "error"); });
+    });
+
+    window.Shell.restoreAdmin().then(function (admin) {
+        // A delayed restore must not change the tab after the user chose one.
+        if (attempted) return;
+        Session.setAdmin(admin);
+        if (!admin) return;
+        paintAdmin(admin);
+        if (!changedTabs && explicit !== "member") selectTab("admin", false);
+    }).catch(function () { /* the separate sign-in forms remain available */ });
 })();

@@ -264,7 +264,24 @@
         return count;
     }
 
+    var POLICY_FIELDS = {
+        check1: "action_check1", check2: "action_check2", check3: "action_check3", block_code: "action_code"
+    };
+
+    function policyAction(settings, rule) {
+        var action = settings[POLICY_FIELDS[rule]];
+        if (action) return action;
+        // Old payloads still represent the same effective rules.
+        var enabled = rule === "block_code" ? !!settings[rule] : settings[rule] !== false;
+        return enabled ? "block" : "allow";
+    }
+
+    function activeChecks(settings) {
+        return Object.keys(POLICY_FIELDS).filter(function (rule) { return policyAction(settings, rule) !== "allow"; }).length;
+    }
+
     global.Dom = {
+        policyAction: policyAction, activeChecks: activeChecks, policyFields: POLICY_FIELDS,
         el: el, fromHTML: fromHTML, esc: esc,
         $: $, $$: $$, on: on,
         avatarTone: avatarTone, initials: initials,

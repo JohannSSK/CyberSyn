@@ -167,10 +167,14 @@ class RouteTests(unittest.TestCase):
         chat_api.complete = lambda key, model, prompt, **kwargs: "stub reply"
         # Screening passes each check the time left in its shared budget,
         # plus a stop flag the checks use to abandon a settled verdict.
-        scanning.run_check = lambda stage, prompt, timeout=None, stop=None: {
-            "blocked": prompt != "hello", "stage": stage, "reason": "stub",
-            "line": 1, "start": 0, "end": 1, "snippet": "", "matches": [],
-        }
+        def scan(stage, prompt, *args, **kwargs):
+            matches = [] if prompt == "hello" else [{
+                "line": 1, "cause": "GREEK_AFM", "score": .95,
+                "start_offset": 0, "end_offset": len(prompt), "snippet": prompt,
+            }]
+            return {"blocked": bool(matches), "matches": matches}
+
+        scanning.run_check = scan
 
     def ids(self, **extra):
         body = {"Parent_id": 1, "Employee_id": self.member_id,
@@ -236,9 +240,10 @@ class RouteTests(unittest.TestCase):
              patch.object(chat_api, "complete", return_value="ok") as complete:
             r = self.client.post(ROUTES["CHAT"], json=self.ids(
                 prompt="hello", check1=False, check2=False, check3=False, block_code=True,
-                MODEL_NAME="other/model"))
+                action_check1="allow", action_check2="allow", MODEL_NAME="other/model"))
             self.assertEqual(r.status_code, 200)
-            screen.assert_called_once_with("hello", {"check1": True, "check2": True, "check3": True, "block_code": False})
+            screen.assert_called_once_with("hello", {"action_check1": "block", "action_check2": "block",
+                                                     "action_check3": "block", "action_code": "allow"})
             self.assertEqual(complete.call_args.args[1], "gpt-4o-mini")
 
     def test_a_signed_in_member_can_read_their_own_settings(self):
@@ -377,7 +382,7 @@ class RouteTests(unittest.TestCase):
 
     def test_a_blocked_prompt_is_logged_and_not_forwarded(self):
         r = self.client.post(ROUTES["CHAT"],
-                             json=self.ids(prompt="my AFM is 123456789",
+                             json=self.ids(prompt="Synthetic AFM fixture",
                                            check1=True, check2=True, check3=True))
         body = r.get_json()
         self.assertTrue(body["blocked"], "the stub scanner blocks everything")

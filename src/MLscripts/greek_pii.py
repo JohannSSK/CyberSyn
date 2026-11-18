@@ -118,7 +118,7 @@ def _not_private_name(name, text):
             (name.casefold() in _PUBLIC and re.search(r"\b(who (was|is)|explain|describe|biography)\b", text, re.I)))
 
 
-def analyze(raw_text, stop=None):
+def analyze(raw_text, stop=None, full_detail=False):
     if not raw_text.strip():
         return {
             "blocked": False,
@@ -177,16 +177,19 @@ def analyze(raw_text, stop=None):
 
     seen_spans = {(m["start_offset"], m["end_offset"]) for m in matches}
 
+    def seen(start, end):
+        if full_detail:
+            # Keep partially overlapping names; the redactor will cover the
+            # union rather than exposing the part outside a previous hit.
+            return (start, end) in seen_spans
+        return any(not (end <= s or start >= e) for s, e in seen_spans)
+
     # Detect titled person names (e.g. "Η κα. Ελένη Παπαδοπούλου") and Greek surnames
     for match in TITLE_NAME_PATTERN.finditer(raw_text):
         val = match.group(1).strip()
         start, end = match.start(1), match.end(1)
         span = (start, end)
-        overlaps = any(
-            not (end <= s or start >= e)
-            for s, e in seen_spans
-        )
-        if not overlaps and not _not_private_name(val, raw_text):
+        if not seen(start, end) and not _not_private_name(val, raw_text):
             seen_spans.add(span)
             matches.append(
                 {
@@ -203,11 +206,7 @@ def analyze(raw_text, stop=None):
         val = match.group().strip()
         start, end = match.start(), match.end()
         span = (start, end)
-        overlaps = any(
-            not (end <= s or start >= e)
-            for s, e in seen_spans
-        )
-        if not overlaps and not _not_private_name(val, raw_text):
+        if not seen(start, end) and not _not_private_name(val, raw_text):
             seen_spans.add(span)
             matches.append(
                 {
@@ -233,7 +232,7 @@ def analyze(raw_text, stop=None):
     #    blocking on its own, and a name found here could be - so the
     #    short-circuit needs a score at or above the block threshold.
     settled = (
-        any(is_blocking(m["cause"], m["score"]) for m in matches)
+        not full_detail and any(is_blocking(m["cause"], m["score"]) for m in matches)
         and len(raw_text) > DETAIL_CHARS
     )
     classifier_ran = False
@@ -261,10 +260,6 @@ def analyze(raw_text, stop=None):
                     else:
                         name = raw_name
                     span = (start_char, end_char)
-                    overlaps = any(
-                        not (end_char <= s or start_char >= e)
-                        for s, e in seen_spans
-                    )
                     is_full_name = (
                         len(name.split()) >= 2
                         and re.match(script_regex, name)
@@ -273,7 +268,7 @@ def analyze(raw_text, stop=None):
                         len(name.split()) == 1
                         and (tm is not None or GREEK_SURNAME_REGEX.match(name))
                     )
-                    if not overlaps and (is_full_name or is_surname) and not _not_private_name(name, raw_text):
+                    if not seen(start_char, end_char) and (is_full_name or is_surname) and not _not_private_name(name, raw_text):
                         seen_spans.add(span)
                         matches.append(
                             {
@@ -282,7 +277,7 @@ def analyze(raw_text, stop=None):
                                 "line": get_line_number(raw_text, start_char),
                                 "start_offset": start_char,
                                 "end_offset": end_char,
-                                "snippet": name,
+                                "snippet": raw_text[start_char:end_char],
                             }
                         )
 
@@ -325,7 +320,7 @@ def analyze(raw_text, stop=None):
 
 def analyze_stdin():
     """CLI entry point: read the prompt from stdin and return the verdict."""
-    return analyze(sys.stdin.read())
+    return analyze(sys.stdin.read(), full_detail="--full-detail" in sys.argv)
 
 
 if __name__ == "__main__":

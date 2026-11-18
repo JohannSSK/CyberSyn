@@ -11,6 +11,7 @@ Both are append-only. Deleting a chat does not touch either, so the team
 numbers stay honest.
 """
 
+from contextlib import closing
 from datetime import datetime, timezone
 
 from auth import _connect
@@ -52,6 +53,12 @@ KIND_LABELS = {
     "message_deleted": "Message deleted",
     "regenerated": "Answer regenerated",
     "logout": "Signed out",
+    "warned": "Message paused",
+    "warn_proceeded": "Warning confirmed",
+    "redacted": "Message redacted",
+    "shadow_policy": "AI tool policy changed",
+    "shadow_import": "Discovery logs imported",
+    "shadow_clear": "Discovery logs cleared",
 }
 
 
@@ -81,9 +88,11 @@ def record_block(db_file, parent_id, employee_id, stage, reason):
     con.close()
 
 
-def record_activity(db_file, parent_id, employee_id, kind, detail=None):
-    """Record one step a member took. Unknown kinds are stored as-is."""
-    con = _connect(db_file)
+def record_activity(db_file, parent_id, employee_id, kind, detail=None, *, con=None):
+    """Record one step, optionally as part of the caller's transaction."""
+    if con is None:
+        with closing(_connect(db_file)) as con, con:
+            return record_activity(db_file, parent_id, employee_id, kind, detail, con=con)
     con.execute(ACTIVITY_SQL)
     con.execute(ACTIVITY_INDEX)
     con.execute(
@@ -92,8 +101,6 @@ def record_activity(db_file, parent_id, employee_id, kind, detail=None):
         (parent_id, employee_id, str(kind)[:40],
          None if detail is None else str(detail)[:200], _now()),
     )
-    con.commit()
-    con.close()
 
 
 def block_rows(db_file, parent_id, employee_id=None):

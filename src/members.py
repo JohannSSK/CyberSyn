@@ -9,9 +9,11 @@ it matters.
 from config import DEFAULT_MODEL, ROUTES
 from db import get_db
 from errors import ApiError
+from policy import ACTION_FIELDS, ACTIONS, DEFAULT_FLAGS, legacy_action, rule_actions
 from secret_store import encrypt_secret, mask_stored_key
 
-SETTING_FLAGS = ("check1", "check2", "check3", "block_code")
+SETTING_FLAGS = tuple(ACTION_FIELDS)
+POLICY_FIELDS = (*SETTING_FLAGS, *ACTION_FIELDS.values(), "restore_redactions")
 CONNECTION_FIELDS = ("API_KEY", "PROVIDER", "API_BASE", "MODEL_NAME")
 
 
@@ -44,15 +46,17 @@ def default_settings_values(parent_id=None):
         "SELECT * FROM SETTINGS WHERE Parent_id = ? AND Employee_id = 0",
         (parent_id,),
     ).fetchone()
-    if row:
-        return {
-            "check1": int(row["check1"]), "check2": int(row["check2"]),
-            "check3": int(row["check3"]), "block_code": int(row["block_code"]), "API_KEY": row["API_KEY"] or "",
-            "MODEL_NAME": row["MODEL_NAME"] or DEFAULT_MODEL,
-            "PROVIDER": _provider_of(row), "API_BASE": _base_of(row),
-        }
-    return {"check1": 1, "check2": 1, "check3": 1, "block_code": 0, "API_KEY": "",
-            "MODEL_NAME": DEFAULT_MODEL, "PROVIDER": "auto", "API_BASE": ""}
+    policy = _policy_values(row or DEFAULT_FLAGS)
+    return {**policy, "API_KEY": (row["API_KEY"] or "") if row else "",
+            "MODEL_NAME": (row["MODEL_NAME"] or DEFAULT_MODEL) if row else DEFAULT_MODEL,
+            "PROVIDER": _provider_of(row) if row else "auto", "API_BASE": _base_of(row) if row else ""}
+
+
+def _policy_values(row):
+    actions = rule_actions(row)
+    return {**{flag: action != "allow" for flag, action in actions.items()},
+            **{field: actions[flag] for flag, field in ACTION_FIELDS.items()},
+            "restore_redactions": bool(_value(row, "restore_redactions", 0))}
 
 
 def _value(row, name, default=""):
@@ -82,15 +86,15 @@ def create_default_settings(parent_id, employee_id, *, inherit=False, commit=Tru
     if exists:
         return
     d = default_settings_values(parent_id if inherit else None)
+    columns = (*POLICY_FIELDS, *CONNECTION_FIELDS)
+    placeholders = ", ".join("?" for _ in columns)
     db.execute(
-        "INSERT OR IGNORE INTO SETTINGS (Parent_id, Employee_id, check1, check2, check3, block_code, "
-        "API_KEY, MODEL_NAME, PROVIDER, API_BASE) "
-        "SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE "
+        f"INSERT OR IGNORE INTO SETTINGS (Parent_id, Employee_id, {', '.join(columns)}) "
+        f"SELECT ?, ?, {placeholders} WHERE "
         "(? = 0 AND EXISTS (SELECT 1 FROM ADMINS WHERE id=?)) OR "
         "EXISTS (SELECT 1 FROM EMPLOYEES WHERE id=? AND Parent_id=?)",
-        (parent_id, employee_id, d["check1"], d["check2"], d["check3"], d["block_code"],
-         d["API_KEY"], d["MODEL_NAME"], d.get("PROVIDER", "auto"),
-         d.get("API_BASE", ""), employee_id, parent_id, employee_id, parent_id),
+        (parent_id, employee_id, *(d[column] for column in columns),
+         employee_id, parent_id, employee_id, parent_id),
     )
     if commit:
         db.commit()
@@ -116,10 +120,7 @@ def settings_payload(parent_id, employee_id, row):
     return {
         "Parent_id": str(parent_id),
         "Employee_id": str(employee_id),
-        "check1": bool(row["check1"]),
-        "check2": bool(row["check2"]),
-        "check3": bool(row["check3"]),
-        "block_code": bool(row["block_code"]),
+        **_policy_values(row),
         "API_KEY": "",
         "API_KEY_MASK": mask_stored_key(row["API_KEY"]),
         "MODEL_NAME": row["MODEL_NAME"] or DEFAULT_MODEL,
@@ -136,11 +137,24 @@ def settings_updates(data):
     from web import non_empty_str
 
     updates = {}
-    for key in SETTING_FLAGS:
-        if key in data:
-            if not isinstance(data[key], bool):
-                raise ApiError(f"'{key}' must be true or false.", 400)
-            updates[key] = 1 if data[key] else 0
+    for flag, field in ACTION_FIELDS.items():
+        if flag in data and not isinstance(data[flag], bool):
+            raise ApiError(f"'{flag}' must be true or false.", 400)
+        if field in data:
+            action = data[field]
+            if action not in ACTIONS:
+                raise ApiError(f"'{field}' must be allow, warn, redact or block.", 400)
+            if flag == "check3" and action == "redact":
+                raise ApiError("Prompt injection does not support redaction. Choose allow, warn or block.", 400)
+            updates[field] = action
+            updates[flag] = int(action != "allow")
+        elif flag in data:
+            updates[flag] = int(data[flag])
+            updates[field] = legacy_action(data[flag])
+    if "restore_redactions" in data:
+        if not isinstance(data["restore_redactions"], bool):
+            raise ApiError("'restore_redactions' must be true or false.", 400)
+        updates["restore_redactions"] = int(data["restore_redactions"])
     if "API_KEY" in data:
         if not isinstance(data["API_KEY"], str):
             raise ApiError("'API_KEY' must be a string.", 400)

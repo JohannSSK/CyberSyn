@@ -11,7 +11,7 @@
     var Loading = window.Loading;
     var $ = Dom.$;
 
-    if (!window.Shell.guardAdmin()) return;
+    var access = null;
 
     function t(text) {
         return window.I18n && typeof window.I18n.t === "function"
@@ -65,7 +65,7 @@
             '<span class="member-meta">' +
             '<span class="mono" data-no-i18n>' + Dom.esc(member.model || "gpt-4o-mini") + "</span>" +
             "<span>·</span><span>" + Dom.esc(keyNote) + "</span>" +
-            "<span>·</span><span>" + Dom.esc(t(member.checks_on + " of 3 checks on")) + "</span>" +
+            "<span>·</span><span>" + Dom.esc(t(member.checks_on + " of 4 checks on")) + "</span>" +
             "</span></span>";
 
         head.appendChild(buildDonut(member.block_rate, member.blocked, member.sent));
@@ -119,7 +119,7 @@
             var empty = Dom.el("div", "empty-inline");
             empty.innerHTML =
                 "<strong>" + Dom.esc(t("No team members yet")) + "</strong>" +
-                "<span>" + Dom.esc(t("Add a colleague from step 2 of the sign-in screen — their seat and active checks appear here.")) + "</span>";
+                "<span>" + Dom.esc(t("Add a colleague from the Administrator tab to see their seat and active checks here.")) + "</span>";
             list.appendChild(empty);
         } else {
             members.forEach(function (member) { list.appendChild(memberRow(member)); });
@@ -128,18 +128,16 @@
     }
 
     function load(button) {
+        if (!access) return;
         var task = function () {
-            return Api.post("TEAM", {},
-                { member: false, onUnauthorised: false });
+            return Api.post("TEAM", { Parent_id: access.parentId }, { member: false, onUnauthorised: false });
         };
         var request = button ? Loading.withButton(button, task) : task();
 
         return request.then(function (data) {
             latestData = data;
             render(data);
-        }).catch(function (err) {
-            Loading.toast(err.message, "error");
-        });
+        }).catch(window.Shell.adminPageError);
     }
 
     Dom.on($("#btn-refresh"), "click", function () { load($("#btn-refresh")); });
@@ -148,8 +146,8 @@
         if (latestData) render(latestData);
     });
 
-    window.Shell.withAdminPage({
-        title: "Team",
-        what: "every member and how their gate is configured"
-    }).then(function () { load(); }).catch(function () { });
+    window.Shell.enterAdminPage("/team").then(function (context) {
+        access = context;
+        return load();
+    }).catch(window.Shell.adminPageError);
 })();

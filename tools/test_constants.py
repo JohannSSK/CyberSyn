@@ -120,7 +120,7 @@ for path in (ROOT / "src").rglob("*.py"):
 check("no Python module hardcodes an /api/ route", not hardcoded,
       "; ".join(hardcoded[:4]))
 
-documented = set(re.findall(r'`POST (/api/[A-Za-z0-9_/]+)`', read(ROOT / "API_Examples.md")))
+documented = set(re.findall(r'`POST (/api/[A-Za-z0-9_/-]+)`', read(ROOT / "API_Examples.md")))
 check("API examples cover every registered endpoint", documented == set(ROUTES.values()),
       documented.symmetric_difference(ROUTES.values()))
 

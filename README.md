@@ -4,7 +4,8 @@
 
 > Employees paste code, contracts and client data into public AI tools every day, often without IT knowing.
 > For prompts sent through CyberSyn, the member’s policy runs **on the gateway** before forwarding.
-> Blocks are explained to the sender; administrator exceptions are recorded without logging the blocked text.
+> Enabled rules can warn, redact or block; administrator exceptions are audited without logging private text.
+> Shadow AI makes imported usage and workspace AI tool policy inspectable without contacting the logged destinations.
 
 ---
 
@@ -12,7 +13,9 @@
 
 - [Key features](#key-features)
 - [Architecture](#architecture)
-- [The three-gate pipeline](#the-three-gate-pipeline)
+- [The three scanners](#the-three-scanners)
+- [Policy actions](#policy-actions)
+- [Shadow AI discovery](#shadow-ai-discovery)
 - [Quick start (Docker)](#quick-start-docker)
 - [Local development](#local-development)
 - [Configuration](#configuration)
@@ -26,8 +29,7 @@
 
 CyberSyn is a self-hosted **AI gateway for teams**. Team members chat with the AI model of their choice
 through CyberSyn; administrators define what must never leave. The server applies the member’s enabled local
-checks, and a risky prompt is stopped **before** it is sent — with the exact line, offset and reason shown
-to the user instead of a generic refusal.
+rules before sending. When a rule pauses or blocks a prompt, the member can see what matched and why, without exposing the text to an administrator.
 
 Design principles:
 
@@ -35,8 +37,7 @@ Design principles:
    third-party DLP service for inspection — that would just move the leak.
 2. **Fail closed.** If a scanner crashes or times out, the request is refused. A broken gate is never an
    open gate.
-3. **Explain, don't just block.** Every block names the stage, the category, the line number and the
-   offending snippet, so the user learns the rule instead of fighting it.
+3. **Explain, don't just block.** Local findings include the category, line and matched span. Destination blocks name the unapproved tool.
 4. **Humans stay in control.** An administrator can approve a genuine exception; the override is recorded
    and attributed, not silently allowed.
 5. **Minimise audit data.** A blocked snippet is shown to its sender. The logs retain the stage,
@@ -46,19 +47,22 @@ Design principles:
 
 **Protection**
 
-- Three independent screening stages: personal/Greek identifiers, confidential company context, and
-  prompt injection (see [the pipeline](#the-three-gate-pipeline)).
+- Four independent rules backed by [three scanners](#the-three-scanners): personal/Greek identifiers,
+  confidential company context, prompt injection and source code.
 - Greek-aware detection: **AFM** (with checksum validation), **AMKA**, Greek phone numbers, Greek and Latin
   company suffixes, plus person names in both English and Greek via dual spaCy NER models.
 - Credential and secret detection: DB connection strings, private keys, IBANs, `sk-`/`AKIA` keys, inline
   `password=`/`token=` assignments.
 - Prompt-injection detection that reads code comments too — multi-line comment blocks are merged so an
   attack split across lines is still caught.
-- Server-enforced **per-member** checks and a separate **Block proprietary source code** toggle.
+- Per-member **Allow, Warn, Redact & send or Block** policies, with optional local reply restoration.
   Code alone is allowed by default. Workspace defaults seed new members; they do not rewrite existing policies.
 
 **Governance & visibility**
 
+- Shadow AI (`/shadow-ai`): inspect tool risks and GDPR considerations, set statuses or add custom domains,
+  and see which teams' synthetic log records indicate sensitive data going to unapproved AI tools.
+- Independent **Team member** and **Administrator** sign-in tabs, with direct links to the administrator dashboards.
 - Administrator statistics (`/stats`): prompts answered and blocked per member, reasons, trends and a timestamped activity log.
 - Block log persisted in SQLite and attributed to a member and a stage.
 - Admin-approved override: a blocked prompt can be released by entering the administrator password; the
@@ -87,16 +91,19 @@ flowchart TB
     end
 
     W -->|"parallel in-process calls via scanners.py"| Runner
-    GATE -->|"JSON: blocked / cause / line / offsets"| W
+    GATE -->|"verdicts, causes and spans"| W
 
     W -->|"blocked → refuse + explain"| BL[("BLOCK_LOG<br/>SQLite")]
-    W -->|"clean prompt"| AI["AI provider<br/>OpenAI · Gemini · Anthropic<br/>(via LiteLLM)"]
+    W -->|"permitted or sanitized prompt"| AI["AI provider<br/>OpenAI · Gemini · Anthropic<br/>(via LiteLLM)"]
     AI -->|answer| W
     W --> CH[("CHATS<br/>SQLite")]
 
     A["Administrator<br/>(browser)"] --> W
     W --> ST["/api/admin/team<br/>stats & block reasons"]
     ST --> TD["Team dashboard"]
+    A -->|"synthetic CSV / proxy / DNS logs"| D["Shadow AI · offline parser"]
+    D --> DE[("AI_TOOL_POLICY / DISCOVERY_EVENTS<br/>SQLite")]
+    DE -->|"destination policy"| W
 
     style GATE fill:#0f2e23,stroke:#2dd4a7,color:#e8fff7
     style BL fill:#3a1414,stroke:#e06c75,color:#ffeaea
@@ -108,26 +115,45 @@ flowchart TB
 1. The browser posts a prompt to `POST /api/admin/employee/chat`, with its HttpOnly member cookie and CSRF header. API clients may use a body token.
 2. The server authorises the caller — the member's own token, and an administrator's token as well
    when the request is an override. Unauthorised calls are refused before any work is done.
-3. The server resolves the member's saved settings (enabled checks, encrypted API key, model).
-4. `scanning.screen()` runs enabled checks in parallel via `scanners.py`, against one shared deadline
-   (45 seconds by default). Loaded models are reused. Missing imports may use a serialized subprocess
-   fallback if configured; runtime failures and timeouts fail closed. Blocks are reported in stage order.
-5. On a hit: the block is written to `BLOCK_LOG` with stage and reason, and the response carries full
-   `block_info` — stage, cause, line, start/end offsets, snippet and the blocking matches.
-6. On a clean pass: the prompt goes to the selected provider and the exchange is saved to the chat
-   history.
+3. CyberSyn resolves the saved model, provider and base, and checks the current destination policy.
+4. `scanning.screen()` runs enabled rules via `scanners.py` against one shared deadline (45 seconds by default).
+   Loaded models are reused. A missing import can use the serialized subprocess fallback; an invalid, failed or timed-out check stops the send (`503`).
+5. Enforce block → warn → redact → allow in that order. Findings can be shown to the member; only audit metadata is written for stopped or flagged sends.
+6. Only a permitted or sanitized prompt is forwarded. Regeneration follows the same path. Redacted history saves the sanitized prompt and unrestored answer.
 
-## The three-gate pipeline
+## The three scanners
 
-| # | Script | Detects | Technique | Blocks when |
+| # | Script | Detects | Technique | Triggers when |
 |---|---|---|---|---|
 | 1 | `src/MLscripts/greek_pii.py` | AFM checksum, AMKA date, Greek ID format/context, IBAN mod-97, phones, emails, modern provider/access keys, companies and names (EN + EL) | Regex with checksum & context scoring, plus spaCy `en_core_web_sm` / `el_core_news_sm` NER | A PII match scores ≥ 0.80 |
-| 2 | `src/MLscripts/context.py` | Credentials/banking, legal contracts & NDAs, internal financials, HR/payroll/customer dumps, source code | IBAN mod-97, Luhn, strict confidential indicators; `valhalla/distilbart-mnli-12-1` zero-shot classification (threshold 0.55) on lines the regexes did not already explain | Confidential hit, or source when this member’s `block_code` is enabled |
+| 2 | `src/MLscripts/context.py` | Credentials/banking, legal contracts & NDAs, internal financials, HR/payroll/customer dumps, source code | IBAN mod-97, Luhn, strict confidential indicators; `valhalla/distilbart-mnli-12-1` zero-shot classification (threshold 0.55) on lines the regexes did not already explain | Confidential hit or recognized source code, governed by separate rules |
 | 3 | `src/MLscripts/injection.py` | Prompt injection and instruction override, including attacks hidden in code comments | Attack-phrase regexes + zero-shot classification (threshold 0.60); examines adjacent lines, `#`/`//`/`--`, block/HTML comments, strings and docstrings | `PROMPT_INJECTION` detected |
 
 The staged design is deliberate: cheap, precise regexes fire first and the neural classifier only sees
 lines the rules could not explain. That keeps latency and false positives down, and the zero-shot model
 means a new category is a label change, not a retraining.
+
+## Policy actions
+
+| Action | What happens on a match |
+|---|---|
+| **Allow** | This rule is skipped; other checks and destination policy still apply. |
+| **Warn** | Pause without sending. The member can edit or confirm without an admin password. Confirmation re-screens the prompt under current policy. |
+| **Redact & send** | Replace detected spans with tokens such as `[EMAIL_1]`. Repeated identical values share a token, and overlapping spans are masked together. Only sanitized text is sent or saved. |
+| **Block** | Keep the message local. A live administrator session or one-time approval can release a block, but cannot turn off active redaction rules. |
+
+Prompt injection does not offer redaction. Administrators can save changes for one member and optionally copy them to the default for future members. Legacy boolean policy writes still select Allow or Block.
+
+With **Restore redacted values locally in replies** enabled, exact tokens echoed by the model are replaced in memory for that immediate reply only. Chat history keeps the unrestored reply; it cannot bring back values on reload. No redaction value map is stored or sent. Audit entries never contain blocked, warned, redacted or overridden prompt text or match snippets, even with ordinary prompt previews enabled. Local detectors are heuristic, not a guarantee that all sensitive data will be recognized.
+
+## Shadow AI discovery
+
+Open **Shadow AI** as an administrator, or unlock the read-only page from a member session. The inventory covers the gateway's named service providers and common assistants, coding tools and model hubs. Review hosting, training and GDPR considerations before making a decision; scores are conservative assessments, not certifications or provider guarantees. Workspace policy and notes apply immediately, including to previously imported events. A custom service can be registered by hostname without adding a provider integration.
+
+- **Approved** and **Restricted** are available through the screened gateway. Restricted direct access is flagged in discovery. **Unapproved** blocks gateway sends and regenerations to the tool unless an administrator approves an exception.
+- Use **Load sample week** for a synthetic demo. To answer *Which teams sent client data to unapproved AI this week?*, choose **This week (7d)**, **Unapproved** and **Client data**, then read the ranked team breakdown.
+- Upload or paste synthetic CSV, proxy/Squid or DNS logs. The parser works offline: it does not look up DNS or fetch any pasted address. It keeps only normalized destination hosts and structured metadata, not URL credentials, paths, queries, fragments or message contents. Tags and upload sizes are indicators, not verification of what the traffic contained. See [log formats and limits](API_Examples.md#post-apiadminshadow-aiimport).
+- Imports and policy edits need a primary admin session or fresh one-time approval. Clearing logs does not change tool policy. Removing the workspace deletes its imported events and inventory overrides. Discovery is not live traffic interception.
 
 ## Quick start (Docker)
 
@@ -153,12 +179,10 @@ docker compose down -v            # stop and delete BOTH volumes (irreversible)
 
 **First run**
 
-1. Create the first administrator locally, **before exposing the port**. Later signups need an existing
-   administrator or the configured `CYBERSYN_ADMIN_SIGNUP_TOKEN` (the creation page has an optional field).
-2. Sign in as administrator, add team members and sign in as the intended member. This revokes the browser’s primary admin session.
-3. In **Settings**, select a provider before pasting an ambiguous key, select a model and save the connection with administrator approval.
-4. Under **Local safety checks**, set **Block proprietary source code** for this member and choose **Save checks**.
-   Leave it off for ordinary code reviews. Both “also save” options affect future members, not existing colleagues. Saving a connection as the default includes its key.
+1. On `/`, choose **Administrator** → **Create administrator account**, **before exposing the port**. Later signups need an existing administrator or the configured `CYBERSYN_ADMIN_SIGNUP_TOKEN`.
+2. Sign in on the **Administrator** tab to open Shadow AI, Statistics or Team, or to add and remove members. The browser restores a valid administrator session on reload.
+3. Members can sign in directly from **Team member** on their own devices. Enter the administrator username as **Workspace** when multiple workspaces exist. **Switch to member sign-in** pre-fills it; a successful member login revokes the browser's admin session and page grant.
+4. In **Settings** from Chat, choose the provider/model, save the key with administrator approval, and set each rule's action. Both “also save” options affect future members only. Saving a default connection includes its key.
 
 Docker runs **Gunicorn**, one worker with eight threads by default; spaCy and DistilBART are loaded once
 per worker. The first build needs network access to the CPU wheel index, PyPI, GitHub and Hugging Face.
@@ -256,6 +280,7 @@ python3 tools/test_provider_errors.py
 python3 tools/test_gateway.py      # real DB/session/concurrency/policy boundaries
 python3 tools/test_scanner_rules.py # deterministic scanner rules with model stand-ins
 python3 tools/test_models.py       # model discovery uses the stored key
+python3 tools/test_shadow_policy.py # Shadow AI, policy actions and direct sign-in
 node tools/test_frontend.js        # browser behaviour (needs: npm install jsdom)
 node tools/test_account_pages.js
 ```
@@ -300,7 +325,7 @@ All settings are optional; defaults suit the Docker flow.
 | `CYBERSYN_COOKIE_SECURE` | `0` | Force Secure cookies behind HTTPS termination (always set on HTTPS requests) |
 | `CYBERSYN_RATE_LIMIT` / `CYBERSYN_TRUST_PROXY` | `1` / `0` | Failed credential attempts are limited per IP and IP/username; trust forwarded IPs only behind a trusted proxy that replaces the header |
 | `CYBERSYN_MAX_BODY_BYTES` / `CYBERSYN_MAX_PROMPT_CHARS` | `262144` / `16000` | Request body and prompt/edit limits |
-| `CYBERSYN_LOG_PROMPT_PREVIEW` | `0` | Opt in to 80-character activity previews for ordinary prompts, edits and regenerations; never for blocked or overridden sends |
+| `CYBERSYN_LOG_PROMPT_PREVIEW` | `0` | Opt in to 80-character activity previews for ordinary prompts, edits and regenerations; never for blocked, warned, redacted or overridden sends |
 | `CYBERSYN_SCREEN_BUDGET` / `CYBERSYN_AI_TIMEOUT` | `45` / `60` seconds | Shared screening deadline and outbound model timeout |
 | `CYBERSYN_WARM_MODELS` / `CYBERSYN_SCANNER_FALLBACK` | `1` / native `1`, Docker `0` | Background model loading and optional import-failure subprocess fallback |
 | `CYBERSYN_THREADS` / `CYBERSYN_DB_FILE` | `8` / path registry | Gunicorn threads and optional SQLite location |
@@ -317,7 +342,7 @@ Non-secret defaults (host, port, database and script paths, route names) live in
 | Browser sessions | HttpOnly, SameSite=Lax cookies; same-origin custom request header and Origin checks. Only hashed session tokens are stored server-side. Password changes revoke old sessions. |
 | Approvals | Single-use 5-minute grants for writes/overrides; read-only page grants expire in 15 minutes and “Lock now” revokes them. Neither supplies a reusable admin login in the member’s browser. |
 | Member isolation | IDs are not credentials. The server enforces saved policy/model; only the member's live session can read chats. Offboarding removes sessions, settings and chats together; historical audit/statistics rows remain. |
-| Audit | Stage, category, time, actor and safe metadata by default. Blocked/override events never store the prompt or snippet. An explicitly enabled ordinary prompt preview is visible to workspace administrators. |
+| Audit | Stage, category, time, actor and safe metadata by default. Blocked, warned, redacted and overridden events never store the prompt or snippet. Discovery retains only structured metadata. An explicitly enabled ordinary prompt preview is visible to workspace administrators. |
 | Fail-closed | An unavailable, failed or late scanner prevents forwarding. A deliberate admin override is attributed and logged. |
 | Web and container | Self-hosted fonts, same-origin CSP, no framing, no referrer, nosniff. Non-root Gunicorn worker, CPU wheels, baked classification weights; no CDN needed at runtime. |
 
@@ -328,7 +353,7 @@ Non-secret defaults (host, port, database and script paths, route names) live in
 
 ## Testing & evaluation
 
-`tools/smoke.py` exercises account, settings, history and statistics routes over HTTP. With no provider
+`tools/smoke.py` exercises account, settings, history, statistics and synthetic discovery routes over HTTP. With no provider
 key configured it verifies the no-key refusal; it does not substitute for real model inference.
 
 ### Authorisation tests
@@ -386,6 +411,8 @@ models.
 │   │   └── model_cache.py   # loads each model once, then scans in-process
 │   ├── scanners.py          # in-process runner (subprocess fallback)
 │   ├── scanning.py          # parallel checks under one deadline
+│   ├── policy.py redaction.py  # rule actions and request-local placeholders
+│   ├── shadow_ai.py discovery_logs.py  # tool inventory, policy and offline log parsing
 │   ├── admin_session.py     # administrator token sessions (hashed, expiring)
 │   ├── members.py           # authorisation for member routes
 │   ├── passwords.py         # hashing and verification
@@ -402,7 +429,7 @@ models.
 │       ├── css/             # base, components, auth, workspace, page, stats
 │       └── js/
 │           ├── core/        # dom, icons, api, loading, markdown, shell
-│           └── auth.js workspace.js profile.js settings.js stats.js team.js
+│           └── auth.js workspace.js profile.js settings.js stats.js team.js shadow_ai.js
 └── tools/
     ├── evaluate.py          # precision / recall / F1 harness
     ├── smoke.py             # drives the app over HTTP
@@ -431,6 +458,7 @@ Greek-text, multi-line-code and blocked-prompt cases.
 | `POST /api/admin/employee/chats`, `…/chats/open`, `…/chats/rename`, `…/chats/delete`, `…/chats/search` | Member’s own chat history |
 | `POST /api/admin/employee/chats/message/edit`, `…/message/delete` | Modify a stored exchange |
 | `POST /api/admin/team`, `/api/admin/team/list`, `/api/admin/employee/override/check` | Statistics, roster and page-access verification |
+| `POST /api/admin/shadow-ai`, `…/shadow-ai/policy`, `…/shadow-ai/import` | Inventory and current discovery findings; approved policy and import changes |
 
 See [API examples](API_Examples.md) for request bodies, response shapes and permission rules.
 
@@ -439,16 +467,11 @@ See [API examples](API_Examples.md) for request bodies, response shapes and perm
 - **SQLite** keeps the prototype to one container and zero configuration; PostgreSQL (an official image)
   is the migration path for multi-instance deployments.
 - **Gateway coverage** today is the CyberSyn chat surface. Capturing traffic from arbitrary AI sites needs
-  a browser extension or proxy (LiteLLM/mitmproxy) in front of those calls — the natural next step, and
-  the reason the scanners are standalone stdin→JSON processes that any transport can call.
+  a separate source of network logs. Shadow AI can import such logs, but does not monitor or intercept traffic itself.
 - **Stored chats are not encrypted.** The DB contains answered exchanges, including approved overrides.
   Protect backups and restrict host access. Upgrading removes old prompt details from the live activity
   timeline; it does not erase old backups. Deletion retains audit statistics.
 - **Detection is English/Greek tuned**; more languages mean more patterns and NER models.
-- **Redaction instead of blocking** — "warn and forward a sanitised prompt" — is the most requested next
-  policy action, and the per-match offsets needed for it are already returned by every scanner.
-- **Accuracy numbers** come from the harness in `tools/`; regenerating them on the judging machine keeps
-  the reported thresholds honest.
 
 ---
 

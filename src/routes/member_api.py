@@ -2,15 +2,15 @@
 
 import sqlite3
 
-from flask import Blueprint, request
+from flask import Blueprint
 
-from auth import (ADMIN_COOKIE, MEMBER_COOKIE, PAGE_COOKIE, _hash, admin_from_token, cookie_token,
-                  create_employee_session, require_member, revoke_employee_session, session_response)
+from auth import (ADMIN_COOKIE, MEMBER_COOKIE, PAGE_COOKIE, admin_from_token, cookie_token,
+                  create_employee_session, require_member, revoke_browser_admin, revoke_employee_session, session_response)
 from block_log import record_activity
 from config import DB_FILE, NULL, ROUTES
 from db import get_db
 from errors import ApiError
-from members import (CONNECTION_FIELDS, SETTING_FLAGS, create_default_settings, employee_row, get_settings, not_found_employee_message,
+from members import (CONNECTION_FIELDS, POLICY_FIELDS, create_default_settings, employee_row, get_settings, not_found_employee_message,
                      save_settings, settings_payload, settings_updates)
 from passwords import credentials_match, hash_password, member_password_problem, upgrade_password
 from rate_limit import limited
@@ -78,30 +78,37 @@ def employee_login():
 
     try:
         data = require_body()
-        pid = to_int(data.get("Parent_id"))
         username = clean_str(data.get("username"), "username", 64)
         password = password_field(data, "password")
+        workspace = clean_str(data["workspace"], "workspace", 64) if "workspace" in data else None
+        pid = to_int(data.get("Parent_id"))
+        if "Parent_id" in data and pid is None:
+            raise ApiError("'Parent_id' must be a positive integer.", 400)
+        if pid is not None and workspace is not None:
+            raise ApiError("Provide either Parent_id or workspace, not both.", 400)
     except ApiError as exc:
         return fail_employee_login(exc.message, exc.status)
-    if not pid:
-        return fail_employee_login("'Parent_id' must be a positive integer.", 400)
     db = get_db()
     with db:
         db.execute("BEGIN IMMEDIATE")
+        if workspace is not None:
+            owner = db.execute("SELECT id FROM ADMINS WHERE username=?", (workspace,)).fetchone()
+            pid = owner["id"] if owner else None
+        elif pid is None:
+            owners = db.execute("SELECT id FROM ADMINS LIMIT 2").fetchall()
+            if len(owners) == 2:
+                return fail_employee_login("Enter your workspace name to sign in.", 400)
+            pid = owners[0]["id"] if owners else None
         row = db.execute("SELECT * FROM EMPLOYEES WHERE Parent_id=? AND username=?", (pid, username)).fetchone()
         if not credentials_match(row, password):
             return fail_employee_login("Invalid employee username or password.", 401)
         eid = row["id"]
         upgrade_password(db, "EMPLOYEES", eid, row["password"], password)
         token = create_employee_session(DB_FILE, pid, eid, db)
-        # Changing seats ends the privileged browser session, not just its cookie.
-        for name in (ADMIN_COOKIE, PAGE_COOKIE):
-            old = request.cookies.get(name)
-            if old:
-                db.execute("DELETE FROM ADMIN_SESSIONS WHERE token_hash=?", (_hash(old),))
+        revoke_browser_admin(db)
     record_activity(DB_FILE, pid, eid, "login")
     latest = newest_chat(DB_FILE, pid, eid)
-    response = session_response({"error": False, "Employee_id": str(eid), "username": username,
+    response = session_response({"error": False, "Parent_id": str(pid), "Employee_id": str(eid), "username": username,
                                  "chats": list_chats(DB_FILE, pid, eid), "chat_id": latest["id"] if latest else None,
                                  "CHAT_LOGS": latest["messages"] if latest else [], "error_message": NULL,
                                  "settings": settings_payload(pid, eid, get_settings(pid, eid))}, MEMBER_COOKIE, token)
@@ -131,14 +138,15 @@ def employee_settings():
     also_default = data.get("also_default", False)
     if not isinstance(also_default, bool):
         return fail("'also_default' must be true or false.", 400)
-    fields = {*SETTING_FLAGS, *CONNECTION_FIELDS, "CLEAR_API_KEY"}
+    fields = {*POLICY_FIELDS, *CONNECTION_FIELDS, "CLEAR_API_KEY"}
     writing = not fields.isdisjoint(data)
     with db:
         db.execute("BEGIN IMMEDIATE")
-        if writing or eid == 0:
+        if writing:
             require_admin_approval(data, pid, db)
-        elif require_member(DB_FILE, data, allow_admin=True, con=db)[0] is None:
-            if admin_from_token(DB_FILE, data.get("admin_token", data.get("token")), parent_id=pid, con=db) is None:
+        elif eid == 0 or require_member(DB_FILE, data, con=db)[0] is None:
+            token = data.get("admin_token", data.get("token", data.get("session_token")))
+            if admin_from_token(DB_FILE, token, parent_id=pid, page=True, con=db) is None:
                 return fail("Your session has ended. Sign in again.", 401)
         if eid and employee_row(pid, eid) is None:
             return fail(not_found_employee_message(pid, eid), 404)

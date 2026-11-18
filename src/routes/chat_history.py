@@ -10,8 +10,13 @@ from flask import Blueprint
 import chat_store
 from auth import require_member
 from block_log import record_activity
-from config import DB_FILE, MAX_PROMPT_CHARS, ROUTES
+from config import DB_FILE, DEFAULT_MODEL, MAX_PROMPT_CHARS, ROUTES
+from db import get_db
 from errors import ApiError
+from members import get_settings, provider_and_base
+from policy import redaction_only, rule_actions
+from scanning import apply_redactions, screen
+from shadow_ai import unapproved_destination
 from web import activity_detail, fail, get_json_dict, ok, to_int
 
 chat_history = Blueprint("chat_history", __name__)
@@ -125,12 +130,25 @@ def message_edit():
     if not text:
         return fail("The message cannot be empty.", 400)
 
-    messages = chat_store.edit_message(
-        DB_FILE, ids[0], ids[1], chat_id, message_id, text
-    )
+    # A local edit is not a send. Still, never introduce a raw value that
+    # this seat's redaction rules already require us to keep out of history.
+    saved = get_settings(*ids)
+    rules = redaction_only(saved)
+    outcome = screen(text, rules) if "redact" in rules.values() else None
+    redaction = apply_redactions(text, (outcome or {}).get("redact_matches"))
+    messages = chat_store.edit_message(DB_FILE, *ids, chat_id, message_id, text, redaction=redaction)
+    del redaction
     if messages is None:
         return fail("That message was not found.", 404)
-    record_activity(DB_FILE, ids[0], ids[1], "message_edited", activity_detail(chat_id, text))
+    entry = next(message for message in messages if message.get("id") == message_id)
+    # An unscreened edit must not become an audit preview for a later
+    # block, warning or override. Preserve opt-in previews of ordinary edits
+    # only when no screen or destination policy applies.
+    preview = not entry.get("metadata_only") and all(action == "allow" for action in rule_actions(saved).values())
+    if preview:
+        provider, base = provider_and_base(saved)
+        preview = unapproved_destination(get_db(), ids[0], provider, base, saved["MODEL_NAME"] or DEFAULT_MODEL) is None
+    record_activity(DB_FILE, *ids, "message_edited", activity_detail(chat_id, entry["prompt"], preview=preview))
     return ok(messages=messages)
 
 

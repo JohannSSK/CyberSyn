@@ -45,6 +45,18 @@ def session_response(body, cookie, token, status=200, max_age=SESSION_DAYS * 864
     return response
 
 
+def revoke_browser_admin(con):
+    """Retire presented admin cookies on a successful switch to a member.
+
+    Neither cookie is used to authorize the transition; the member's own
+    password is required. Revoke in the same transaction as the new session.
+    """
+    for name in (ADMIN_COOKIE, PAGE_COOKIE):
+        token = request.cookies.get(name)
+        if token:
+            con.execute("DELETE FROM ADMIN_SESSIONS WHERE token_hash=?", (_hash(token),))
+
+
 def init_tables(db_file):
     with closing(_connect(db_file)) as con, con:
         con.execute("CREATE TABLE IF NOT EXISTS EMPLOYEE_SESSIONS (token_hash TEXT PRIMARY KEY, "

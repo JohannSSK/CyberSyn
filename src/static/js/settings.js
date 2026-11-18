@@ -1,5 +1,5 @@
 /* ==========================================================================
-   settings.js — local safety check toggles and the AI connection.
+   settings.js — local policy actions and the AI connection.
 
    The API key is write-only: it is stored encrypted on the server and the
    browser only ever receives a mask back. Changing checks, removing the key,
@@ -28,7 +28,7 @@
         return !!(window.I18n && window.I18n.current() === "el");
     }
 
-    var flags = ["check1", "check2", "check3", "block_code"];
+    var rules = Object.keys(Dom.policyFields);
     var savedMask = "";
     var dirty = false;
     var savedConnection = { provider: "auto", base: "", hasKey: false };
@@ -39,6 +39,7 @@
         check2: $("#setting-check2"),
         check3: $("#setting-check3"),
         block_code: $("#setting-block-code"),
+        restore: $("#setting-restore-redactions"),
         alsoDefault: $("#also-default"),
         connectionDefault: $("#connection-also-default"),
         clearKey: $("#btn-clear-key"),
@@ -72,15 +73,19 @@
             key: "check3",
             name: "Prompt-injection",
             body: " attempts will not be flagged."
+        },
+        {
+            key: "block_code",
+            name: "Proprietary source code",
+            body: " will not be flagged by the code rule."
         }
     ];
 
     function updateAllOff() {
         var off = CHECK_CONSEQUENCES.filter(function (item) {
-            return nodes[item.key] && !nodes[item.key].checked;
+            return nodes[item.key].value === "allow";
         });
-        var codeBlocked = !!(nodes.block_code && nodes.block_code.checked);
-        var noneOn = off.length === CHECK_CONSEQUENCES.length && !codeBlocked;
+        var noneOn = off.length === CHECK_CONSEQUENCES.length;
         var partialOff = off.length > 0 && !noneOn;
 
         if (nodes.allOff) {
@@ -153,9 +158,8 @@
     }
 
     function apply(data) {
-        flags.forEach(function (key) {
-            if (nodes[key]) nodes[key].checked = !!data[key];
-        });
+        rules.forEach(function (key) { nodes[key].value = Dom.policyAction(data, key); });
+        nodes.restore.checked = data.restore_redactions === true;
         updateAllOff();
         if (data.MODEL_NAME && !Array.from(nodes.model.options).some(function (o) {
             return o.value === data.MODEL_NAME;
@@ -210,14 +214,13 @@
             "Changing the local safety checks requires the administrator password and is recorded in the audit log."
         ).then(function (token) {
             return Loading.withButton(nodes.saveChecks, function () {
-                return Api.post("SETTINGS", {
-                    check1: nodes.check1.checked,
-                    check2: nodes.check2.checked,
-                    check3: nodes.check3.checked,
-                    block_code: nodes.block_code.checked,
+                var payload = {
+                    restore_redactions: nodes.restore.checked,
                     also_default: nodes.alsoDefault.checked,
                     admin_token: token
-                });
+                };
+                rules.forEach(function (rule) { payload[Dom.policyFields[rule]] = nodes[rule].value; });
+                return Api.post("SETTINGS", payload);
             }).then(function (data) {
                 apply(data);
                 nodes.alsoDefault.checked = false;
@@ -369,7 +372,7 @@
        Wiring
        ------------------------------------------------------------------ */
 
-    flags.forEach(function (key) {
+    rules.forEach(function (key) {
         if (nodes[key]) Dom.on(nodes[key], "change", markDirty);
     });
 
@@ -399,6 +402,7 @@
         });
     }
 
+    Dom.on(nodes.restore, "change", markDirty);
     Dom.on(nodes.saveChecks, "click", saveChecks);
     Dom.on(nodes.saveConnection, "click", saveConnection);
     Dom.on(nodes.refresh, "click", function () { refreshModels({ button: true }); });

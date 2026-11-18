@@ -27,7 +27,7 @@
     }
 
     function home() {
-        window.location.href = "/";
+        window.location.href = "/?tab=admin";
     }
 
     /* Every browser page loads shell.js first and gets the styled .modal.
@@ -138,7 +138,7 @@
             confirmRemoval({
                 eyebrow: "Remove account",
                 title: "Delete administrator " + name + "?",
-                lost: "Removed: this administrator account, its member accounts, saved settings and active sessions.",
+                lost: "Removed: this workspace, member accounts, settings, sessions and imported discovery logs.",
                 kept: "Kept: block and activity log rows stay in the local database.",
                 confirmLabel: "Delete account",
                 cancelLabel: "Keep account",

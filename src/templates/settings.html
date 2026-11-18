@@ -26,65 +26,79 @@
                 <section class="card stack">
                     <div>
                         <div class="card-title"><span data-icon="shield"></span><span>Local safety checks</span></div>
-                        <p class="small muted settings-intro">Each check runs on this computer in order before a message reaches the AI. Changing these checks requires the administrator password and is recorded in the audit log.</p>
+                        <p class="small muted settings-intro">Choose what happens when an enabled rule finds a match. Changes require administrator approval and are recorded in the audit log.</p>
                     </div>
 
                     <div id="toggle-list">
                         <div class="toggle-row" data-toggle="check1">
                             <div class="toggle-text">
-                                <strong>1. Personal data</strong>
+                                <label for="setting-check1">Personal &amp; Greek IDs</label>
                                 <p>AFM with checksum, AMKA, IBANs, phone numbers, email addresses, payment cards and names in English and Greek.</p>
                             </div>
-                            <label class="switch">
-                                <input type="checkbox" id="setting-check1" checked aria-label="Personal data check">
-                                <span class="switch-track"></span>
-                            </label>
+                            <select class="select policy-action" id="setting-check1">
+                                <option value="allow">Allow</option>
+                                <option value="warn">Warn</option>
+                                <option value="redact">Redact &amp; send</option>
+                                <option value="block" selected>Block</option>
+                            </select>
                         </div>
 
                         <div class="toggle-row" data-toggle="check2">
                             <div class="toggle-text">
-                                <strong>2. Context</strong>
+                                <label for="setting-check2">Confidential context</label>
                                 <p>Confidential contracts, internal financials, HR and payroll records, and credentials</p>
                             </div>
-                            <label class="switch">
-                                <input type="checkbox" id="setting-check2" checked aria-label="Context check">
-                                <span class="switch-track"></span>
-                            </label>
+                            <select class="select policy-action" id="setting-check2">
+                                <option value="allow">Allow</option>
+                                <option value="warn">Warn</option>
+                                <option value="redact">Redact &amp; send</option>
+                                <option value="block" selected>Block</option>
+                            </select>
                         </div>
 
                         <div class="toggle-row" data-toggle="check3">
                             <div class="toggle-text">
-                                <strong>3. Prompt injection</strong>
+                                <label for="setting-check3">Prompt injection</label>
                                 <p>Hidden instructions and override attempts — especially common in pasted emails, web pages and documents.</p>
                             </div>
-                            <label class="switch">
-                                <input type="checkbox" id="setting-check3" checked aria-label="Prompt injection check">
-                                <span class="switch-track"></span>
-                            </label>
+                            <select class="select policy-action" id="setting-check3">
+                                <option value="allow">Allow</option>
+                                <option value="warn">Warn</option>
+                                <option value="block" selected>Block</option>
+                            </select>
                         </div>
 
                         <div class="toggle-row" data-toggle="block_code">
                             <div class="toggle-text">
-                                <strong>Block proprietary source code</strong>
-                                <p>Block source-code pastes from this member. Off allows code review; other enabled checks still apply.</p>
+                                <label for="setting-block-code">Proprietary source code</label>
+                                <p>Applies to source-code pastes. Other enabled rules still apply to text within code.</p>
                             </div>
-                            <label class="switch">
-                                <input type="checkbox" id="setting-block-code" aria-label="Block proprietary source code">
-                                <span class="switch-track"></span>
-                            </label>
+                            <select class="select policy-action" id="setting-block-code">
+                                <option value="allow" selected>Allow</option>
+                                <option value="warn">Warn</option>
+                                <option value="redact">Redact &amp; send</option>
+                                <option value="block">Block</option>
+                            </select>
                         </div>
                     </div>
 
+                    <div>
+                        <label class="check-option">
+                            <input type="checkbox" id="setting-restore-redactions" aria-describedby="restore-redactions-hint">
+                            <span>Restore redacted values locally in replies</span>
+                        </label>
+                        <p class="hint" id="restore-redactions-hint">Matching placeholders are swapped back in memory for this reply only. Only the redacted prompt and unrestored reply are saved.</p>
+                    </div>
                     <label class="check-option">
                         <input type="checkbox" id="also-default">
-                        <span>Also save these checks as the workspace default for new team members</span>
+                        <span>Also save as the workspace default for new team members</span>
                     </label>
 
                     <div id="checks-consequence" class="callout callout-warn checks-consequence hidden"
                          role="status" aria-live="polite"></div>
 
                     <div id="all-checks-off-note" class="callout callout-warn hidden" role="status">
-                        All checks are turned off. Messages from this account will go straight to the AI provider until at least one check is turned back on.
+                        All prompt rules are set to Allow. The workspace AI tool policy still applies.
                     </div>
 
                     <div class="row">
