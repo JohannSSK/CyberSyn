@@ -53,9 +53,9 @@ def _sign_in(approval):
         upgrade_password(db, "ADMINS", row["id"], row["password"], password)
         purpose = "approval_" + scope if approval else "session"
         token = admin_session.create_session(DB_FILE, row["id"], purpose, db)
-    body = {"success": True, "Parent_id": str(row["id"]), "username": username, "reason": NULL}
-    if not approval:
-        return session_response(body, ADMIN_COOKIE, token)
+        body = {"success": True, "Parent_id": str(row["id"]), "username": username, "reason": NULL}
+        if not approval:
+            return admin_session.retire_page_grant(db, session_response(body, ADMIN_COOKIE, token))
     if scope == "page":
         return session_response(body, PAGE_COOKIE, token, max_age=900)
     return dict(body, admin_token=token)
@@ -100,8 +100,9 @@ def admin_manage():
                 return fail_admin(f"Admin '{username}' already exists.", 409)
             db.execute("INSERT INTO SETTINGS (Parent_id, Employee_id) VALUES (?, 0)", (pid,))
             token = admin_session.create_session(DB_FILE, pid, con=db)
-            return session_response({"error": False, "Parent_id": str(pid), "username": username,
-                                     "error_message": NULL}, ADMIN_COOKIE, token, 201)
+            response = session_response({"error": False, "Parent_id": str(pid), "username": username,
+                                         "error_message": NULL}, ADMIN_COOKIE, token, 201)
+            return admin_session.retire_page_grant(db, response)
         row = db.execute("SELECT * FROM ADMINS WHERE username=?", (username,)).fetchone()
         if not credentials_match(row, password):
             return fail_admin(INVALID, 401)
@@ -110,7 +111,7 @@ def admin_manage():
         for table in ("EMPLOYEE_SESSIONS", "CHATS", "SETTINGS", "EMPLOYEES"):
             db.execute(f"DELETE FROM {table} WHERE Parent_id=?", (pid,))
         db.execute("DELETE FROM ADMINS WHERE id=?", (pid,))
-    return ok(Parent_id=str(pid))
+        return admin_session.retire_page_grant(db, ok(Parent_id=str(pid)))
 
 
 @admin_api.post(ROUTES["TEAM_LIST"])

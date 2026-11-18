@@ -120,6 +120,81 @@ class Gateway(unittest.TestCase):
             con.execute("UPDATE ADMIN_SESSIONS SET expires_at=? WHERE token_hash=?", ("2000-01-01T00:00:00+00:00", auth._hash(expired)))
         self.assertEqual(self.post("TEAM", token=expired).status_code, 401)
 
+    def unlock_owner_page(self):
+        r = self.browse("ADMIN_APPROVE", dict(CREDENTIALS, scope="page"))
+        self.assertEqual(r.status_code, 200, r.json)
+        return self.browser.get_cookie(auth.PAGE_COOKIE).value
+
+    def assert_workspace(self, username, members, **body):
+        # /stats and the removal picker use different endpoints.
+        for route in ("TEAM", "TEAM_LIST"):
+            with self.subTest(route=route):
+                r = self.browse(route, body)
+                self.assertEqual(r.status_code, 200, r.json)
+                self.assertEqual([m["username"] for m in r.json["members"]], members)
+                if route == "TEAM":
+                    self.assertEqual(r.json["admin"], username)
+
+    def test_member_page_to_different_admin_login(self):
+        other = dict(username="second", password=PW)
+        r = self.post("ADMIN", method="add", token=self.admin, **other)
+        self.assertEqual(r.status_code, 201, r.json)
+        added = self.post("EMPLOYEE", method="add", token=r.json["session_token"], Parent_id=r.json["Parent_id"],
+                          username="colleague", password=PW)
+        self.assertEqual(added.status_code, 201, added.json)
+        self.assertEqual(self.browse("EMPLOYEE_LOGIN", dict(Parent_id=self.pid, username="staff", password=PW)).status_code, 200)
+        grant = self.unlock_owner_page()
+        self.assertEqual(self.browser.post(ROUTES["TEAM_LIST"], json={}).status_code, 403)
+        self.assertEqual(self.browse("ADMIN_LOGIN", dict(other, password="wrong")).status_code, 401)
+        self.assertEqual(self.browser.get_cookie(auth.PAGE_COOKIE).value, grant)
+        self.assert_workspace("owner", ["staff"])
+        self.assertEqual(self.browse("ADMIN_LOGIN", other).status_code, 200)
+        self.assertIsNone(self.browser.get_cookie(auth.PAGE_COOKIE))
+        self.assertEqual(self.post("TEAM", token=grant).status_code, 401)
+        self.assert_workspace("second", ["colleague"])
+
+    def test_primary_cookie_selects_workspace_when_both_grants_are_live(self):
+        r = self.browse("ADMIN", dict(method="add", token=self.admin, username="second", password=PW))
+        self.assertEqual(r.status_code, 201, r.json)
+        # Issue a live page grant *after* primary login: clearing it at login
+        # alone cannot make this test pass.
+        page = self.unlock_owner_page()
+        self.assert_workspace("second", [])
+        self.assertFalse(self.browse("OVERRIDE_CHECK", {"Parent_id": self.pid}).json["allowed"])
+        self.assert_workspace("owner", ["staff"], token=page)  # explicit credential still wins
+        for route in ("TEAM", "TEAM_LIST"):
+            self.assertEqual(self.browse(route, {"token": "invalid"}).status_code, 401)
+            self.assertEqual(self.browser.post(ROUTES[route], json={}).status_code, 403)
+            cross = dict(HEADERS, Origin="https://other.invalid")
+            self.assertEqual(self.browser.post(ROUTES[route], json={}, headers=cross).status_code, 403)
+        self.browser.set_cookie(auth.ADMIN_COOKIE, "invalid")
+        self.assertEqual(self.browse("TEAM", {}).status_code, 401)  # don't switch identities on validation failure
+
+    def test_fresh_login_after_rotation_with_stale_page_cookie(self):
+        page = self.unlock_owner_page()
+        new = dict(CREDENTIALS, password="Replacement 321")
+        # Rotate in a separate client so the first browser still has the old cookie.
+        r = self.post("ADMIN_PASSWORD", token=self.admin, current_password=CREDENTIALS["password"], new_password=new["password"])
+        self.assertEqual(r.status_code, 200, r.json)
+        self.assertEqual(self.browse("TEAM", {}).status_code, 401)
+        self.assertEqual(self.browse("ADMIN_LOGIN", new).status_code, 200)
+        self.assertIsNone(self.browser.get_cookie(auth.PAGE_COOKIE))
+        self.assert_workspace("owner", ["staff"])
+        self.browser.set_cookie(auth.PAGE_COOKIE, page)  # even a retained stale cookie can't mask the new login
+        self.assert_workspace("owner", ["staff"])
+
+    def test_create_and_remove_retire_only_the_presented_page_grant(self):
+        independent = self.grant("page")
+        other = dict(username="second", password=PW)
+        for method, status in (("add", 201), ("remove", 200)):
+            page = self.unlock_owner_page()
+            r = self.browse("ADMIN", dict(other, method=method, token=self.admin))
+            self.assertEqual(r.status_code, status, r.json)
+            self.assertIsNone(self.browser.get_cookie(auth.PAGE_COOKIE))
+            self.assertEqual(self.post("TEAM", token=page).status_code, 401)
+            self.assertEqual(self.post("TEAM", token=independent).status_code, 200)
+        self.assertEqual(self.post("ADMIN_SESSION", token=self.admin).status_code, 200)
+
     def test_source_policy_is_individual_inherited_only_by_new_members(self):
         other = self.add("before")
         self.assertFalse(self.edit().json["block_code"])
