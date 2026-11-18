@@ -36,7 +36,7 @@
                         <li><a href="#checks">The three checks</a></li>
                         <li><a href="#chat">Using the chat</a></li>
                         <li><a href="#roles">Accounts and roles</a></li>
-                        <li><a href="#local">What never leaves this machine</a></li>
+                        <li><a href="#local">What stays local</a></li>
                         <li><a href="#failclosed">When a check cannot run</a></li>
                         <li><a href="#data">What is stored, and how</a></li>
                         <li><a href="#config">Configuration</a></li>
@@ -53,11 +53,9 @@
                         <li><span class="badge">2</span>
                             Sign in as administrator, then add your team members.</li>
                         <li><span class="badge">3</span>
-                            Open <strong>Settings</strong>, paste an API key, choose your model
-                            and which checks run.</li>
+                            Sign in as the member whose settings you want to configure.</li>
                         <li><span class="badge">4</span>
-                            Sign in as a team member and start chatting. A blocked prompt shows a
-                            card naming the line and the reason.</li>
+                            In Settings, select the provider, enter a key and save the model and checks with administrator approval.</li>
                         <li><span class="badge">5</span>
                             Open <strong>Statistics</strong> as the administrator to see who was
                             blocked, why, and when.</li>
@@ -66,36 +64,26 @@
 
                 <section class="card" id="checks">
                     <div class="card-title"><span data-icon="shield"></span> The three checks</div>
-                    <p class="help-lead">Every prompt passes all three that are switched on, in
-                    order. The first one to object stops the message.</p>
+                    <p class="help-lead">Enabled checks run in parallel under one time budget. Blocks are reported in stage order.</p>
 
                     <div class="help-checks">
                         <article>
                             <h4><span class="badge">1</span> Personal &amp; Greek IDs</h4>
-                            <p>AFM validated by checksum, AMKA, Greek phone numbers, email
-                            addresses, API keys, IBANs, database connection strings, private
-                            keys, company names and person names in both English and Greek.</p>
-                            <p class="muted small">Two name-recognition models run side by side
-                            (<code>en_core_web_sm</code> for English, <code>el_core_news_sm</code>
-                            for Greek), so a Greek name written in Latin script is still caught.</p>
+                            <p>Greek tax numbers and IBANs are checked by checksum; Greek IDs by format and context. Checks also cover AMKA dates, phones, emails, modern API keys and company names.</p>
+                            <p class="muted small">Local English and Greek name-recognition models check for personal names.</p>
                         </article>
 
                         <article>
                             <h4><span class="badge">2</span> Confidential context</h4>
-                            <p>Contracts and NDAs, internal financials, HR and payroll records,
-                            credentials and connection strings, and source code.</p>
-                            <p class="muted small">This runs as a zero-shot classification over
-                            the whole prompt rather than pattern matching, so wording the policy
-                            has never seen can still be recognised as confidential.</p>
+                            <p>Patterns and IBAN/card checksums detect credentials, banking data and strong indicators of confidential records. A local zero-shot model classifies ambiguous text.</p>
+                            <p class="muted small">Source code is allowed by default. An administrator can switch on code blocking for an individual member in Settings without changing anyone else’s policy.</p>
                         </article>
 
                         <article>
                             <h4><span class="badge">3</span> Prompt injection</h4>
                             <p>Instructions trying to override the model's rules, jailbreaks, and
                             payloads hidden inside code comments.</p>
-                            <p class="muted small">Multi-line comment blocks are merged before
-                            inspection, so an attack split across several lines to dodge a
-                            single-line rule is still caught.</p>
+                            <p class="muted small">The scanner examines adjacent lines, Python, SQL and JavaScript comments, block and HTML comments, quoted strings and docstrings.</p>
                         </article>
                     </div>
                 </section>
@@ -105,8 +93,8 @@
 
                     <div class="rows">
                         <div class="row-item">
-                            <span class="row-label">Search this chat</span>
-                            <span class="row-value">Type in the top bar — matches are highlighted</span>
+                            <span class="row-label">Search messages</span>
+                            <span class="row-value">Type in the top bar to highlight matches or open a result from another chat</span>
                         </div>
                         <div class="row-item">
                             <span class="row-label">Edit a message</span>
@@ -164,22 +152,23 @@
                     <p class="muted small" style="margin-top:14px">A member's session only ever
                     reads that member's own chats. Opening another member's chat is refused by
                     the server, not merely hidden in the interface.</p>
+                    <p>Member sign-in ends the browser’s administrator session. A single-use approval lasts five minutes. A read-only page unlock lasts fifteen minutes; Lock now revokes it on the server.</p>
                 </section>
 
                 <section class="card" id="local">
-                    <div class="card-title"><span data-icon="lock"></span> What never leaves this machine</div>
+                    <div class="card-title"><span data-icon="lock"></span> What stays local</div>
                     <div class="rows">
                         <div class="row-item">
                             <span class="row-label">Your prompts</span>
-                            <span class="row-value">Screened locally before sending</span>
+                            <span class="row-value">Screened locally; allowed prompts are sent to the selected provider</span>
                         </div>
                         <div class="row-item">
                             <span class="row-label">Your API key</span>
-                            <span class="row-value">Stored encrypted, only ever shown masked</span>
+                            <span class="row-value">Stored encrypted; used to authenticate to the selected provider</span>
                         </div>
                         <div class="row-item">
                             <span class="row-label">Blocked messages</span>
-                            <span class="row-value">Never transmitted to any provider</span>
+                            <span class="row-value">Not sent unless a workspace administrator approves an exception</span>
                         </div>
                         <div class="row-item">
                             <span class="row-label">Inspection itself</span>
@@ -187,8 +176,7 @@
                         </div>
                         <div class="row-item">
                             <span class="row-label">Detected items</span>
-                            <span class="row-value">Reported as an offset and a category,
-                            never as a copy of the text</span>
+                            <span class="row-value">Matching snippets are returned to the sender for editing, never stored in the block or activity log as block evidence</span>
                         </div>
                     </div>
                 </section>
@@ -224,12 +212,10 @@
                         </div>
                         <div class="row-item">
                             <span class="row-label">Sessions</span>
-                            <span class="row-value">Bearer tokens, hashed, expiring</span>
+                            <span class="row-value">HttpOnly session cookies; server-side expiry and revocation</span>
                         </div>
                     </div>
-                    <p class="muted small" style="margin-top:14px">There is no telemetry and no
-                    outbound call other than the one prompt you chose to send. Deleting a chat
-                    removes its messages.</p>
+                    <p class="muted small" style="margin-top:14px">Discovery contacts the selected provider. Deleting a chat removes its messages, not audit events. Prompt previews are off by default and never recorded for blocked or overridden sends.</p>
                 </section>
 
                 <section class="card" id="config">
@@ -260,14 +246,29 @@
                         </div>
                         <div class="row-item">
                             <span class="row-label"><code>CYBERSYN_SCANNER_FALLBACK</code></span>
-                            <span class="row-value">Set to <code>0</code> to force the
-                            one-process-per-message path instead of the in-process scanners</span>
+                            <span class="row-value">Fallback can start one subprocess if a scanner cannot be imported. It is off in Docker. A scanner that throws at runtime fails closed.</span>
                         </div>
                         <div class="row-item">
                             <span class="row-label"><code>CYBERSYN_WARM_MODELS</code></span>
-                            <span class="row-value">Load the models at start-up so the first
-                            message is not the one that waits</span>
+                            <span class="row-value">Enabled by default. Set to 0 to skip background warm-up.</span>
                         </div>
+                        {% for variable, description in [
+                            ("CYBERSYN_THREADS", "Gunicorn uses one worker and eight threads by default"),
+                            ("CYBERSYN_ALLOW_PRIVATE_BASE", "Set to 0 to refuse LAN and loopback provider destinations; metadata addresses are always refused"),
+                            ("CYBERSYN_COOKIE_SECURE", "Set to 1 when terminating HTTPS at a trusted reverse proxy"),
+                            ("CYBERSYN_MAX_BODY_BYTES", "Maximum JSON body size; default 256 KiB"),
+                            ("CYBERSYN_RATE_LIMIT", "Failed credential attempts are limited per IP and username; enabled by default"),
+                            ("CYBERSYN_TRUST_PROXY", "Trust forwarded client IPs only behind a proxy that replaces the header; off by default"),
+                            ("CYBERSYN_ALLOW_OPEN_SIGNUP", "Set to 1 only to allow unrestricted administrator signup"),
+                            ("CYBERSYN_KEY_FILE", "Path to the encryption key file; a separate secrets volume in Docker"),
+                            ("CYBERSYN_ADMIN_SIGNUP_TOKEN", "Registration token for additional administrators"),
+                            ("CYBERSYN_MAX_PROMPT_CHARS", "Maximum prompt or edit length; default 16000 characters"),
+                            ("CYBERSYN_LOG_PROMPT_PREVIEW", "Set to 1 to include short previews of ordinary messages in the activity log"),
+                            ("CYBERSYN_SCREEN_BUDGET", "Seconds shared by all enabled checks; default 45")
+                        ] %}
+                        <div class="row-item"><span class="row-label"><code>{{ variable }}</code></span>
+                            <span class="row-value">{{ description }}</span></div>
+                        {% endfor %}
                         <div class="row-item">
                             <span class="row-label"><code>CYBERSYN_DEBUG</code></span>
                             <span class="row-value">Flask debug mode — leave off in production</span>
@@ -286,11 +287,7 @@
                         </article>
                         <article>
                             <h4>Model discovery names the wrong provider</h4>
-                            <p>Discovery offers the key to each provider in turn and uses the
-                            first that answers, which is right almost always. When it is not —
-                            several providers issue keys that look alike — pick the provider
-                            explicitly instead of leaving it on <em>Detect automatically</em>.
-                            Only that one is then asked.</p>
+                            <p>Automatic discovery uses recognized key prefixes only. Select your provider explicitly for unfamiliar or ambiguous formats; your key is not tried against unrelated services.</p>
                         </article>
                         <article>
                             <h4>Every message is refused</h4>
@@ -299,9 +296,7 @@
                         </article>
                         <article>
                             <h4>The first message is slow</h4>
-                            <p>The scanners load their models on first use. Set
-                            <code>CYBERSYN_WARM_MODELS=1</code> to pay that cost at start-up
-                            instead.</p>
+                            <p>Background warm-up is enabled by default. Set CYBERSYN_WARM_MODELS=0 only if you prefer loading models on first use.</p>
                         </article>
                         <article>
                             <h4>Statistics will not load</h4>
@@ -333,6 +328,9 @@
                         <div class="licence-row" role="row">
                             <span>Flask</span><span>BSD-3-Clause</span>
                             <span>Web framework</span>
+                        </div>
+                        <div class="licence-row" role="row">
+                            <span>Gunicorn</span><span>MIT</span><span>Threaded production WSGI server</span>
                         </div>
                         <div class="licence-row" role="row">
                             <span>Werkzeug</span><span>BSD-3-Clause</span>
@@ -383,8 +381,8 @@
                         </div>
                         <div class="licence-row" role="row">
                             <span><code>distilbart-mnli-12-1</code></span>
-                            <span>Apache-2.0</span>
-                            <span>Confidential-context classification; derived from
+                            <span>Check model card</span>
+                            <span>Classification weights derived from
                             <code>facebook/bart-large-mnli</code>. Confirm on the model card
                             before redistributing</span>
                         </div>
@@ -392,14 +390,11 @@
 
                     <h4 class="help-sub">Fonts and icons</h4>
                     <p class="small">Inter, Instrument Serif and JetBrains Mono are each licensed
-                    under the SIL Open Font License 1.1 and are loaded from Google Fonts. The
+                    under the SIL Open Font License 1.1 and are served locally. No font CDN is contacted. The
                     interface icons in <code>assets/icons/</code> are drawn for this project and
                     follow the application's licence.</p>
 
-                    <p class="muted small" style="margin-top:16px">Licence identifiers were
-                    checked against each project's own licence file. They are recorded here for
-                    information, not as legal advice — take your own advice before
-                    distributing.</p>
+                    <p class="muted small" style="margin-top:16px">Check the upstream licence for each exact package or model version before redistributing it. A library licence does not automatically cover its model weights.</p>
                 </section>
 
             </div>

@@ -4,8 +4,8 @@
 The bug this guards: discovery guessed the provider from the shape of the
 key and fell back to OpenAI for anything it did not recognise. A Google key
 that did not match the expected prefix was sent to api.openai.com, which
-rejected it, and the app reported the key as invalid. Discovery now tries
-providers until one answers.
+rejected it, and the app reported the key as invalid. Discovery now contacts only
+a prefix-matched provider, or the one explicitly selected.
 
 Also covers the address checks, because the base-URL field lets someone
 point this server at an address of their choosing.
@@ -27,8 +27,6 @@ def check(name, ok, extra=""):
           + (f" -> {extra}" if extra and not ok else ""))
 
 
-
-
 # --------------------------------------------------------------------------
 # Parsing: every provider answers in one of a handful of shapes
 # --------------------------------------------------------------------------
@@ -36,6 +34,8 @@ def check(name, ok, extra=""):
 # Only the socket is stubbed; parsing, filtering and qualification all run
 # for real, so these check the code that ships rather than a copy of it.
 SERVED = {}
+CONTACTED = []
+real_fetch = providers.fetch_json
 
 
 def serve(url, body=None, error=None):
@@ -43,6 +43,7 @@ def serve(url, body=None, error=None):
 
 
 def fake_fetch_json(url, headers, provider, timeout=None):
+    CONTACTED.append(provider.key)
     served = None
     for pattern, payload in SERVED.items():
         if pattern in url:
@@ -118,7 +119,13 @@ SERVED.clear()
 serve("generativelanguage.googleapis.com", gemini_body)
 
 # The exact case that used to fail: a Google key that does not look like one.
-provider, models, errors = providers.detect("AizaSyNotTheUsualPrefix-xxxx")
+CONTACTED.clear()
+try:
+    providers.detect("AizaSyNotTheUsualPrefix-xxxx")
+    check("unknown format requires selection", False)
+except providers.ProviderError as exc:
+    check("unknown format requires selection without contacting anyone", "dropdown" in exc.detail and not CONTACTED)
+provider, models, errors = providers.detect("AIzaSyExample")
 check("a Google key is not sent to OpenAI",
       provider is not None and provider.key == "gemini",
       provider.key if provider else [str(e) for e in errors])
@@ -158,7 +165,7 @@ serve("api.openai.com", None, error=("Incorrect API key provided", 401))
 serve("api.anthropic.com", None, error=("invalid x-api-key", 401))
 provider, models, errors = providers.detect("sk-nothing")
 check("total failure returns no models", provider is None and not models)
-check("every attempt is reported", len(errors) >= 2, len(errors))
+check("every attempt is reported", len(errors) == 1, len(errors))
 best = providers.best_error(errors)
 check("the refusal is preferred over a timeout",
       best is not None and best.status == 401, best)
@@ -173,8 +180,8 @@ SERVED.clear()
 serve("api.openai.com", None, error=("no answer within 8s", None))
 serve("api.anthropic.com", None, error=("invalid x-api-key", 401))
 _, _, errors = providers.detect("sk-mixed")
-check("a real refusal outranks a timeout",
-      providers.best_error(errors).status == 401,
+check("a matched timeout does not try an unrelated provider",
+      [e.provider for e in errors] == ["openai"] and providers.best_error(errors).status is None,
       [str(e) for e in errors])
 
 # --------------------------------------------------------------------------
@@ -203,6 +210,76 @@ check("file refused", not base_ok("file:///etc/passwd"))
 check("credentials in URL refused", not base_ok("https://user:pw@example.com"))
 check("empty refused", not base_ok(""))
 check("no host refused", not base_ok("https://"))
+
+for prefix, service in (("sk-proj-", "openai"), ("sk-ant-", "anthropic"), ("sk-or-", "openrouter"),
+                        ("gsk_", "groq"), ("AIza", "gemini"), ("xai-", "xai")):
+    CONTACTED.clear()
+    providers.detect(prefix + "fixture")
+    check("only matched service contacted: " + prefix, CONTACTED == [service], CONTACTED)
+base = "https://api.example.com:8443/llm/v1"
+check("base path preserved", providers.validate_base_url(base) == base)
+check("version path not doubled", providers.get("custom").endpoint(base) == base + "/models")
+from unittest.mock import patch
+import socket
+import urllib.request
+for address in ("[::ffff:169.254.169.254]", "100.100.100.200", "192.0.0.192", "[fd00:ec2::254]",
+                "255.255.255.255", "224.0.0.1", "0.0.0.0", "[::]", "metadata", "instance-data"):
+    check("special address refused: " + address, not base_ok("http://" + address))
+# Exercise transition-address parsing without IPv6 connectivity or DNS.
+import ipaddress
+for ip in ("2002:a9fe:a9fe::1", "2001:0:4136:e378:8000:63bf:5601:5601"):
+    check("link-local embedded in transition address is refused", bool(providers._address_reason(ipaddress.ip_address(ip))))
+for suffix in ("?", "#", "?q=1", "#section"):
+    check("base forbids query/fragment delimiters: " + suffix, not base_ok("http://127.0.0.1/prefix" + suffix))
+with patch.object(providers, "ALLOW_PRIVATE_BASE", False):
+    check("private-address opt out", not base_ok("http://127.0.0.1") and not base_ok("http://192.168.0.10"))
+for url in ("file:///not-opened", "ftp://localhost", "http://[::ffff:169.254.169.254]/"):
+    with patch.object(providers._OPENER, "open") as opened:
+        try:
+            real_fetch(url, {}, providers.get("custom"))
+            check("fetch rejects " + url, False)
+        except providers.ProviderError:
+            check("fetch rejects " + url, not opened.called)
+req = urllib.request.Request("https://127.0.0.1/models", headers={
+    "Authorization": "test", "x-api-key": "test", "x-goog-api-key": "test"})
+for url in ("http://127.0.0.1/models", "https://127.0.0.2/models", "https://127.0.0.1:8443/models"):
+    redir = providers._SafeRedirect().redirect_request(req, None, 302, "Found", {}, url)
+    check("redirect removes all credentials: " + url, not redir.header_items())
+# Mock the resolver and socket: even if DNS changes, no unvalidated socket opens.
+def address(ip):
+    return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (ip, 443))]
+with patch.object(socket, "getaddrinfo", side_effect=[address("8.8.8.8"), address("169.254.169.254")]), patch.object(socket, "socket") as sock:
+    providers.validate_base_url("https://provider.invalid")
+    try:
+        providers._pinned_socket(("provider.invalid", 443), 4, None)
+        check("rebinding refused", False)
+    except providers.ProviderError:
+        check("rebound host refused before TCP", not sock.called)
+with patch.object(socket, "getaddrinfo", return_value=address("8.8.8.8")), patch.object(socket, "socket") as sock:
+    providers._pinned_socket(("provider.invalid", 443), 4, None)
+    check("connect uses the validated numeric sockaddr", sock.return_value.connect.call_args.args == (("8.8.8.8", 443),))
+
+# An overlap introduced by a future registry entry must not broadcast the key.
+with patch.object(providers, "PROVIDERS", [providers.get("openai"), providers.get("openai")]), patch.object(providers, "fetch_json") as fetch:
+    try:
+        providers.detect("sk-synthetic")
+        check("ambiguous prefixes need an explicit provider", False)
+    except providers.ProviderError:
+        check("ambiguous prefixes need an explicit provider without contacting either", not fetch.called)
+for key, path in (("gemini", "/tenant/v1beta"), ("openrouter", "/tenant/api/v1"), ("groq", "/tenant/openai/v1")):
+    base = "https://127.0.0.1" + path
+    check(key + " preserves the supplied versioned API root", providers.get(key).endpoint(base) == base + "/models")
+
+# The TCP peer is pinned, but HTTP Host and TLS certificate/SNI identity
+# remain the provider name. No TLS session or external connection is made.
+import ssl
+ctx = ssl.create_default_context()
+with patch.object(socket, "getaddrinfo", return_value=address("8.8.8.8")), patch.object(socket, "socket"), patch.object(ctx, "wrap_socket") as wrap:
+    conn = providers._HTTPSConnection("provider.invalid", timeout=3, context=ctx)
+    conn.request("GET", "/models")
+    check("pinned HTTPS retains the original certificate/SNI name", wrap.call_args.kwargs["server_hostname"] == "provider.invalid")
+    check("pinned HTTPS retains the original Host header", b"Host: provider.invalid\r\n" in wrap.return_value.sendall.call_args.args[0])
+    conn.close()
 
 # The refusal has to say why, since it is shown to the person who typed it.
 try:

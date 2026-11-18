@@ -13,10 +13,15 @@
     var FENCE = "```";
 
     function inline(text) {
-        return String(text)
-            .replace(/`([^`]+)`/g, "<code>$1</code>")
+        var codes = [];
+        // NUL cannot collide with a placeholder supplied by the message.
+        return esc(text).replace(/\u0000/g, "\uFFFD")
+            .replace(/`([^`]+)`/g, function (_, code) {
+                return "\u0000" + (codes.push(code) - 1) + "\u0000";
+            })
             .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-            .replace(/(^|[^*])\*([^*\s][^*]*)\*(?!\*)/g, "$1<em>$2</em>");
+            .replace(/(^|[^*])\*([^*\s][^*]*)\*(?!\*)/g, "$1<em>$2</em>")
+            .replace(/\u0000(\d+)\u0000/g, function (_, i) { return "<code>" + codes[i] + "</code>"; });
     }
 
     function render(source) {
@@ -44,13 +49,13 @@
                 if ((m = raw.match(/^\s{0,3}(#{1,6})\s+(.*)$/))) {
                     closeList();
                     var level = Math.min(m[1].length + 1, 6);
-                    html += "<h" + level + ">" + inline(esc(m[2])) + "</h" + level + ">";
+                    html += "<h" + level + ">" + inline(m[2]) + "</h" + level + ">";
                     return;
                 }
                 if (/^\s*([-*_])\1{2,}\s*$/.test(raw)) { closeList(); html += "<hr>"; return; }
                 if ((m = raw.match(/^\s*[*+-]\s+(.*)$/))) {
                     if (list !== "ul") { closeList(); html += "<ul>"; list = "ul"; }
-                    html += "<li>" + inline(esc(m[1])) + "</li>";
+                    html += "<li>" + inline(m[1]) + "</li>";
                     return;
                 }
                 if ((m = raw.match(/^\s*(\d+)[.)]\s+(.*)$/))) {
@@ -59,11 +64,11 @@
                         html += '<ol start="' + parseInt(m[1], 10) + '">';
                         list = "ol";
                     }
-                    html += "<li>" + inline(esc(m[2])) + "</li>";
+                    html += "<li>" + inline(m[2]) + "</li>";
                     return;
                 }
                 closeList();
-                html += "<p>" + inline(esc(raw)) + "</p>";
+                html += "<p>" + inline(raw) + "</p>";
             });
             closeList();
         });

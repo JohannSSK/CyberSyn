@@ -12,6 +12,8 @@ each one is what the app actually uses.
     python3 tools/test_constants.py
 """
 import json
+import os
+import tempfile
 import re
 import sys
 from pathlib import Path
@@ -53,6 +55,8 @@ check("PORT is a number", isinstance(CONSTANTS.get("PORT"), int),
 # config.py reads it, and every path resolves to something real
 # --------------------------------------------------------------------------
 
+_tmp = tempfile.TemporaryDirectory()
+os.environ.setdefault("CYBERSYN_DB_FILE", str(Path(_tmp.name) / "constants.db"))
 import config  # noqa: E402
 
 check("config reads the same file",
@@ -116,17 +120,16 @@ for path in (ROOT / "src").rglob("*.py"):
 check("no Python module hardcodes an /api/ route", not hardcoded,
       "; ".join(hardcoded[:4]))
 
-# The browser posts to these too. It is allowed to write them down, but only
-# if what it writes is a route the constants file knows about.
-js_dir = ROOT / "src" / "static" / "js"
+documented = set(re.findall(r'`POST (/api/[A-Za-z0-9_/]+)`', read(ROOT / "API_Examples.md")))
+check("API examples cover every registered endpoint", documented == set(ROUTES.values()),
+      documented.symmetric_difference(ROUTES.values()))
+
+# The browser uses symbolic keys; the template serializes this same registry.
 js_routes = set()
-for path in js_dir.rglob("*.js"):
-    js_routes.update(re.findall(r'"/api/[A-Za-z0-9/_-]*"', read(path)))
-unknown = sorted(r for r in js_routes if r.strip('"') not in set(ROUTES.values()))
-check("every route the browser calls is in constants.json", not unknown,
-      str(unknown))
-check("the browser does call the API", bool(js_routes),
-      "no /api/ strings found under src/static/js")
+for path in (ROOT / "src/static/js").rglob("*.js"):
+    js_routes.update(re.findall(r'Api\.post\(\s*"([^"]+)"', read(path)))
+check("every browser call uses a route key from constants.json", js_routes <= ROUTES.keys(), js_routes - ROUTES.keys())
+check("every API route is wired into the browser", js_routes == ROUTES.keys(), ROUTES.keys() - js_routes)
 
 # --------------------------------------------------------------------------
 # The paths are used, not merely present

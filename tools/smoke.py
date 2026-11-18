@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """End-to-end smoke test against a running CyberSyn instance.
 
-Exercises the flows a judge would watch: sign in, screen a prompt, block it,
-search it, edit it, regenerate it, delete it, then read the statistics.
-
-The scanners and the AI provider are stubbed through the API where possible;
-what this checks is that every screen and every new endpoint hangs together.
+Use a disposable database. The test creates accounts, checks authorization,
+searches history, reads statistics and loads pages. With a configured key it
+also sends a prompt and edits/deletes the answer; without one it verifies the
+no-key refusal. No provider or scanner is mocked by this script.
 
     python3 tools/smoke.py                     # http://127.0.0.1:5000
     python3 tools/smoke.py http://host:port
@@ -19,21 +18,12 @@ import urllib.request
 from pathlib import Path
 
 
-def default_base():
-    """The address the app listens on, from includes/constants.json.
+REGISTRY = json.loads((Path(__file__).resolve().parents[1] / "includes" / "constants.json").read_text())
 
-    The server reads its host and port from that file, so a test that
-    hardcodes 127.0.0.1:5000 breaks the moment someone changes it there.
-    """
-    here = Path(__file__).resolve().parent
-    constants = here.parent / "includes" / "constants.json"
-    host, port = "127.0.0.1", 5000
-    try:
-        values = json.loads(constants.read_text(encoding="utf-8"))
-        host = values.get("HOST", host)
-        port = int(values.get("PORT", port))
-    except (OSError, ValueError):
-        pass
+
+def default_base():
+    """The address the app listens on, from includes/constants.json."""
+    host, port = REGISTRY["HOST"], REGISTRY["PORT"]
     # 0.0.0.0 is a bind address, not somewhere to connect to.
     if host in ("0.0.0.0", "::"):
         host = "127.0.0.1"
@@ -48,7 +38,7 @@ FAILED = []
 
 def call(path, payload):
     req = urllib.request.Request(
-        BASE + path,
+        BASE + REGISTRY["ROUTES"][path],
         data=json.dumps(payload).encode("utf-8"),
         headers={"Content-Type": "application/json"},
         method="POST",
@@ -86,12 +76,12 @@ def main():
     # ---- sign in -----------------------------------------------------
     # The app ships with no accounts, so the test creates its own rather
     # than depending on one having been seeded by hand.
-    status, admin = call("/api/admin/login",
+    status, admin = call("ADMIN_LOGIN",
                          {"username": ADMIN_USER, "password": ADMIN_PASS})
     if not admin.get("success"):
-        added = call("/api/admin", {"method": "add", "username": ADMIN_USER,
+        added = call("ADMIN", {"method": "add", "username": ADMIN_USER,
                                     "password": ADMIN_PASS})
-        status, admin = call("/api/admin/login",
+        status, admin = call("ADMIN_LOGIN",
                              {"username": ADMIN_USER, "password": ADMIN_PASS})
         if not admin.get("success"):
             print(f"  note: {ADMIN_USER} exists with a different password. "
@@ -104,15 +94,15 @@ def main():
     parent_id = int(admin["Parent_id"])
 
     name = "smoke_user"
-    call("/api/admin/employee",
+    call("EMPLOYEE",
          {"method": "remove", "Parent_id": parent_id, "username": name,
-          "password": "Passw0rd!", "token": admin_token})
-    status, _ = call("/api/admin/employee",
+          "admin_password": ADMIN_PASS, "token": admin_token})
+    status, _ = call("EMPLOYEE",
                      {"method": "add", "Parent_id": parent_id, "username": name,
                       "password": "Passw0rd!", "token": admin_token})
     check("team member added", status in (200, 201), status)
 
-    status, login = call("/api/admin/employee/login",
+    status, login = call("EMPLOYEE_LOGIN",
                          {"Parent_id": parent_id, "username": name,
                           "password": "Passw0rd!"})
     check("member signs in and gets a session",
@@ -131,16 +121,17 @@ def main():
     # ---- settings ----------------------------------------------------
     # Changing policy is an administrator action now, so the write carries
     # the administrator's approval; the read does not need one.
-    status, settings = member("/api/admin/employee/settings",
-                              MODEL_NAME="gpt-4o-mini", admin_token=admin_token)
+    status, grant = call("ADMIN_APPROVE", {"username": ADMIN_USER, "password": ADMIN_PASS, "scope": "once"})
+    check("administrator approves once", status == 200)
+    status, settings = member("SETTINGS",
+                              MODEL_NAME="gpt-4o-mini", admin_token=grant.get("admin_token"))
     check("settings readable", status == 200 and "check1" in settings, settings)
     check("api key never returned in the clear",
           settings.get("API_KEY") == "" and "API_KEY_MASK" in settings, settings)
 
     # ---- a clean message ---------------------------------------------
-    status, chat = member("/api/admin/employee/chat",
-                          prompt="What is the capital of Greece?",
-                          check1=False, check2=False, check3=False)
+    status, chat = member("CHAT",
+                          prompt="What is the capital of Greece?")
     if chat.get("error_message") == "No API_KEY provided.":
         # Correct behaviour with no key configured: the guard fires first.
         check("message refuses to send without a key", True)
@@ -153,44 +144,44 @@ def main():
         chat_id = chat.get("chat_id")
 
     # ---- search -------------------------------------------------------
-    status, found = member("/api/admin/employee/chats/search", query="capital")
+    status, found = member("CHATS_SEARCH", query="capital")
     check("chat search works", status == 200 and "results" in found, found)
 
     # ---- per-message edit / delete ------------------------------------
     if chat_id:
-        _, opened = member("/api/admin/employee/chats/open", chat_id=chat_id)
+        _, opened = member("CHATS_OPEN", chat_id=chat_id)
         messages = (opened.get("chat") or {}).get("messages") or []
         check("chat reopens with messages", bool(messages), opened)
         if messages:
             mid = messages[0].get("id")
-            status, edited = member("/api/admin/employee/chats/message/edit",
+            status, edited = member("MESSAGE_EDIT",
                                     chat_id=chat_id, message_id=mid,
                                     text="What is the capital of France?")
             check("a single message can be edited",
                   status == 200 and bool(edited.get("messages")), edited)
-            status, removed = member("/api/admin/employee/chats/message/delete",
+            status, removed = member("MESSAGE_DELETE",
                                      chat_id=chat_id, message_id=mid)
             check("a single message can be deleted",
                   status == 200 and "messages" in removed, removed)
 
     # ---- authorisation still holds ------------------------------------
-    status, _ = call("/api/admin/employee/chats",
+    status, _ = call("CHATS",
                      {"Parent_id": parent_id, "Employee_id": employee_id})
     check("history still refuses an anonymous caller", status == 401, status)
 
-    status, _ = call("/api/admin/employee/chat",
+    status, _ = call("CHAT",
                      {"Parent_id": parent_id, "Employee_id": employee_id,
                       "prompt": "hello", "bypass": True,
                       "session_token": member_token})
     check("override still refuses a member token", status == 401, status)
 
-    status, _ = call("/api/admin/employee/settings",
+    status, _ = call("SETTINGS",
                      {"Parent_id": parent_id, "Employee_id": employee_id,
                       "check1": False})
     check("settings still refuse an anonymous caller", status == 401, status)
 
     # ---- statistics ---------------------------------------------------
-    status, stats = call("/api/admin/team", {"token": admin_token})
+    status, stats = call("TEAM", {"token": admin_token})
     check("statistics load for the administrator",
           status == 200 and not stats.get("error"), stats)
     if status == 200:
@@ -198,7 +189,7 @@ def main():
         check("statistics carry a timestamped timeline",
               "timeline" in stats, list(stats)[:8])
         check("statistics refuse a non-administrator",
-              call("/api/admin/team", {"token": member_token})[0] == 401)
+              call("TEAM", {"token": member_token})[0] == 401)
         check("member trends are per member",
               all("trend" in m for m in stats.get("members", [])))
 
@@ -212,7 +203,7 @@ def main():
         except Exception as exc:
             check(f"page {path} renders", False, exc)
 
-    report()
+    return report()
 
 
 def report():

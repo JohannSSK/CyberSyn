@@ -9,17 +9,12 @@ Everything here is lazy and cached. A scanner that never runs never pays for
 a model, and the first prompt pays once rather than three times over.
 """
 
-import contextlib
-import io
 import os
 import threading
-import warnings
 
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
 os.environ.setdefault("HF_HUB_VERBOSITY", "error")
-
-warnings.filterwarnings("ignore")
 
 ZERO_SHOT_MODEL = "valhalla/distilbart-mnli-12-1"
 
@@ -38,8 +33,7 @@ def env_int(name, default):
 # above them the paste stops paying for detail nobody is going to read.
 #
 # Lines for the classifier (its cost is per chunk), characters for spaCy (its
-# cost is per document). Set either to 0 to always finish the scan, or very
-# high to stop at the first blocking regex no matter the size.
+# cost is per document). Smaller limits skip detail sooner after a block.
 DETAIL_LINES = env_int("CYBERSYN_DETAIL_LINES", 12)
 DETAIL_CHARS = env_int("CYBERSYN_DETAIL_CHARS", 1000)
 
@@ -51,22 +45,22 @@ _spacy = {}
 _zero_shot = None
 
 
-@contextlib.contextmanager
-def _quiet():
-    """Model downloads chatter on stderr; the scanner protocol owns stdout."""
-    with contextlib.redirect_stderr(io.StringIO()):
-        yield
+_ner_locks = {name: threading.RLock() for name in (_EN, _EL)}
 
 
 def get_spacy(model_name):
-    """Return a loaded spaCy pipeline, loading it at most once."""
-    with _lock:
+    with _ner_locks[model_name]:
         if model_name not in _spacy:
             import spacy
-
-            with _quiet():
-                _spacy[model_name] = spacy.load(model_name)
+            _spacy[model_name] = spacy.load(model_name, exclude=[
+                "tagger", "parser", "attribute_ruler", "lemmatizer", "morphologizer", "senter",
+            ])
         return _spacy[model_name]
+
+
+def run_ner(model_name, text):
+    with _ner_locks[model_name]:
+        return get_spacy(model_name)(text)
 
 
 def get_taggers():
@@ -90,20 +84,16 @@ def get_zero_shot(local_only=False):
         if _zero_shot is None:
             from transformers import logging, pipeline
 
-            with _quiet():
-                logging.set_verbosity_error()
-                try:
-                    _zero_shot = pipeline(
-                        "zero-shot-classification",
-                        model=ZERO_SHOT_MODEL,
-                        local_files_only=True,
-                    )
-                except Exception:
-                    if local_only:
-                        raise
-                    _zero_shot = pipeline(
-                        "zero-shot-classification", model=ZERO_SHOT_MODEL
-                    )
+            from huggingface_hub import snapshot_download
+
+            logging.set_verbosity_error()
+            try:
+                model = snapshot_download(ZERO_SHOT_MODEL, local_files_only=True)
+            except OSError:
+                if local_only:
+                    raise
+                model = ZERO_SHOT_MODEL
+            _zero_shot = pipeline("zero-shot-classification", model=model, device=-1)
         return _zero_shot
 
 
@@ -121,7 +111,7 @@ def classify(texts, labels, **kwargs):
 # The classifier is fed in batches so a scan can be abandoned part way
 # through. Each sequence is scored on its own, so batching changes nothing
 # about the answers — only how many are computed before we stop asking.
-CLASSIFY_BATCH = env_int("CYBERSYN_CLASSIFY_BATCH", 8)
+CLASSIFY_BATCH = max(1, env_int("CYBERSYN_CLASSIFY_BATCH", 8))
 
 
 def classify_batched(texts, labels, stop=None, **kwargs):
@@ -139,6 +129,8 @@ def classify_batched(texts, labels, stop=None, **kwargs):
     if stop is None:
         return classify(texts, labels, **kwargs)
 
+    if stop():
+        return []
     clf = get_zero_shot()
     out = []
     for start in range(0, len(texts), CLASSIFY_BATCH):
@@ -146,6 +138,8 @@ def classify_batched(texts, labels, stop=None, **kwargs):
             break
         batch = texts[start:start + CLASSIFY_BATCH]
         with _lock:
+            if stop():
+                break
             got = clf(batch, candidate_labels=labels, **kwargs)
         out.extend(got if isinstance(got, list) else [got])
     return out
@@ -161,16 +155,32 @@ def warm(names=("spacy", "zero-shot")):
     reported as skipped rather than fetched.
     """
     done, skipped = [], []
-    try:
-        if "spacy" in names:
-            get_taggers()
-            done.append("spacy")
-        if "zero-shot" in names:
-            try:
-                get_zero_shot(local_only=True)
-                done.append("zero-shot")
-            except Exception:
-                skipped.append("zero-shot")
-    except Exception:
-        skipped.append("spacy")
+    loaders = {"spacy": get_taggers, "zero-shot": lambda: get_zero_shot(local_only=True)}
+    for name in names:
+        try:
+            loaders[name]()
+        except Exception:
+            skipped.append(name)
+        else:
+            done.append(name)
     return {"loaded": done, "skipped": skipped}
+
+
+def verify():
+    """Used by both installers: importability alone cannot verify model weights."""
+    import torch
+
+    if torch.version.cuda is not None:
+        raise RuntimeError("Expected the CPU build of PyTorch, not a CUDA wheel.")
+    for name in (_EN, _EL):
+        if "ner" not in get_spacy(name).pipe_names:
+            raise RuntimeError(f"{name}: missing NER pipeline")
+        run_ner(name, "A short model check.")
+    result = get_zero_shot()("A friendly greeting.", candidate_labels=["greeting", "question"])
+    if len(result["scores"]) != 2:
+        raise RuntimeError("DistilBART did not return classification scores.")
+    print(f"Verified CPU inference: {_EN}, {_EL}, {ZERO_SHOT_MODEL}")
+
+
+if __name__ == "__main__":
+    verify()

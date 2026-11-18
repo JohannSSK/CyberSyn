@@ -8,9 +8,6 @@
     <title>{% block title %}CyberSyn{% endblock %}</title>
 
     <link rel="icon" href="/assets/icons/shield.png" type="image/png">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
     <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}">
@@ -19,7 +16,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}">
     {% block styles %}{% endblock %}
 </head>
-<body data-screen-budget="{{ screen_budget | default(45, true) }}"
+<body data-routes='{{ api_routes | tojson }}' data-screen-budget="{{ screen_budget | default(45, true) }}"
       data-ai-timeout="{{ ai_timeout | default(60, true) }}"
       data-request-timeout="{{ request_timeout | default(135, true) }}">
     <div id="toast-container" class="toast-container"></div>

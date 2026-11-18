@@ -13,59 +13,51 @@ from flask import Blueprint
 from auth import admin_from_token, member_from_token
 from config import DB_FILE, ROUTES
 from members import get_settings
-from providers import (ProviderError, best_error, choices, detect, get,
-                       validate_base_url)
+from providers import ProviderError, best_error, choices, detect, validate_base_url
 from secret_store import decrypt_secret
 from web import get_json_dict
 
 models_api = Blueprint("models_api", __name__)
 
 
-def _stored_key(member, admin):
-    """The key already saved for this member, decrypted."""
-    parent_id = member["Parent_id"] if member else admin["id"]
-    employee_id = member["Employee_id"] if member else 0
-    return decrypt_secret(get_settings(parent_id, employee_id)["API_KEY"] or "").strip()
+def _identity(data):
+    token = data.get("session_token")
+    member = member_from_token(DB_FILE, token)
+    admin = None if member else admin_from_token(DB_FILE, token)
+    return member, admin
 
 
 @models_api.post(ROUTES["MODELS"])
 def list_models():
     data = get_json_dict() or {}
-    token = data.get("session_token")
-    member = member_from_token(DB_FILE, token)
-    admin = None if member else admin_from_token(DB_FILE, token)
+    member, admin = _identity(data)
     if member is None and admin is None:
         return {"models": [], "message": "Your session has ended. Sign in again."}, 401
-
+    pid = member["Parent_id"] if member else admin["id"]
     key = str(data.get("API_KEY") or "").strip()
-    if not key:
-        # No key pasted: use the one already saved. The field only ever holds
-        # a mask, so demanding a re-paste made the list impossible to refresh
-        # after the first save.
-        key = _stored_key(member, admin)
-        if not key:
-            return {"models": [], "message": "Paste an API key first."}, 400
-
-    requested = str(data.get("provider") or "auto").strip().lower()
-    base = str(data.get("API_BASE") or "").strip()
-
-    # Only a named provider may take a custom address, and it is checked
-    # before the request goes out: this is a URL a user typed, and the server
-    # is what would be making the call.
-    if base and requested in ("auto", "custom", ""):
-        named = get(requested) if requested not in ("auto", "") else get("custom")
-        try:
-            base = validate_base_url(base)
-        except ProviderError as exc:
-            exc.label = named.label
-            return {"models": [], "provider": named.key, "message": str(exc)}, 400
-
+    saved = None if key else get_settings(pid, member["Employee_id"] if member else 0)
+    requested = str(data.get("provider", saved["PROVIDER"] if saved else "auto") or "auto").strip().lower()
+    base = str(data.get("API_BASE", saved["API_BASE"] if saved else "") or "").strip()
     try:
-        provider, models, errors = detect(key, requested or "auto", base)
+        if base:
+            base = validate_base_url(base)
+        if saved:
+            key = decrypt_secret(saved["API_KEY"]).strip()
+            if not key:
+                return {"models": [], "message": "Paste an API key first."}, 400
+            old_base = validate_base_url(saved["API_BASE"]) if saved["API_BASE"] else ""
+            old_provider = saved["PROVIDER"] or "auto"
+            if base != old_base and base.startswith("http://"):
+                return {"models": [], "message": "Save this HTTP base with administrator approval first."}, 403
+            if base != old_base or requested != old_provider or data.get("admin_token"):
+                approved = admin_from_token(DB_FILE, data.get("admin_token", data.get("session_token")),
+                                            parent_id=pid, consume=True)
+                if not approved:
+                    status = 401 if data.get("admin_token") else 403
+                    return {"models": [], "message": "Using the saved key at another destination needs administrator approval."}, status
+        provider, models, errors = detect(key, requested, base)
     except ProviderError as exc:
-        exc.label = (get(exc.provider) or get("custom")).label
-        return {"models": [], "provider": exc.provider, "status": exc.status,
-                "message": str(exc)}, 400
+        return {"models": [], "provider": exc.provider, "status": exc.status, "message": str(exc)}, 400
 
     if provider is None:
         failure = best_error(errors)
@@ -93,9 +85,7 @@ def list_providers():
     deployment is willing to call.
     """
     data = get_json_dict() or {}
-    token = data.get("session_token")
-    member = member_from_token(DB_FILE, token)
-    admin = None if member else admin_from_token(DB_FILE, token)
+    member, admin = _identity(data)
     if member is None and admin is None:
         return {"providers": [], "message": "Your session has ended. Sign in again."}, 401
     return {"providers": choices(), "message": None}

@@ -33,7 +33,7 @@ sys.path.insert(0, "src")
 
 DB = os.environ.setdefault("CYBERSYN_DB_FILE", "/tmp/cybersyn-screening.db")
 import scanning  # noqa: E402
-from config import CHECKS  # noqa: E402
+from config import CHECKS, ML_DIR  # noqa: E402
 from errors import ChatError  # noqa: E402
 
 results = []
@@ -75,6 +75,8 @@ def fake_subprocess(behaviour):
 run, calls = fake_subprocess(lambda c: FakeCompleted(stderr="ModuleNotFoundError: No module named 'spacy'", returncode=1))
 scanning.subprocess.run = run
 scanning.SCANNER_FALLBACK = True
+real_available = scanning.registry.available
+scanning.registry.available = lambda stage: False
 try:
     scanning.run_check("check1", PII)
     check("a scanner that dies raises instead of passing", False, "no exception")
@@ -116,6 +118,14 @@ except ChatError as exc:
 # 2. Screening is bounded and the checks run together
 # --------------------------------------------------------------------------
 
+scanning.registry.available = real_available
+from unittest.mock import patch
+with patch.object(scanning.registry, "run", side_effect=ValueError("runtime error")), patch.object(scanning, "_run_subprocess") as spawn:
+    try:
+        scanning.run_check("check1", PII)
+        check("loaded scanner failures refuse", False)
+    except ChatError:
+        check("a loaded scanner failure does not spawn an interpreter", not spawn.called)
 scanning.subprocess.run = real_run
 
 
@@ -178,7 +188,7 @@ scanning.SCREEN_BUDGET = budget_before
 # 3. Warm-up never holds the lock for a download
 # --------------------------------------------------------------------------
 
-sys.path.insert(0, "src/MLscripts")
+sys.path.insert(0, str(ML_DIR))
 try:
     import model_cache
 

@@ -522,13 +522,26 @@ mark {
 }
 
 @media (max-width: 760px) {
-    .search-box { display: none; }
+    /* Keep history search reachable without crowding the title and menu. */
+    .topbar { flex-wrap: wrap; height: auto; padding-block: 8px; row-gap: 6px; }
+    .search-box { order: 1; flex: 0 0 100%; }
+    .search-box input { width: 100%; }
 }
 
 @media (max-width: 620px) {
-    .topbar { padding: 0 14px; }
+    .topbar { padding-inline: 14px; }
     .topbar-title span { max-width: 108px; }
     .stream-inner { padding: 0 14px; }
     .composer { padding: 12px 14px 16px; }
     .bubble-user { max-width: 92%; }
 }
+
+/* Cross-chat hits stay beside the search field, separate from the open chat. */
+#other-chat-results {
+    position: absolute; top: calc(100% + 6px); right: 0; z-index: 5;
+    width: min(360px, 78vw); max-height: 45vh; overflow: auto;
+    padding: 12px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--r-md); box-shadow: var(--shadow-md);
+}
+.search-hit { display: block; width: 100%; text-align: left; padding: 8px; overflow-wrap: anywhere; }
+.search-hit:hover, .search-hit:focus { background: var(--surface-2); }

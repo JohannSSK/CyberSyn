@@ -48,8 +48,8 @@
         nodes.employeeId.textContent = member.employeeId || "—";
         nodes.parentId.textContent = member.parentId || "—";
 
-        return Api.post("/api/admin/employee/settings", {}).then(function (data) {
-            var on = ["check1", "check2", "check3"].filter(function (k) { return data[k]; }).length;
+        return Api.post("SETTINGS", {}).then(function (data) {
+            var on = [data.check1, data.check2 || data.block_code, data.check3].filter(Boolean).length;
             nodes.checks.textContent = on + " of 3";
             nodes.model.textContent = data.MODEL_NAME || "gpt-4o-mini";
             nodes.key.textContent = data.API_KEY_MASK || "not set";
@@ -67,7 +67,7 @@
         }
 
         Loading.withButton(nodes.saveUsername, function () {
-            return Api.post("/api/admin/employee/account", {
+            return Api.post("EMPLOYEE_ACCOUNT", {
                 action: "username",
                 new_username: next,
                 current_password: password
@@ -75,7 +75,7 @@
         }).then(function () {
             var member = Session.getMember() || {};
             member.username = next;
-            Session.setMember(Session.getMemberToken(), member);
+            Session.setMember(member);
             Shell.paintMember();
             nodes.newUsername.value = "";
             nodes.usernamePassword.value = "";
@@ -102,7 +102,7 @@
         }
 
         Loading.withButton(nodes.savePassword, function () {
-            return Api.post("/api/admin/employee/account", {
+            return Api.post("EMPLOYEE_ACCOUNT", {
                 action: "password",
                 new_password: next,
                 current_password: current
@@ -120,6 +120,25 @@
 
     Dom.on(nodes.formUsername, "submit", saveUsername);
     Dom.on(nodes.formPassword, "submit", savePassword);
+
+    var adminForm = $("#form-admin-password");
+    Dom.on(adminForm, "submit", function (event) {
+        event.preventDefault();
+        var current = adminForm.elements.current_password.value;
+        var next = adminForm.elements.new_password.value;
+        var msg = $("#msg-admin-password");
+        showMessage(msg, "");
+        Loading.withButton(adminForm.querySelector("button"), function () {
+            return Api.post("ADMIN_APPROVE", { username: adminForm.elements.username.value.trim(),
+                password: current, scope: "once" }, { onUnauthorised: false }).then(function (data) {
+                return Api.post("ADMIN_PASSWORD", { token: data.admin_token,
+                    current_password: current, new_password: next }, { onUnauthorised: false });
+            });
+        }).then(function () {
+            adminForm.reset();
+            showMessage(msg, "Administrator password updated. Previous sessions have ended.", true);
+        }).catch(function (err) { showMessage(msg, err.message); });
+    });
 
     load().catch(function (err) { Loading.toast(err.message, "error"); });
 })();
