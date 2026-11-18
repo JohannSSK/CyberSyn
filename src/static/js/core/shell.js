@@ -9,6 +9,7 @@
     "use strict";
 
     var Session = global.Api.Session;
+    var primaryAdmin = null;
 
     function t(text) {
         return global.I18n && typeof global.I18n.t === "function"
@@ -52,8 +53,8 @@
 
     /** Render the signed-in member (or administrator) into shared chrome. */
     function paintMember() {
-        var member = Session.getMember() || {};
-        var admin = Session.getAdmin() || {};
+        var member = primaryAdmin ? {} : (Session.getMember() || {});
+        var admin = primaryAdmin || Session.getAdmin() || {};
         var name = member.username || admin.username || t("Member");
         var wsId = member.parentId || admin.parentId || null;
 
@@ -70,6 +71,11 @@
         global.Dom.$$("[data-workspace]").forEach(function (node) {
             node.textContent = wsId ? t("Workspace " + wsId) : "";
         });
+        global.Dom.$$("[data-sidebar-role]").forEach(function (node) {
+            node.textContent = primaryAdmin ? t("Administrator") : t("Administrator-managed workspace");
+        });
+        global.Dom.$$('[data-member-only]').forEach(function (link) { link.hidden = !!primaryAdmin; });
+        global.Dom.$$('[data-admin-hub]').forEach(function (link) { link.hidden = !primaryAdmin; });
     }
 
     /** Show a brief, quiet sign-out confirmation before returning to /. */
@@ -130,12 +136,11 @@
         return true;
     }
 
-    /** Administrator pages may be entered by a signed-in member (step-up) or
-        directly from step 2 of the portal while an admin session is held. */
+    /** Legacy synchronous hint; use enterAdminPage to verify cookie access. */
     function guardAdmin() {
         var admin = Session.getAdmin() || {};
         if (!Session.ready() && !admin.parentId) {
-            location.replace("/");
+            location.replace("/?tab=admin");
             return false;
         }
         return true;
@@ -396,7 +401,7 @@
         if (!slot) return;
         var record = currentUnlock();
         slot.innerHTML = "";
-        if (!record) {
+        if (!record || primaryAdmin) {
             slot.classList.add("hidden");
             return;
         }
@@ -587,8 +592,52 @@
 
     var ADMIN_ONLY = {
         "/stats": { title: "Statistics", what: "team activity, blocks and trends" },
-        "/team": { title: "Team", what: "every member and how their gate is configured" }
+        "/team": { title: "Team", what: "every member and how their gate is configured" },
+        "/shadow-ai": { title: "Shadow AI", what: "discovered AI activity and tool risk" }
     };
+
+    function restoreAdmin() {
+        return global.Api.post("ADMIN_SESSION", {}, { member: false, onUnauthorised: false }).then(function (data) {
+            return data.success && data.Parent_id ? { parentId: data.Parent_id, username: data.username } : null;
+        }).catch(function (err) {
+            if (err.status === 401) return null;
+            throw err;
+        });
+    }
+
+    /** Verify the primary cookie first, even if this browser has member UI
+        metadata. Otherwise ask the signed-in member for a read-only unlock. */
+    function enterAdminPage(path) {
+        return restoreAdmin().then(function (admin) {
+            if (admin) {
+                primaryAdmin = admin;
+                Session.setAdmin(admin);
+                forgetUnlock();
+                paintMember();
+                return { primary: true, parentId: admin.parentId };
+            }
+            Session.clearAdmin();
+            if (Session.ready()) {
+                return withAdminPage(ADMIN_ONLY[path]).then(function () {
+                    return { primary: false, parentId: Session.ids().Parent_id };
+                });
+            }
+            location.replace("/?tab=admin");
+            var err = new Error("Your session has ended. Sign in again.");
+            err.cancelled = true;
+            throw err;
+        });
+    }
+
+    function adminPageError(err) {
+        if (err.cancelled) return;
+        if (err.status === 401) {
+            forgetUnlock();
+            if (primaryAdmin) Session.clearAdmin();
+            location.replace(primaryAdmin ? "/?tab=admin" : "/workspace");
+        }
+        global.Loading.toast(err.message, "error");
+    }
 
     function isAdminOnly(path) {
         var key = (path || "").replace(/\/+$/, "") || "/";
@@ -705,6 +754,10 @@
         signOut: signOut,
         guard: guard,
         guardAdmin: guardAdmin,
+        enterAdminPage: enterAdminPage,
+        restoreAdmin: restoreAdmin,
+        forgetAdminPage: forgetUnlock,
+        adminPageError: adminPageError,
         confirm: confirmDialog,
         prompt: promptDialog,
         withAdmin: withAdmin,

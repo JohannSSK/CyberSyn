@@ -8,16 +8,22 @@
     </div>
 
     <nav class="sidebar-nav" aria-label="Workspace navigation">
-        <a href="/workspace" class="nav-item" data-nav="/workspace">
+        <a href="/workspace" class="nav-item" data-nav="/workspace" data-member-only>
             <span data-icon="chat"></span><span>Chat</span>
+        </a>
+        <a href="/?tab=admin" class="nav-item" data-admin-hub hidden>
+            <span data-icon="shield"></span><span>Administrator workspace</span>
+        </a>
+        <a href="/shadow-ai" class="nav-item" data-nav="/shadow-ai">
+            <span data-icon="search"></span><span>Shadow AI</span>
         </a>
         <a href="/stats" class="nav-item" data-nav="/stats">
             <span data-icon="stats"></span><span>Statistics</span>
         </a>
-        <a href="/profile" class="nav-item" data-nav="/profile">
+        <a href="/profile" class="nav-item" data-nav="/profile" data-member-only>
             <span data-icon="profile"></span><span>Profile</span>
         </a>
-        <a href="/settings" class="nav-item" data-nav="/settings">
+        <a href="/settings" class="nav-item" data-nav="/settings" data-member-only>
             <span data-icon="settings"></span><span>Settings</span>
         </a>
         <a href="/team" class="nav-item" data-nav="/team">
@@ -41,11 +47,11 @@
             <span class="who">
                 <strong data-member-name>Member</strong>
                 <small data-workspace></small>
-                <small class="sidebar-managed">Administrator-managed workspace</small>
+                <small class="sidebar-managed" data-sidebar-role>Administrator-managed workspace</small>
             </span>
         </div>
         <div data-lang-switch></div>
-        <a href="/help" class="nav-item" data-nav="/help">
+        <a href="/help" class="nav-item" data-nav="/help" data-member-only>
             <span data-icon="help"></span><span>Help &amp; info</span>
         </a>
         <button type="button" class="nav-item" data-action="sign-out">

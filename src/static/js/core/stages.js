@@ -19,17 +19,22 @@
     var STAGES = {
         check1: { name: "Personal & Greek IDs" },
         check2: { name: "Confidential context" },
-        check3: { name: "Prompt injection" }
+        check3: { name: "Prompt injection" },
+        policy: { name: "Workspace AI tool policy" }
     };
 
     function entry(stage) {
         return STAGES[stage] || null;
     }
 
+    function title(stage) {
+        var found = entry(stage);
+        return found ? found.name : "Local check";
+    }
+
     /** "Personal & Greek IDs" — used by administrator Statistics. */
     function name(stage) {
-        var found = entry(stage);
-        return t(found ? found.name : (stage || "a local check"));
+        return t(entry(stage) ? title(stage) : (stage || "a local check"));
     }
 
     /** "Check 2 · Confidential context" — numbered for administrator Statistics. */
@@ -101,7 +106,8 @@
     }
 
     global.Stages = {
-        keys: Object.keys(STAGES),
+        keys: ["check1", "check2", "check3"],
+        title: title,
         has: function (stage) { return !!entry(stage); },
         name: name,
         label: label,

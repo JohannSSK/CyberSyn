@@ -31,6 +31,8 @@ import scanners as registry
 
 from config import BLOCK_KEYS, CHECKS, CHECK_TIMEOUT, PATHS, ROOT_DIR, SCANNER_FALLBACK
 from errors import ChatError
+from policy import ACTIONS, ACTION_FIELDS, rule_actions
+from redaction import RedactionError, offsets, redact
 
 # The whole screening stage shares this budget. It has to fit inside the
 # browser's own timeout along with the model call that follows, otherwise a
@@ -121,6 +123,8 @@ def _spawn(stage, prompt, timeout, policy):
             args.append("--block-code")
         if not policy.get("context_enabled", True):
             args.append("--code-only")
+        if policy.get("full_detail"):
+            args.append("--full-detail")
         proc = subprocess.run(
             args, input=prompt,
             capture_output=True, text=True, encoding="utf-8",
@@ -165,81 +169,141 @@ def _screening_deadline():
     return time.monotonic() + SCREEN_BUDGET
 
 
-def screen(prompt, flags):
-    """Run every enabled check, all at once, against one shared deadline.
+CODE_CAUSE = "computer source code"
+DETAIL_KEYS = ("line", "start_offset", "end_offset", "snippet")
 
-    Returns None when the prompt is clean, or the block info for the first
-    check that stops it. Raises ChatError — refusing the prompt — if any
-    enabled check could not produce a verdict in time, because a check that
-    did not run is not the same thing as a check that passed.
+
+def _hits(stage, prompt, result, actions, *, legacy=False):
+    """Separate code and confidential votes from the shared context scanner."""
+    if not isinstance(result, dict) or not isinstance(result.get("blocked"), bool):
+        raise ValueError("Missing scanner verdict.")
+    matches = result.get("matches", [])
+    if not isinstance(matches, list):
+        raise ValueError("Invalid scanner matches.")
+    for match in matches:
+        if not isinstance(match, dict) or not isinstance(match.get("cause"), str) or not match["cause"]:
+            raise ValueError("Invalid scanner match.")
+        score = match.get("score", 0)
+        if type(score) not in (int, float) or not 0 <= score <= 1:
+            raise ValueError("Invalid scanner match score.")
+        line = match.get("line")
+        if line is not None and (type(line) is not int or line < 1):
+            raise ValueError("Invalid scanner match line.")
+        start, end = offsets(prompt, match)
+        if match.get("snippet") != prompt[start:end]:
+            raise ValueError("Scanner match does not point to its snippet.")
+    if not result["blocked"]:
+        # A clean verdict can include non-violating diagnostics, such as a
+        # weak identifier candidate or code where that rule is set to allow.
+        return {}
+
+    if not matches:
+        # The legacy boolean-only scanner interface also accepted a primary
+        # finding. Action-aware scanners must supply an actual match list.
+        rule = "block_code" if stage == "check2" and result.get("main_cause") == CODE_CAUSE else stage
+        if legacy and actions[rule] == "block" and isinstance(result.get("main_cause"), str):
+            return {"block": build_block_info(stage, result)}
+        raise ValueError("A triggered rule lacks matches.")
+
+    grouped = {}
+    for match in matches:
+        rule = "block_code" if stage == "check2" and match["cause"] == CODE_CAUSE else stage
+        action = actions[rule]
+        if action != "allow":
+            grouped.setdefault(action, []).append(match)
+    if not grouped:
+        raise ValueError("A triggered scanner has no enabled rule matches.")
+    verdicts = {}
+    for action, found in grouped.items():
+        if action == "redact":
+            verdicts[action] = found
+        else:
+            worst = max(found, key=lambda hit: hit.get("score", 0))
+            verdicts[action] = build_block_info(stage, {
+                "main_cause": worst["cause"], "matches": found,
+                **{key: worst.get(key) for key in DETAIL_KEYS},
+            })
+    return verdicts
+
+
+def screen(prompt, flags):
+    """Run the enabled scanners in parallel against one deadline.
+
+    Legacy flag callers still get None or the first block_info. New rules
+    can also return a warning and/or a list of spans to redact. No scanner
+    can shorten the others unless the prompt cannot go out.
     """
-    enabled = [stage for stage, _ in CHECKS if flags.get(stage, True) or
-               (stage == "check2" and flags.get("block_code"))]
+    actions = rule_actions(flags)
+    legacy = not any(field in flags.keys() for field in ACTION_FIELDS.values())
+    if any(action not in ACTIONS for action in actions.values()) or actions["check3"] == "redact":
+        raise ChatError("Not sent — invalid saved screening policy.", 503)
+    enabled = [stage for stage, _ in CHECKS if actions[stage] != "allow" or
+               (stage == "check2" and actions["block_code"] != "allow")]
     if not enabled:
         return None
 
     deadline = _screening_deadline()
     results = {}
     failures = {}
-
-    # Set the first time a check refuses the prompt. The others are already
-    # running by then, and there is nothing left for them to decide: the
-    # verdict cannot change, so they stop paying for the rest of the paste
-    # instead of finishing it. One flag per request, so a refusal here can
-    # never shorten another prompt's scan.
     refused = threading.Event()
 
     def work(stage):
-        # Each check gets whatever is left of the shared budget, so three
-        # slow checks cost one budget between them rather than three.
-        remaining = max(1.0, deadline - time.monotonic())
+        remaining = max(0.001, deadline - time.monotonic())
         try:
             policy = {}
-            if stage == "check2" and flags.get("block_code"):
-                policy = {"block_code": True, "context_enabled": flags.get("check2", True)}
+            stage_actions = {actions[stage]}
+            if stage == "check2" and actions["block_code"] != "allow":
+                policy = {"block_code": True, "context_enabled": actions["check2"] != "allow"}
+                stage_actions.add(actions["block_code"])
+            if stage_actions & {"warn", "redact"}:
+                policy["full_detail"] = True
             result = run_check(stage, prompt, remaining, stop=refused.is_set, **policy)
-            if not isinstance(result, dict) or not isinstance(result.get("blocked"), bool):
-                raise ChatError("scanner did not produce a verdict")
-            results[stage] = result
-            if result.get("blocked"):
+            hits = _hits(stage, prompt, result, actions, legacy=legacy)
+            results[stage] = hits
+            if "block" in hits:
                 refused.set()
-        except Exception as exc:  # noqa: BLE001 - recorded, then refused
-            failures[stage] = exc
+        except Exception as exc:
+            # An exception string may contain arbitrary scanner output. Only
+            # report the stage and error type, never the original exception.
+            failures.setdefault(stage, type(exc).__name__)
             refused.set()
 
-    # Daemon threads: if one is abandoned by the deadline it must not keep
-    # the process from exiting.
-    threads = [
-        threading.Thread(target=work, args=(stage,), daemon=True,
-                         name=f"cybersyn-{stage}")
-        for stage in enabled
-    ]
-    for thread in threads:
+    threads = [(stage, threading.Thread(target=work, args=(stage,), daemon=True, name=f"cybersyn-{stage}"))
+               for stage in enabled]
+    for _, thread in threads:
         thread.start()
-    for thread in threads:
+    for stage, thread in threads:
         thread.join(max(0.0, deadline - time.monotonic()))
         if thread.is_alive():
             refused.set()
-            failures[thread.name.replace("cybersyn-", "")] = ChatError(
-                f"did not finish within {SCREEN_BUDGET:.0f}s"
-            )
+            failures[stage] = f"did not finish within {SCREEN_BUDGET:.0f}s"
 
-    # Refuse rather than guess. Report every check that could not answer, so
-    # the message says what to fix instead of blaming the prompt.
     if failures:
-        detail = "; ".join(
-            f"{stage}: {failures[stage]}" for stage in enabled if stage in failures
-        )
-        raise ChatError(
-            "Not sent — " + ("a check could not run" if len(failures) == 1
-                             else "checks could not run") + f" ({detail}).",
-            503,
-        )
+        detail = "; ".join(f"{stage}: {failures[stage]}" for stage in enabled if stage in failures)
+        raise ChatError("Not sent — " + ("a check could not run" if len(failures) == 1
+                                        else "checks could not run") + f" ({detail}).", 503)
 
-    # Checks are reported in their configured order, not in the order the
-    # threads happened to finish, so the same prompt always names the same
-    # stage.
-    for stage, _ in CHECKS:
-        if stage in results and results[stage].get("blocked"):
-            return build_block_info(stage, results[stage])
+    # Scanner order, not completion order, determines the primary finding.
+    ordered = [results[stage] for stage in enabled]
+    for hits in ordered:
+        if "block" in hits:
+            return hits["block"]
+    redactions = [match for hits in ordered for match in hits.get("redact", [])]
+    warnings = [hits["warn"] for hits in ordered if "warn" in hits]
+    if warnings:
+        primary = {key: value for key, value in warnings[0].items() if key != "blocked"}
+        primary["matches"] = [dict(match, stage=info["stage"]) for info in warnings for match in info["matches"]]
+        return {"action": "warn", "warn_info": dict(primary, will_redact=bool(redactions)), "redact_matches": redactions}
+    if redactions:
+        return {"action": "redact", "redact_matches": redactions}
     return None
+
+
+def apply_redactions(prompt, matches):
+    """Refuse instead of falling back to raw text if a span cannot be masked."""
+    if not matches:
+        return None
+    try:
+        return redact(prompt, matches)
+    except RedactionError as exc:
+        raise ChatError(f"Not sent — {exc}", 503) from None

@@ -68,7 +68,7 @@ def get_classifier():
     return get_zero_shot()
 
 
-def analyze(raw_text, stop=None, block_code=False, context_enabled=True):
+def analyze(raw_text, stop=None, block_code=False, context_enabled=True, full_detail=False):
     """Analyse a prompt.
 
     `stop` is a callable that returns True once the verdict is already
@@ -89,41 +89,43 @@ def analyze(raw_text, stop=None, block_code=False, context_enabled=True):
     def hit(part, cause, score):
         matches.append({**part, "cause": cause, "score": score, "snippet": part["text"]})
 
-    def identifier(match, score):
-        if context_enabled:
-            hit({"text": match[0], "line": raw_text.count("\n", 0, match.start()) + 1,
-                 "start_offset": match.start(), "end_offset": match.end()}, "credentials or banking data", score)
+    def identifier(match, score, tag):
+        hit({"text": match[0], "line": raw_text.count("\n", 0, match.start()) + 1,
+             "start_offset": match.start(), "end_offset": match.end(), "redaction_tag": tag},
+            "credentials or banking data", score)
 
-    # Inspect the full span for identifiers first: ID context and assigned
-    # credentials can cross a line boundary. Regex checks also see pure code.
-    for pattern, score in ((GREEK_ID, id_score), (IBAN, iban_score)):
-        for m in re.finditer(pattern, raw_text):
-            confidence = score(raw_text, m)
-            if confidence >= 0.8:
-                identifier(m, confidence)
-    for m in credential_matches(raw_text):
-        identifier(m, 0.96)
-    for m in CARD.finditer(raw_text):
-        if is_valid_luhn(m[0]):
-            identifier(m, 0.96)
+    # Inspect the full span first: an identifier and its context can cross a
+    # line break. A code hit never suppresses a confidential hit on that line.
+    if context_enabled:
+        for pattern, score, tag in ((GREEK_ID, id_score, "GREEK_ID"), (IBAN, iban_score, "IBAN")):
+            for m in re.finditer(pattern, raw_text):
+                confidence = score(raw_text, m)
+                if confidence >= 0.8:
+                    identifier(m, confidence, tag)
+        for m in credential_matches(raw_text):
+            identifier(m, 0.96, "API_KEY")
+        for m in CARD.finditer(raw_text):
+            if is_valid_luhn(m[0]):
+                identifier(m, 0.96, "CARD")
     secret_lines = {m["line"] for m in matches}
     for part in lines(raw_text):
         text = part["text"]
         if len(text) <= 3:
             continue
-        if block_code and CODE_SYNTAX.search(text):
+        is_code = bool(CODE_SYNTAX.search(text))
+        if is_code:
             hit(part, CODE_LABEL, 0.90)
-        if part["line"] in secret_lines:
+        if not context_enabled and is_code:
             continue
-        elif LEGAL_PATTERNS.search(text):
+        if not full_detail and not block_code and part["line"] in secret_lines:
+            continue  # the legacy context-only block already covers this line
+        if context_enabled and LEGAL_PATTERNS.search(text):
             hit(part, "legal contract or NDA", 0.92)
-        elif FINANCE_PATTERNS.search(text):
+        elif context_enabled and FINANCE_PATTERNS.search(text):
             hit(part, "internal company financial data", 0.92)
-        elif HR_CUSTOMER_PATTERNS.search(text):
+        elif context_enabled and HR_CUSTOMER_PATTERNS.search(text):
             hit(part, "confidential HR, payroll, or customer records", 0.92)
-        elif CODE_SYNTAX.search(text):
-            if not block_code:
-                hit(part, CODE_LABEL, 0.90)
+        elif is_code:
             for fragment in embedded(text):
                 unknown_chunks.append({**fragment, "line": part["line"],
                                        "start_offset": part["start_offset"] + fragment["start_offset"],
@@ -133,7 +135,7 @@ def analyze(raw_text, stop=None, block_code=False, context_enabled=True):
             if (topics and len(text) <= 140 and _EDUCATIONAL.match(text) and
                     re.fullmatch(r"[\w ,?;;.'’-]+", text) and not re.search(r"\d|\bour\b", text, re.I)):
                 continue  # a short definition/schema question without records or figures
-            if len(topics) >= 2 and re.search(r"(?:[€$£]\s*\d|\d[\d.,]*\s*(?:%|EUR|USD))", text, re.I):
+            if context_enabled and len(topics) >= 2 and re.search(r"(?:[€$£]\s*\d|\d[\d.,]*\s*(?:%|EUR|USD))", text, re.I):
                 hit(part, "leaked internal company document or confidential record", 0.90)
             else:
                 unknown_chunks.append(part)
@@ -160,7 +162,8 @@ def analyze(raw_text, stop=None, block_code=False, context_enabled=True):
         # Stop early only once the verdict is settled *and* the leftover is
         # big enough to be worth stopping for. A short prompt still gets the
         # complete report, because finishing it costs almost nothing.
-        settled = any(m["cause"] in blocked_labels for m in matches) and len(keys) > DETAIL_LINES
+        settled = (not full_detail and any(m["cause"] in blocked_labels for m in matches)
+                   and len(keys) > DETAIL_LINES)
         if not settled:
             results = classify_batched(
                 keys,
@@ -170,6 +173,8 @@ def analyze(raw_text, stop=None, block_code=False, context_enabled=True):
             )
             if isinstance(results, dict):
                 results = [results]
+            if len(results) != len(keys) and not (stop is not None and stop()):
+                raise ValueError("Incomplete context verdict.")
 
             # Another check can refuse the prompt before the first batch is
             # even submitted, and then there is nothing computed to report.
@@ -180,6 +185,8 @@ def analyze(raw_text, stop=None, block_code=False, context_enabled=True):
             for text, res in zip(keys, results):
                 top_label = res["labels"][0]
                 top_score = round(float(res["scores"][0]), 4)
+                if top_label not in LABELS or not 0 <= top_score <= 1:
+                    raise ValueError("Invalid context classification.")
                 if top_label != SAFE_LABEL and top_score >= THRESHOLD:
                     for chunk in distinct[text]:
                         matches.append({
@@ -231,7 +238,7 @@ def analyze(raw_text, stop=None, block_code=False, context_enabled=True):
 def analyze_stdin():
     """CLI entry point: read the prompt from stdin and return the verdict."""
     return analyze(sys.stdin.read(), block_code="--block-code" in sys.argv,
-                   context_enabled="--code-only" not in sys.argv)
+                   context_enabled="--code-only" not in sys.argv, full_detail="--full-detail" in sys.argv)
 
 
 if __name__ == "__main__":

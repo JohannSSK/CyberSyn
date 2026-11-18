@@ -108,7 +108,7 @@ def admin_manage():
             return fail_admin(INVALID, 401)
         pid = row["id"]
         db.execute("DELETE FROM ADMIN_SESSIONS WHERE admin_id=?", (pid,))
-        for table in ("EMPLOYEE_SESSIONS", "CHATS", "SETTINGS", "EMPLOYEES"):
+        for table in ("EMPLOYEE_SESSIONS", "CHATS", "SETTINGS", "EMPLOYEES", "AI_TOOL_POLICY", "DISCOVERY_EVENTS"):
             db.execute(f"DELETE FROM {table} WHERE Parent_id=?", (pid,))
         db.execute("DELETE FROM ADMINS WHERE id=?", (pid,))
         return admin_session.retire_page_grant(db, ok(Parent_id=str(pid)))

@@ -15,6 +15,7 @@ from contextlib import closing
 from datetime import datetime, timezone
 
 from auth import _connect
+from redaction import retained_redactions
 
 EARLIER_TITLE = "Earlier chat"
 TITLE_LEN = 48
@@ -213,29 +214,35 @@ def bump_answered(db_file, parent_id, employee_id):
 # Writes
 # --------------------------------------------------------------------------
 
-def _mutate(db_file, parent_id, employee_id, chat_id, change):
+def _mutate(db_file, parent_id, employee_id, chat_id, change, *, retitle=None):
     """Serialize the complete read/modify/write, including legacy ID assignment."""
     with closing(_connect(db_file)) as con, con:
         con.execute("BEGIN IMMEDIATE")
         ids = (chat_id, parent_id, employee_id)
-        row = con.execute("SELECT messages FROM CHATS WHERE id=? AND Parent_id=? AND Employee_id=?", ids).fetchone()
+        row = con.execute("SELECT title, messages FROM CHATS WHERE id=? AND Parent_id=? AND Employee_id=?", ids).fetchone()
         if row is None:
             con.rollback()
             return None
         messages = normalise(_load(row["messages"]))[0]
         if not change(messages):
             return None
-        con.execute("UPDATE CHATS SET messages=?, updated_at=? WHERE id=? AND Parent_id=? AND Employee_id=?",
-                    (_dump(messages), _now(), *ids))
+        title = retitle(row["title"], messages) if retitle else row["title"]
+        con.execute("UPDATE CHATS SET title=?, messages=?, updated_at=? WHERE id=? AND Parent_id=? AND Employee_id=?",
+                    (title, _dump(messages), _now(), *ids))
         return messages
 
 
-def save_exchange(db_file, parent_id, employee_id, chat_id, prompt, answer, blocked=False, block_info=None):
+def save_exchange(db_file, parent_id, employee_id, chat_id, prompt, answer, blocked=False, block_info=None,
+                  *, redaction_info=None, metadata_only=False):
     now = _now()
     entry = {"id": _new_id(), "prompt": prompt, "answer": answer, "created_at": now,
              "blocked": bool(blocked), "edited": False}
     if blocked and block_info:
         entry["block_info"] = block_info
+    if redaction_info:
+        entry.update(redacted=True, redaction_info=redaction_info)
+    if metadata_only:
+        entry["metadata_only"] = True
     if chat_id is None:
         with closing(_connect(db_file)) as con, con:
             # A member may have been offboarded while the provider was answering.
@@ -254,31 +261,80 @@ def save_exchange(db_file, parent_id, employee_id, chat_id, prompt, answer, bloc
     return chat_id, entry
 
 
-def _change_entry(db_file, parent_id, employee_id, chat_id, message_id, fields=None):
-    def change(messages):
+def _change_entry(db_file, parent_id, employee_id, chat_id, message_id, change, *, retitle=None):
+    def apply(messages):
         for i, entry in enumerate(messages):
-            if entry.get("id") == message_id:
-                if fields is None:
-                    del messages[i]
-                else:
-                    entry.update(fields)
+            if entry.get("id") != message_id:
+                continue
+            if change is None:
+                del messages[i]
                 return True
+            return change(entry)
         return False
-    return _mutate(db_file, parent_id, employee_id, chat_id, change)
+    return _mutate(db_file, parent_id, employee_id, chat_id, apply, retitle=retitle)
 
 
-def edit_message(db_file, parent_id, employee_id, chat_id, message_id, text):
-    return _change_entry(db_file, parent_id, employee_id, chat_id, message_id,
-                         {"prompt": text, "edited": True, "edited_at": _now()})
+def _redaction_metadata(entry, info):
+    if info:
+        entry.update(redacted=True, redaction_info=info, metadata_only=True)
+        entry.pop("block_info", None)  # legacy evidence may contain original text
+    else:
+        entry.pop("redacted", None)
+        entry.pop("redaction_info", None)
+
+
+def _redacted_title(message_id, previous_prompt, safe_prompt):
+    """Replace an auto-title derived from a formerly unsanitized first prompt."""
+    def retitle(title, messages):
+        if messages and messages[0].get("id") == message_id and title == make_title(previous_prompt):
+            return make_title(safe_prompt)
+        return title
+    return retitle
+
+
+def edit_message(db_file, parent_id, employee_id, chat_id, message_id, text, *, redaction=None):
+    if redaction:
+        text = redaction.prompt
+    previous = None
+
+    def change(entry):
+        nonlocal previous
+        previous = entry.get("prompt")
+        info = redaction.info if redaction else retained_redactions(text, entry)
+        _redaction_metadata(entry, info)
+        if redaction and isinstance(entry.get("answer"), str):
+            # A reply from before the edit may have echoed the very values
+            # we are masking now. Don't leave those echoes in a redacted row.
+            entry["answer"] = redaction.un_restored_reply(entry["answer"])
+        entry.update(prompt=text, edited=True, edited_at=_now())
+        return True
+
+    def retitle(title, messages):
+        return _redacted_title(message_id, previous, text)(title, messages)
+
+    return _change_entry(db_file, parent_id, employee_id, chat_id, message_id, change,
+                         retitle=retitle if redaction else None)
 
 
 def delete_message(db_file, parent_id, employee_id, chat_id, message_id):
-    return _change_entry(db_file, parent_id, employee_id, chat_id, message_id)
+    return _change_entry(db_file, parent_id, employee_id, chat_id, message_id, None)
 
 
-def replace_answer(db_file, parent_id, employee_id, chat_id, message_id, answer):
-    return _change_entry(db_file, parent_id, employee_id, chat_id, message_id,
-                         {"answer": answer, "regenerated_at": _now()})
+def replace_answer(db_file, parent_id, employee_id, chat_id, message_id, answer, *,
+                   expected_prompt=None, sent_prompt=None, redaction_info=None, metadata_only=False):
+    def change(entry):
+        if expected_prompt is not None and entry.get("prompt") != expected_prompt:
+            return False  # a newer edit arrived while the provider was answering
+        if sent_prompt is not None and sent_prompt != expected_prompt:
+            entry.update(prompt=sent_prompt, edited=True, edited_at=_now())
+        entry.update(answer=answer, regenerated_at=_now())
+        if sent_prompt is not None:
+            _redaction_metadata(entry, redaction_info)
+        if metadata_only:
+            entry["metadata_only"] = True
+        return True
+    retitle = _redacted_title(message_id, expected_prompt, sent_prompt) if redaction_info else None
+    return _change_entry(db_file, parent_id, employee_id, chat_id, message_id, change, retitle=retitle)
 
 
 def rename_chat(db_file, parent_id, employee_id, chat_id, title):

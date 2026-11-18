@@ -1,8 +1,7 @@
 """Team statistics for the administrator dashboard.
 
-Answers the analyst's question — "which teams sent client data to
-unapproved AI tools this week?" — and hands the page a per-member breakdown,
-a daily trend, and a timestamped stream of every step each member took.
+Gives the page a per-member screening breakdown, daily trends and a
+metadata-only activity timeline. Imported network activity is in Shadow AI.
 
 Blocks and approved overrides are counted separately: an override is in the
 audit trail, but the message *was* sent, so it is not a block.
@@ -16,6 +15,7 @@ from flask import Blueprint
 import block_log
 from auth import admin_from_token, _connect
 from config import DB_FILE, DEFAULT_MODEL, ROUTES
+from policy import ACTION_FIELDS, rule_actions
 
 team_stats_api = Blueprint("team_stats_api", __name__)
 
@@ -56,8 +56,7 @@ def member_stats(db_file, parent_id, employee_id, username, settings,
     blocked = len(stopped)
     overrides = len(blocks) - blocked
     sent = answered + blocked
-    checks_on = sum(bool(v) for v in (settings["check1"], settings["check2"] or settings["block_code"],
-                                      settings["check3"])) if settings else 3
+    checks_on = sum(action != "allow" for action in rule_actions(settings or {}).values())
 
     return {
         "id": employee_id,
@@ -69,7 +68,7 @@ def member_stats(db_file, parent_id, employee_id, username, settings,
         "overrides": overrides,
         "block_rate": pct(blocked, sent),
         "checks_on": checks_on,
-        "checks_off": 3 - checks_on,
+        "checks_off": len(ACTION_FIELDS) - checks_on,
         "model": (settings["MODEL_NAME"] if settings else None) or DEFAULT_MODEL,
         "has_key": bool(settings and settings["API_KEY"]),
         "reasons": ranked(tally(b["reason"] for b in stopped), blocked),
@@ -153,10 +152,13 @@ def build_stats(db_file, parent_id):
 @team_stats_api.post(ROUTES["TEAM"])
 def team():
     """Full statistics for the signed-in administrator's workspace."""
-    from web import get_json_dict
+    from web import get_json_dict, to_int
 
     data = get_json_dict() or {}
-    admin = admin_from_token(DB_FILE, data.get("token"), page=True)
+    pid = to_int(data.get("Parent_id"))
+    if "Parent_id" in data and pid is None:
+        return {"error": True, "error_message": "'Parent_id' must be a positive integer."}, 400
+    admin = admin_from_token(DB_FILE, data.get("token"), parent_id=pid, page=True)
     if admin is None:
         return {"error": True, "error_message": "Your session has ended. Sign in again."}, 401
 

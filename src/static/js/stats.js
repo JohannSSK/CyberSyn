@@ -16,7 +16,7 @@
     var Stages = window.Stages;
     var $ = Dom.$;
 
-    if (!window.Shell.guardAdmin()) return;
+    var access = null;
 
     function t(text) {
         return window.I18n && typeof window.I18n.t === "function"
@@ -39,7 +39,13 @@
         message_edited:  { icon: "edit",       label: "Message edited", prefix: true },
         message_deleted: { icon: "delete",     label: "Message deleted" },
         regenerated:     { icon: "regenerate", label: "Answer regenerated", prefix: true },
-        logout:          { icon: "logout",     label: "Signed out" }
+        logout:          { icon: "logout",     label: "Signed out" },
+        warned:          { icon: "warning",    label: "Message paused" },
+        warn_proceeded:  { icon: "check",      label: "Warning confirmed" },
+        redacted:        { icon: "shield",     label: "Message redacted" },
+        shadow_policy:   { icon: "settings",   label: "AI tool policy changed" },
+        shadow_import:   { icon: "search",     label: "Discovery logs imported" },
+        shadow_clear:    { icon: "delete",     label: "Discovery logs cleared" }
     };
 
     var PREFIX_CAP = 80;
@@ -285,7 +291,7 @@
             Dom.avatarHTML(member.username, "avatar-md") +
             '<span class="member-id"><strong data-no-i18n>' + Dom.esc(member.username) + "</strong>" +
             '<span class="member-meta"><span>' +
-            Dom.esc(t(member.checks_on + " of 3 checks on")) +
+            Dom.esc(t(member.checks_on + " of 4 checks on")) +
             '</span><span>·</span><span class="mono" data-no-i18n>' +
             Dom.esc(member.model) + "</span></span></span>";
 
@@ -350,7 +356,7 @@
                 prefix: ""
             };
         }
-        // Activity rows for blocked/override store "<category>: <80-char prefix>".
+        // Legacy display formatting. Current block and override details are metadata only.
         if ((item.kind === "blocked" || item.kind === "override") && !item.stage) {
             var sep = raw.indexOf(": ");
             if (sep > 0) {
@@ -384,7 +390,7 @@
         items.forEach(function (item) {
             var info = meta(item.kind);
             var row = Dom.el("div", "tl-item kind-" + item.kind);
-            var who = names[item.employee_id] || (t("Member") + " " + item.employee_id);
+            var who = item.employee_id === 0 ? t("Administrator") : (names[item.employee_id] || (t("Member") + " " + item.employee_id));
             var parts = splitActivityDetail(item);
 
             var detailHtml = parts.label
@@ -465,7 +471,7 @@
         lines.push("");
 
         push(["Members"]);
-        push(["Username", "Model", "Checks active (of 3)", "Key configured",
+        push(["Username", "Model", "Checks active (of 4)", "Key configured",
               "Sent", "Answered", "Blocked", "Overrides", "Block rate (%)"]);
         (data.members || []).forEach(function (m) {
             push([m.username, m.model, m.checks_on, m.has_key ? "yes" : "no",
@@ -545,8 +551,8 @@
             $("#stages"),
             stages,
             stats.blocked || 0,
-            "All three checks are quiet",
-            "When a local check holds back a message, its share of blocks appears here."
+            "No screening blocks yet",
+            "When a local rule or destination policy stops a message, its share of blocks appears here."
         );
 
         var members = $("#members");
@@ -554,7 +560,7 @@
         if (!data.members || !data.members.length) {
             members.appendChild(emptyBox(
                 "No team members yet",
-                "Add a colleague from step 2 of the sign-in screen to see their activity here."
+                "Add a colleague from the Administrator tab to see their activity here."
             ));
         } else {
             data.members.forEach(function (member) {
@@ -569,21 +575,16 @@
     }
 
     function load(button) {
+        if (!access) return;
         var task = function () {
-            return Api.post("TEAM", {}, { member: false, onUnauthorised: false });
+            return Api.post("TEAM", { Parent_id: access.parentId }, { member: false, onUnauthorised: false });
         };
-
         var request = button ? Loading.withButton(button, task) : task();
 
         return request.then(function (data) {
             latestData = data;
             render(data);
-        }).catch(function (err) {
-            Loading.toast(
-                err.message || "Could not load statistics. Select Refresh to try again.",
-                "error"
-            );
-        });
+        }).catch(window.Shell.adminPageError);
     }
 
     /* ------------------------------------------------------------------
@@ -610,8 +611,8 @@
         if (latestData) render(latestData);
     });
 
-    window.Shell.withAdminPage({
-        title: "Statistics",
-        what: "team activity, blocks and trends"
-    }).then(function () { load(); }).catch(function () { });
+    window.Shell.enterAdminPage("/stats").then(function (context) {
+        access = context;
+        return load();
+    }).catch(window.Shell.adminPageError);
 })();

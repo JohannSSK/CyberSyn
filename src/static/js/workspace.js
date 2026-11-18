@@ -128,10 +128,8 @@
     function showPending(promptText, bypass) {
         hidePending();
 
-        var enabled = ["check1", "check2", "check3"].filter(function (id) {
-            return state.settings[id] !== false;
-        });
-        var checking = !bypass && enabled.length > 0;
+        var enabled = Dom.activeChecks(state.settings);
+        var checking = !bypass && enabled > 0;
 
         var wrap = Dom.el("div", "msg");
         var head = Dom.el("div", "msg-head");
@@ -159,7 +157,7 @@
 
         var labelKey = bypass
             ? "Sending once with administrator approval."
-            : (!enabled.length
+            : (!enabled
                 ? "Waiting for the AI reply."
                 : "Checking…");
         var slowKey = "Still working — normal on a long paste.";
@@ -235,21 +233,19 @@
        ------------------------------------------------------------------ */
 
     function checksSummaryText(on) {
-        if (on === 3) return t("All checks on");
+        if (on === 4) return t("All checks on");
         if (on === 0) return t("All checks off");
-        return t("Checks: " + on + " of 3 on");
+        return t("Checks: " + on + " of 4 on");
     }
 
     function updateChecksBadge() {
-        var on = ["check1", "check2", "check3"].filter(function (k) {
-            return state.settings[k];
-        }).length;
+        var on = Dom.activeChecks(state.settings);
         var summary = checksSummaryText(on);
         nodes.checksSummary.textContent = summary;
         nodes.checksStatus.removeAttribute("title");
         nodes.checksStatus.setAttribute("aria-label", summary);
-        nodes.checksStatus.classList.toggle("is-all-on", on === 3);
-        nodes.checksStatus.classList.toggle("is-partial", on > 0 && on < 3);
+        nodes.checksStatus.classList.toggle("is-all-on", on === 4);
+        nodes.checksStatus.classList.toggle("is-partial", on > 0 && on < 4);
         nodes.checksStatus.classList.toggle("is-off", on === 0);
     }
 
@@ -350,6 +346,23 @@
         mine.appendChild(mineText);
         Dom.highlightText(mineText, state.query);
         wrap.appendChild(mine);
+
+        if (message.redacted && message.redaction_info) {
+            var info = message.redaction_info;
+            var disclosure = Dom.el("details", "redaction-receipt");
+            var summary = Dom.el("summary");
+            summary.appendChild(Dom.el("span", "badge badge-accent", "Redacted " + Dom.plural(info.count, "item")));
+            var placeholderList = Dom.el("span", "mono redaction-tokens", (info.placeholders || []).join(", "));
+            placeholderList.setAttribute("data-no-i18n", "");
+            summary.appendChild(placeholderList);
+            disclosure.appendChild(summary);
+            disclosure.appendChild(Dom.el("p", "tiny muted", "Sanitized prompt"));
+            var preview = Dom.el("pre", "redaction-preview", message.prompt || "");
+            preview.setAttribute("data-no-i18n", "");
+            disclosure.appendChild(preview);
+            if (info.restored) disclosure.appendChild(Dom.el("p", "tiny muted", "Values restored in this reply only."));
+            wrap.appendChild(disclosure);
+        }
 
         var hasPrompt = !!(message.prompt && String(message.prompt).trim() !== "");
         if (hasPrompt) {
@@ -466,14 +479,14 @@
                 if (!renderFirstRun()) {
                     emptyStream(
                         t("What are we working on today?"),
-                        t("Every message is checked on this computer through three local checks before it reaches the AI."),
+                        t("Write a message below. Your enabled local checks run here before the prompt reaches the AI."),
                         "chat"
                     );
                 }
             } else {
                 emptyStream(
                     t("Start the conversation"),
-                    t("Write a message below. Every line is checked on this computer before it reaches the AI."),
+                    t("Write a message below. Your enabled local checks run here before the prompt reaches the AI."),
                     "chat"
                 );
             }
@@ -629,31 +642,123 @@
         });
     }
 
-    function regenerate(message, button) {
-        if (button && button.dataset && button.dataset.busy === "1") return;
-        Loading.withButton(button, function () {
-            return Api.post("CHAT_REGENERATE", {
-                chat_id: state.chatId,
-                message_id: message.id
-            }, { timeout: requestBudget() });
+    function regenerate(message, button, options) {
+        if (state.busy) return;
+        var opts = options || {};
+        var chatId = state.chatId;
+        state.busy = true;
+        nodes.send.disabled = true;
+        var payload = { chat_id: chatId, message_id: message.id };
+        if (opts.confirmWarn) payload.confirm_warn = true;
+        if (opts.bypass) {
+            payload.bypass = true;
+            payload.admin_token = opts.token;
+        }
+        return Loading.withButton(button, function () {
+            return Api.post("CHAT_REGENERATE", payload, { timeout: requestBudget(), onUnauthorised: !opts.bypass });
         }).then(function (data) {
+            if (chatId !== state.chatId) return;
             if (data.blocked) {
-                renderBlocked(data.block_info || {}, message.prompt || "");
+                renderBlocked(data.block_info || {}, message.prompt || "", function (token) {
+                    return regenerate(message, null, { bypass: true, token: token });
+                });
                 return;
             }
-            state.messages = data.messages || [];
+            if (data.warned) {
+                renderWarning(data.warn_info || {}, message.prompt || "", function (confirm) {
+                    return regenerate(message, confirm, { confirmWarn: true });
+                });
+                return;
+            }
+            if (!Array.isArray(data.messages)) return;
+            state.messages = data.messages;
+            if (data.redacted) {
+                var updated = state.messages.find(function (item) { return item.id === message.id; });
+                if (updated) {
+                    updated.answer = data.reply_message; // ephemeral; the history array from the server was unrestored
+                    updated.redaction_info = data.redaction_info;
+                }
+                loadChats().then(function () {
+                    var chat = state.chats.find(function (item) { return item.id === chatId; });
+                    if (chat && state.chatId === chatId) setTitle(chat.title);
+                });
+            }
+            if (opts.bypass) state.overriddenMessages[message.id] = true;
             renderMessages();
             Loading.toast("New answer ready.", "success");
         }).catch(function (err) {
             Loading.toast(err.message, "error");
+        }).finally(function () {
+            state.busy = false;
+            nodes.send.disabled = false;
         });
+    }
+
+    function findings(info) {
+        return Array.isArray(info.matches) && info.matches.length ? info.matches : [info];
+    }
+
+    function matchList(found, warning) {
+        var list = Dom.el("div", "blocked-matches");
+        found.forEach(function (match) {
+            var cause = match.cause || match.main_cause;
+            var row = Dom.el("div", "blocked-match");
+            var badge = Dom.el("span", "badge " + (warning ? "badge-warn" : "badge-danger"), cause || "match");
+            if (cause) badge.setAttribute("data-no-i18n", "");
+            row.appendChild(badge);
+            if (warning && match.stage) row.appendChild(Dom.el("span", "", Stages.title(match.stage)));
+            if (match.line) row.appendChild(Dom.el("span", "", "line " + match.line));
+            if (match.snippet) {
+                var code = Dom.el("code");
+                code.setAttribute("data-no-i18n", "");
+                code.appendChild(Dom.el("mark", "policy-match", match.snippet));
+                row.appendChild(code);
+            }
+            list.appendChild(row);
+        });
+        return list;
+    }
+
+    function renderWarning(info, text, sendAnyway) {
+        var wrap = Dom.el("div", "msg policy-warning");
+        var card = Dom.el("div", "bubble bubble-warned");
+        card.setAttribute("role", "group");
+        card.setAttribute("aria-label", "Message paused for review");
+        var header = Dom.el("div", "blocked-head");
+        header.innerHTML = Icons.svg("warning", "icon") + '<h3 class="blocked-verdict">Message paused for review</h3>';
+        card.appendChild(header);
+        card.appendChild(Dom.el("p", "blocked-what", "No message was sent. Check what matched before you decide to proceed."));
+        card.appendChild(Dom.el("p", "blocked-why", Stages.title(info.stage)));
+        card.appendChild(matchList(findings(info), true));
+        if (info.will_redact) card.appendChild(Dom.el("p", "blocked-next", "Other flagged details will be redacted before sending."));
+        var actions = Dom.el("div", "blocked-cta-row");
+        var edit = Dom.el("button", "btn btn-sm btn-ghost warn-edit", "Edit message");
+        var confirm = Dom.el("button", "btn btn-sm btn-outline warn-send", "Send anyway");
+        edit.type = confirm.type = "button";
+        Dom.on(edit, "click", function () {
+            wrap.remove();
+            if (!nodes.stream.children.length) renderMessages();
+            fillComposer(text);
+        });
+        Dom.on(confirm, "click", function () {
+            if (state.busy) return;
+            wrap.remove();
+            sendAnyway(confirm);
+        });
+        actions.append(edit, confirm);
+        card.appendChild(actions);
+        wrap.appendChild(card);
+        nodes.stream.appendChild(wrap);
+        if (window.I18n) window.I18n.apply();
+        edit.focus();
+        scrollToEnd(true);
     }
 
     /* ------------------------------------------------------------------
        Blocked message card + "Why?" trace expander + one-off override (D3)
        ------------------------------------------------------------------ */
 
-    function renderBlocked(blockInfo, promptText) {
+    function renderBlocked(blockInfo, promptText, approveOverride) {
         // Clear any empty-state notice if this was the chat's first attempt.
         var emptyNode = nodes.stream.querySelector(".first-run, .empty");
         if (emptyNode) emptyNode.remove();
@@ -671,7 +776,7 @@
         var header = Dom.el("div", "blocked-head");
         header.innerHTML = Icons.svg("warning", "icon") +
             '<h3 class="blocked-verdict">' +
-            Dom.esc(Stages.verdict(blockInfo.stage)) + "</h3>";
+            Dom.esc(blockInfo.stage === "policy" ? "Destination blocked by workspace policy" : Stages.verdict(blockInfo.stage)) + "</h3>";
         card.appendChild(header);
 
         card.appendChild(Dom.el(
@@ -679,35 +784,18 @@
             "blocked-what",
             t("Nothing left this computer. Your message stayed here and was not sent to the AI.")
         ));
-        card.appendChild(Dom.el("p", "blocked-why", Stages.reason(blockInfo)));
+        if (blockInfo.stage === "policy") {
+            var reason = Dom.el("p", "blocked-why", "This AI tool is unapproved.");
+            var name = Dom.el("strong", "", blockInfo.tool_name || "");
+            name.setAttribute("data-no-i18n", "");
+            reason.append(" ", name);
+            card.appendChild(reason);
+        } else {
+            card.appendChild(Dom.el("p", "blocked-why", Stages.reason(blockInfo)));
+        }
 
-        // Every item the check flagged, with its category, line and snippet.
-        var found = Array.isArray(blockInfo.matches) && blockInfo.matches.length
-            ? blockInfo.matches
-            : [{
-                main_cause: blockInfo.main_cause,
-                line: blockInfo.line,
-                start_offset: blockInfo.start_offset,
-                end_offset: blockInfo.end_offset,
-                snippet: blockInfo.snippet
-            }];
-
-        var summary = Dom.el("div", "blocked-matches");
-        summary.innerHTML = found.map(function (match) {
-            var lineText = match.line
-                ? "<span>" + Dom.esc(t("line " + match.line)) + "</span>"
-                : "";
-            var snippetText = match.snippet
-                ? "<code>" + Dom.esc(match.snippet) + "</code>"
-                : "";
-            return '<div class="blocked-match">' +
-                '<span class="badge badge-danger">' +
-                Dom.esc(match.main_cause || t("match")) + "</span>" +
-                lineText +
-                snippetText +
-                "</div>";
-        }).join("");
-        card.appendChild(summary);
+        var found = findings(blockInfo);
+        card.appendChild(matchList(found, false));
 
         // "Why?" expander with labelled mono trace rows (cause, line, offsets).
         var expander = Dom.el("details", "blocked-expander");
@@ -718,7 +806,7 @@
                 "div",
                 "blocked-detail-row",
                 Stages.detailLine(blockInfo.stage, {
-                    main_cause: match.main_cause || match.cause || blockInfo.main_cause,
+                    main_cause: match.cause || match.main_cause || blockInfo.main_cause,
                     line: match.line || blockInfo.line,
                     start_offset: typeof match.start_offset === "number"
                         ? match.start_offset
@@ -763,6 +851,7 @@
         }
 
         Dom.on(ask, "click", function () {
+            var blockedChat = currentChatKey();
             var form = Dom.el("div", "override-form");
             form.innerHTML =
                 '<label class="override-label"><span>' +
@@ -810,9 +899,11 @@
                         scope: "once"
                     }, { onUnauthorised: false });
                 }).then(function (data) {
+                    if (blockedChat !== currentChatKey() || !wrap.isConnected) return;
                     var token = data.admin_token;
                     wrap.remove();
-                    send(promptText.trim(), true, token, promptText);
+                    if (approveOverride) approveOverride(token);
+                    else send(promptText.trim(), true, token, promptText);
                 }).catch(function (err) {
                     Loading.toast(
                         err.message || "That password did not match. Check it and try again.",
@@ -856,13 +947,14 @@
         return seconds * 1000;
     }
 
-    function send(text, bypass, adminToken, rawPrompt) {
+    function send(text, bypass, adminToken, rawPrompt, confirmWarn) {
         if (state.busy) return;
         state.busy = true;
         nodes.send.disabled = true;
 
         var originalPrompt = typeof rawPrompt === "string" ? rawPrompt : text;
         var preSendKey = currentChatKey();
+        var paused = false;
         var emptyNode = nodes.stream.querySelector(".first-run, .empty");
         if (emptyNode) emptyNode.remove();
 
@@ -874,9 +966,19 @@
             bypass: !!bypass
         };
         if (adminToken) payload.admin_token = adminToken;
+        if (confirmWarn) payload.confirm_warn = true;
 
-        Api.post("CHAT", payload, { timeout: requestBudget() })
+        return Api.post("CHAT", payload, { timeout: requestBudget(), onUnauthorised: !bypass })
             .then(function (data) {
+                if (currentChatKey() !== preSendKey) { hidePending(); return; }
+                if (data.warned) {
+                    hidePending();
+                    paused = true;
+                    renderWarning(data.warn_info || {}, originalPrompt, function () {
+                        return send(text, false, null, originalPrompt, true);
+                    });
+                    return null;
+                }
                 if (data.blocked) {
                     waiting.resolve((data.block_info || {}).stage || "check1");
                     hidePending();
@@ -885,7 +987,7 @@
                     return null;
                 }
 
-                waiting.resolve(null);
+                waiting.resolve(data.redacted || confirmWarn ? "policy" : null);
 
                 var nextChatId = data.chat_id || state.chatId;
                 var nextKey = nextChatId ? String(nextChatId) : preSendKey;
@@ -899,15 +1001,17 @@
                 if (data.message_id) {
                     if (bypass) {
                         state.overriddenMessages[data.message_id] = true;
-                    } else if (state.blockedChats[nextKey] && !state.gracedChats[nextKey]) {
+                    } else if (!data.redacted && !confirmWarn && state.blockedChats[nextKey] && !state.gracedChats[nextKey]) {
                         // D4: fires once per chat, only after a prior block in it.
                         state.gracedChats[nextKey] = true;
                         state.gracedMessages[data.message_id] = true;
                     }
                     state.messages.push({
                         id: data.message_id,
-                        prompt: text,
+                        prompt: data.redacted ? data.redacted_prompt : text,
                         answer: data.reply_message,
+                        redacted: !!data.redacted,
+                        redaction_info: data.redaction_info,
                         created_at: new Date().toISOString(),
                         edited: false
                     });
@@ -935,7 +1039,7 @@
             .finally(function () {
                 state.busy = false;
                 nodes.send.disabled = false;
-                nodes.input.focus();
+                if (!paused) nodes.input.focus();
             });
     }
 
@@ -1134,7 +1238,7 @@
         renderChatList();
         if (pending && pending.relocalise) pending.relocalise();
         if (!state.busy &&
-            !nodes.stream.querySelector(".bubble-blocked") &&
+            !nodes.stream.querySelector(".bubble-blocked, .bubble-warned") &&
             !nodes.stream.querySelector(".is-editing")) {
             renderMessages();
         }
@@ -1146,9 +1250,7 @@
 
     (function start() {
         Api.post("SETTINGS", {}).then(function (data) {
-            state.settings.check1 = data.check1 !== false;
-            state.settings.check2 = data.check2 !== false || !!data.block_code;
-            state.settings.check3 = data.check3 !== false;
+            state.settings = data;
             updateChecksBadge();
             updateMissingKeyNote(data);
         }).catch(function () { updateChecksBadge(); });

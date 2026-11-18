@@ -29,7 +29,7 @@
 
                 <section class="card stack">
                     <div class="card-title"><span data-icon="info"></span><span>The short version</span></div>
-                    <p>CyberSyn sits between your team and the AI provider you choose. Every message goes through local safety checks on this computer first — only messages that pass are forwarded over the network.</p>
+                    <p>CyberSyn applies your workspace policy on the gateway before it sends a message to the configured AI provider.</p>
 
                     <div class="step-list">
                         <div class="step">
@@ -42,43 +42,62 @@
                         <div class="step">
                             <span class="step-num">2</span>
                             <div>
-                                <strong>Three checks inspect it locally</strong>
-                                <p>In order, CyberSyn checks for personal data, sensitive workplace context and hidden prompt-injection instructions.</p>
+                                <strong>Enabled rules inspect it locally</strong>
+                                <p>Local checks cover personal data, confidential context, prompt injection and source code.</p>
                             </div>
                         </div>
                         <div class="step">
                             <span class="step-num">3</span>
                             <div>
-                                <strong>Sent if clear — held back if not</strong>
-                                <p>Clear messages go to your configured model. Flagged messages stay on this computer and show you exactly what matched so you can edit or ask for a one-off approval.</p>
+                                <strong>The policy decides what is sent</strong>
+                                <p>A rule can allow, pause for review, redact or block the message. If an enabled check fails, nothing is sent.</p>
                             </div>
                         </div>
                     </div>
                 </section>
 
                 <section class="card stack">
-                    <div class="card-title"><span data-icon="shield"></span><span>The three local checks</span></div>
+                    <div class="card-title"><span data-icon="shield"></span><span>The four screening rules</span></div>
 
                     <div class="check-card">
-                        <strong>1. Personal data</strong>
+                        <strong>Personal &amp; Greek IDs</strong>
                         <p>Catches names, email addresses, phone numbers, payment cards, IBANs and Greek national numbers such as AFM and AMKA before they reach an external model.</p>
                     </div>
 
                     <div class="check-card">
-                        <strong>2. Context</strong>
+                        <strong>Confidential context</strong>
                         <p>Reads the surrounding sentence to spot confidential plans, internal credentials or client information that does not follow a fixed number format.</p>
                     </div>
 
                     <div class="check-card">
-                        <strong>3. Prompt injection</strong>
+                        <strong>Prompt injection</strong>
                         <p>Detects hidden instructions trying to override how the model behaves — common in pasted web pages, forwarded emails and shared documents.</p>
+                    </div>
+                    <div class="check-card">
+                        <strong>Proprietary source code</strong>
+                        <p>Applies a separate rule to recognized source code. CyberSyn does not determine who owns the code.</p>
                     </div>
                 </section>
 
-                <section class="card stack">
-                    <div class="card-title"><span data-icon="warning"></span><span>When a message is held back</span></div>
-                    <p>A stopped message is never sent to the AI provider. The card in your chat names the check that held it back, highlights every matched phrase, and includes a “Why was this stopped?” panel with the category, line number and character offsets.</p>
-                    <p>From there you have two options: select <strong>Edit in message box</strong> to replace the flagged detail with a placeholder and send again, or select <strong>Approve once</strong> so an administrator can enter their password to send that single message and record the approval.</p>
+                <section class="card stack" id="policy-actions">
+                    <div class="card-title"><span data-icon="settings"></span><span>Policy actions</span></div>
+                    <div class="check-card"><strong>Allow</strong><p>Skip that rule; the other enabled rules still apply.</p></div>
+                    <div class="check-card"><strong>Warn</strong><p>Pause and show the matches. You can edit the prompt or send anyway. Confirmation runs the current checks again.</p></div>
+                    <div class="check-card"><strong>Redact &amp; send</strong><p>Replace detected values with placeholders before sending and saving. Optional local restoration swaps matching placeholders back for this reply only. History keeps the unrestored answer.</p></div>
+                    <div class="check-card"><strong>Block</strong><p>Keep the message local. Edit it or ask for one-time administrator approval. Redaction rules still apply to an approved override.</p></div>
+                    <p>Blocks take precedence over warnings, then redaction. Prompt injection cannot be set to Redact.</p>
+                </section>
+
+                <section class="card stack" id="discovery-guide">
+                    <div class="card-title"><span data-icon="search"></span><span>Shadow AI discovery</span></div>
+                    <p>On Shadow AI, review the service inventory, choose approved, restricted or unapproved, and import synthetic CSV, proxy or DNS logs. Use the sample week and the client-data filter to see which teams accessed unapproved tools.</p>
+                    <p>Log discovery never contacts the network. Only hostnames and event metadata are kept, not URL paths, queries or message content. This is an analysis of imported logs, not live network monitoring.</p>
+                </section>
+
+                <section class="card stack" id="sign-in-guide">
+                    <div class="card-title"><span data-icon="profile"></span><span>Signing in</span></div>
+                    <p>Use the Team member tab to open your own conversations. Enter your administrator's username as the workspace name if there is more than one workspace.</p>
+                    <p>Use the Administrator tab to go directly to Shadow AI, Statistics, Team and account management. Member sign-in ends the administrator session in that browser.</p>
                 </section>
 
                 <section class="card stack" id="privacy-storage">
@@ -88,11 +107,11 @@
                     <div class="privacy-list">
                         <div class="privacy-row">
                             <strong>Conversations and AI replies</strong>
-                            <p>Full messages and model replies are stored in this workspace’s local database for your account. Administrator screens do not load full chat threads or AI answers.</p>
+                            <p>Sent messages and replies are stored in the local database for your account. For redacted exchanges, only the sanitized prompt and unrestored reply are saved. Administrator screens do not load your conversations.</p>
                         </div>
                         <div class="privacy-row">
                             <strong>What administrators can see</strong>
-                            <p>After entering the administrator password on Statistics or Team, an administrator can view message counts, block rates, which check and category triggered, and UTC timestamps. Prompt previews are off by default; when enabled via CYBERSYN_LOG_PROMPT_PREVIEW=1, only ordinary sent messages keep an 80-character preview (never blocked or overridden prompts).</p>
+                            <p>Administrator pages show counts, rule categories and timestamps. Prompt previews are off by default. If enabled, only ordinary messages may leave a preview in the local audit log; blocked, warned, redacted and overridden text never does.</p>
                         </div>
                         <div class="privacy-row">
                             <strong>Deleting messages, chats and accounts</strong>
@@ -115,7 +134,7 @@
                     <ul class="help-list">
                         <li>Press <span class="kbd">Enter</span> to send a message and <span class="kbd">Shift</span> + <span class="kbd">Enter</span> to add a new line.</li>
                         <li>Use the search box at the top of Chat to filter the open conversation and search across other chats; press <span class="kbd">Esc</span> to clear it.</li>
-                        <li>Administrator pages stay unlocked in the current tab for 15 minutes after entering the password. Use <strong>Lock</strong> in the sidebar to close that window immediately.</li>
+                        <li>When signed in as a member, administrator pages can be unlocked for 15 minutes. Use <strong>Lock now</strong> in the sidebar to end that access.</li>
                         <li>On Statistics, use <strong>Download CSV</strong> to export workspace totals and trends, or print either Statistics or Team cleanly to A4 — API keys and prompt excerpts are omitted on paper.</li>
                     </ul>
                 </section>

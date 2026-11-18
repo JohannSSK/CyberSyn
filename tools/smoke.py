@@ -2,7 +2,7 @@
 """End-to-end smoke test against a running CyberSyn instance.
 
 Use a disposable database. The test creates accounts, checks authorization,
-searches history, reads statistics and loads pages. With a configured key it
+searches history, reads statistics, imports a synthetic discovery sample and loads pages. With a configured key it
 also sends a prompt and edits/deletes the answer; without one it verifies the
 no-key refusal. No provider or scanner is mocked by this script.
 
@@ -103,10 +103,9 @@ def main():
     check("team member added", status in (200, 201), status)
 
     status, login = call("EMPLOYEE_LOGIN",
-                         {"Parent_id": parent_id, "username": name,
-                          "password": "Passw0rd!"})
-    check("member signs in and gets a session",
-          status == 200 and bool(login.get("session_token")), login)
+                         {"workspace": ADMIN_USER, "username": name, "password": "Passw0rd!"})
+    check("member signs in directly by workspace and gets a scoped session",
+          status == 200 and login.get("Parent_id") == str(parent_id) and bool(login.get("session_token")), login)
     if not login.get("session_token"):
         return report()
     member_token = login["session_token"]
@@ -124,8 +123,9 @@ def main():
     status, grant = call("ADMIN_APPROVE", {"username": ADMIN_USER, "password": ADMIN_PASS, "scope": "once"})
     check("administrator approves once", status == 200)
     status, settings = member("SETTINGS",
-                              MODEL_NAME="gpt-4o-mini", admin_token=grant.get("admin_token"))
-    check("settings readable", status == 200 and "check1" in settings, settings)
+                              MODEL_NAME="gpt-4o-mini", action_check1="warn", admin_token=grant.get("admin_token"))
+    check("settings expose the action and its legacy flag", status == 200 and settings.get("check1") is True and
+          settings.get("action_check1") == "warn", settings)
     check("api key never returned in the clear",
           settings.get("API_KEY") == "" and "API_KEY_MASK" in settings, settings)
 
@@ -193,10 +193,29 @@ def main():
         check("member trends are per member",
               all("trend" in m for m in stats.get("members", [])))
 
+    # ---- offline, synthetic Shadow AI discovery -------------------------
+    target = {"Parent_id": parent_id}
+    status, discovery = call("SHADOW_AI", dict(target, token=admin_token))
+    check("Shadow AI inventory loads for the workspace", status == 200 and len(discovery.get("inventory", [])) >= 16)
+    status, page = call("ADMIN_APPROVE", dict(target, username=ADMIN_USER, password=ADMIN_PASS, scope="page"))
+    page_token = page.get("admin_token")
+    check("page approval can read discovery but cannot import", status == 200 and
+          call("SHADOW_AI", dict(target, token=page_token))[0] == 200 and
+          call("SHADOW_AI_IMPORT", dict(target, admin_token=page_token, sample=True))[0] == 401)
+    status, imported = call("SHADOW_AI_IMPORT", dict(target, admin_token=admin_token, sample=True))
+    check("sample import returns both detected and ignored counts", status == 200 and
+          imported.get("ai_events_added", 0) > 0 and imported.get("non_ai_ignored", 0) > 0, imported)
+    status, sales = call("SHADOW_AI", dict(target, token=admin_token, days=7, team="Sales", status="unapproved", data_signal="client_data"))
+    check("filtered sample shows Sales client-data events to unapproved AI", status == 200 and
+          sales.get("summary", {}).get("client_data_to_unapproved", 0) > 0)
+    status, cleared = call("SHADOW_AI_IMPORT", dict(target, admin_token=admin_token, clear=True))
+    check("clear removes only the discovery records", status == 200 and cleared.get("events_cleared", 0) > 0 and
+          cleared.get("summary", {}).get("total_events") == 0, cleared)
+
     # ---- page routes ---------------------------------------------------
     print()
     for path in ("/", "/workspace", "/profile", "/settings", "/stats",
-                 "/team", "/help"):
+                 "/team", "/shadow-ai", "/help"):
         try:
             with urllib.request.urlopen(BASE + path, timeout=30) as resp:
                 check(f"page {path} renders", resp.status == 200, resp.status)
