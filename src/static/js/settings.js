@@ -194,7 +194,7 @@
     }
 
     /* Changing checks or connection settings is confirmed with a fresh
-       administrator password every time and logged in the audit trail. */
+       administrator password every time and logged in the audit log. */
     function approveChange(titleKey, bodyKey) {
         return Shell.withAdmin({
             title: titleKey,

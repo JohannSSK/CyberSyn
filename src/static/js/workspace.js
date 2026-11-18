@@ -68,7 +68,12 @@
         checksStatus: $("#checks-status"),
         missingKeyNote: $("#missing-key-note"),
         dismissKeyNote: $("#btn-dismiss-key-note"),
-        firstRunTpl: $("#first-run-template")
+        firstRunTpl: $("#first-run-template"),
+        menuButton: $("#btn-chat-menu"),
+        menu: $("#chat-menu"),
+        menuWrap: $(".topbar-menu-wrap"),
+        menuRename: $("#menu-rename-chat"),
+        menuDelete: $("#menu-delete-chat")
     };
 
     function currentChatKey() {
@@ -88,6 +93,56 @@
         btn.innerHTML = Icons.html(name);
         Dom.on(btn, "click", action);
         return btn;
+    }
+
+    /* The assistant's face is the app's own outline shield, never a vendor
+       mark: a quiet circle of --surface-2 with the cream glyph inside. */
+    function aiAvatar() {
+        var node = Dom.el("span", "turn-avatar turn-avatar-ai");
+        node.setAttribute("aria-hidden", "true");
+        node.innerHTML = Icons.svg("shield", "icon");
+        return node;
+    }
+
+    function memberName() {
+        var member = (Api.Session && Api.Session.getMember) ? Api.Session.getMember() : null;
+        return (member && member.username) || "";
+    }
+
+    function memberAvatar() {
+        var node = Dom.fromHTML(Dom.avatarHTML(memberName(), "turn-avatar turn-avatar-user"));
+        node.setAttribute("aria-hidden", "true");
+        return node;
+    }
+
+    /** A turn head: the speaker in --text-dim, then the time alone.
+     *  The day itself is carried by the date divider between days. */
+    function turnHead(speaker, iso, extra) {
+        var head = Dom.el("div", "msg-head");
+        head.appendChild(Dom.el("span", "who", speaker));
+        if (iso) {
+            head.appendChild(Dom.el("span", "msg-time", Dom.clockTime(iso)));
+        }
+        if (extra) head.appendChild(Dom.el("span", "msg-time", extra));
+        return head;
+    }
+
+    function dateDivider(iso) {
+        var row = Dom.el("div", "stream-date");
+        row.appendChild(Dom.el("span", "", Dom.dayStamp(iso)));
+        return row;
+    }
+
+    /* The paper plane trades places with a spinner while a request is open. */
+    function setSendBusy(busy) {
+        if (!nodes.send) return;
+        nodes.send.disabled = !!busy;
+        nodes.send.classList.toggle("is-loading", !!busy);
+        if (busy && !nodes.send.querySelector(".btn-spinner")) {
+            var spinner = Dom.el("span", "btn-spinner");
+            spinner.setAttribute("aria-hidden", "true");
+            nodes.send.appendChild(spinner);
+        }
     }
 
     function autoGrow() {
@@ -133,11 +188,14 @@
         var checking = !bypass && enabled > 0;
 
         var wrap = Dom.el("div", "msg");
-        var head = Dom.el("div", "msg-head");
-        head.innerHTML = Icons.html("profile") +
-            '<span class="who">' + Dom.esc(t("You")) + "</span>";
-        wrap.appendChild(head);
-        wrap.appendChild(Dom.el("div", "bubble bubble-user", promptText));
+
+        var userTurn = Dom.el("div", "turn turn-user");
+        userTurn.appendChild(memberAvatar());
+        userTurn.appendChild(turnHead(t("You")));
+        var userBody = Dom.el("div", "turn-body");
+        userBody.appendChild(Dom.el("div", "bubble bubble-user", promptText));
+        userTurn.appendChild(userBody);
+        wrap.appendChild(userTurn);
 
         var note = Dom.el("div", "msg-pending");
 
@@ -177,7 +235,14 @@
         line.appendChild(slow);
 
         note.appendChild(line);
-        wrap.appendChild(note);
+
+        var aiTurn = Dom.el("div", "turn turn-ai");
+        aiTurn.appendChild(aiAvatar());
+        aiTurn.appendChild(turnHead("CyberSyn"));
+        var aiBody = Dom.el("div", "turn-body");
+        aiBody.appendChild(note);
+        aiTurn.appendChild(aiBody);
+        wrap.appendChild(aiTurn);
         nodes.stream.appendChild(wrap);
         scrollToEnd(true);
 
@@ -374,19 +439,25 @@
         var wrap = Dom.el("div", "msg");
         wrap.dataset.id = message.id || "";
 
-        var head = Dom.el("div", "msg-head");
-        head.innerHTML = Icons.html("profile") +
-            '<span class="who">' + Dom.esc(t("You")) + "</span>" +
-            "<span>·</span><span>" + Dom.esc(Dom.stamp(message.created_at)) + "</span>" +
-            (message.edited ? "<span>· " + Dom.esc(t("edited")) + "</span>" : "");
-        wrap.appendChild(head);
+        var hasPrompt = !!(message.prompt && String(message.prompt).trim() !== "");
+
+        /* ---- Your turn: right-aligned head, bubble, notes, then the pencil */
+        var userTurn = Dom.el("div", "turn turn-user");
+        userTurn.appendChild(memberAvatar());
+        userTurn.appendChild(turnHead(
+            t("You"),
+            message.created_at,
+            message.edited ? t("edited") : ""
+        ));
 
         var mine = Dom.el("div", "bubble bubble-user");
         var mineText = Dom.el("p");
         mineText.textContent = message.prompt || "";
         mine.appendChild(mineText);
         Dom.highlightText(mineText, state.query);
-        wrap.appendChild(mine);
+
+        var userBody = Dom.el("div", "turn-body");
+        userBody.appendChild(mine);
 
         if (message.redacted && message.redaction_info) {
             var info = message.redaction_info;
@@ -402,44 +473,51 @@
             preview.setAttribute("data-no-i18n", "");
             disclosure.appendChild(preview);
             if (info.restored) disclosure.appendChild(Dom.el("p", "tiny muted", "Values restored in this reply only."));
-            wrap.appendChild(disclosure);
+            userBody.appendChild(disclosure);
         }
 
-        var hasPrompt = !!(message.prompt && String(message.prompt).trim() !== "");
+        if (message.id && state.overriddenMessages[message.id]) {
+            userBody.appendChild(Dom.el(
+                "p",
+                "msg-receipt msg-receipt-override",
+                t("Sent once with administrator approval — this was logged.")
+            ));
+        } else if (message.id && state.gracedMessages[message.id]) {
+            userBody.appendChild(Dom.el(
+                "p",
+                "msg-receipt msg-receipt-grace",
+                t("Rewritten — sent.")
+            ));
+        }
+
+        userTurn.appendChild(userBody);
+
         if (hasPrompt) {
             var userActions = Dom.el("div", "msg-actions msg-actions-user");
             var editBtn = iconButton("edit", "Edit this message", function () {
                 beginEdit(wrap, message, editBtn);
             });
             userActions.appendChild(editBtn);
-            wrap.appendChild(userActions);
+            userTurn.appendChild(userActions);
         }
+        wrap.appendChild(userTurn);
 
+        /* ---- The assistant's turn: shield avatar, left-aligned head, reply */
         var hasAnswer = message.answer && String(message.answer).trim() !== "" &&
             String(message.answer) !== "NULL";
         var reply = null;
         var copyTintTimer = null;
+
+        var aiTurn = Dom.el("div", "turn turn-ai");
+        aiTurn.appendChild(aiAvatar());
+        aiTurn.appendChild(turnHead("CyberSyn", message.created_at));
+
+        var aiBody = Dom.el("div", "turn-body");
         if (hasAnswer) {
             reply = Dom.el("div", "bubble bubble-ai");
             reply.innerHTML = window.Markdown.render(message.answer);
             Dom.highlightText(reply, state.query);
-            wrap.appendChild(reply);
-        }
-
-        // Approved override amber receipt (Section 6)
-        if (message.id && state.overriddenMessages[message.id]) {
-            wrap.appendChild(Dom.el(
-                "p",
-                "msg-receipt msg-receipt-override",
-                t("Sent once with administrator approval — this was logged.")
-            ));
-        } else if (message.id && state.gracedMessages[message.id]) {
-            // Once-per-chat grace note after rewriting a blocked prompt (D4)
-            wrap.appendChild(Dom.el(
-                "p",
-                "msg-receipt msg-receipt-grace",
-                t("Rewritten — sent.")
-            ));
+            aiBody.appendChild(reply);
         }
 
         var actionsAi = Dom.el("div", "msg-actions msg-actions-ai");
@@ -469,7 +547,10 @@
         actionsAi.appendChild(iconButton("delete", "Delete this message", function () {
             removeMessage(message, actionsAi);
         }, true));
-        wrap.appendChild(actionsAi);
+
+        aiTurn.appendChild(aiBody);
+        aiTurn.appendChild(actionsAi);
+        wrap.appendChild(aiTurn);
 
         return wrap;
     }
@@ -522,7 +603,13 @@
                 emptyStream(t("Start the conversation"), t("Write a message below."), "chat");
             }
         } else {
+            var lastDay = "";
             visible.forEach(function (message) {
+                var day = Dom.dayKey(message.created_at);
+                if (day && day !== lastDay) {
+                    nodes.stream.appendChild(dateDivider(message.created_at));
+                    lastDay = day;
+                }
                 nodes.stream.appendChild(renderMessage(message));
             });
             if (!query) scrollToEnd(false);
@@ -678,7 +765,7 @@
         var opts = options || {};
         var chatId = state.chatId;
         state.busy = true;
-        nodes.send.disabled = true;
+        setSendBusy(true);
         var payload = { chat_id: chatId, message_id: message.id };
         if (opts.confirmWarn) payload.confirm_warn = true;
         if (opts.bypass) {
@@ -721,7 +808,7 @@
             Loading.toast(err.message, "error");
         }).finally(function () {
             state.busy = false;
-            nodes.send.disabled = false;
+            setSendBusy(false);
         });
     }
 
@@ -778,7 +865,14 @@
         });
         actions.append(edit, confirm);
         card.appendChild(actions);
-        wrap.appendChild(card);
+
+        var aiTurn = Dom.el("div", "turn turn-ai");
+        aiTurn.appendChild(aiAvatar());
+        aiTurn.appendChild(turnHead("CyberSyn"));
+        var aiBody = Dom.el("div", "turn-body turn-body-wide");
+        aiBody.appendChild(card);
+        aiTurn.appendChild(aiBody);
+        wrap.appendChild(aiTurn);
         nodes.stream.appendChild(wrap);
         if (window.I18n) window.I18n.apply();
         edit.focus();
@@ -796,11 +890,13 @@
 
         var wrap = Dom.el("div", "msg");
 
-        var head = Dom.el("div", "msg-head");
-        head.innerHTML = Icons.html("profile") +
-            '<span class="who">' + Dom.esc(t("You")) + "</span>";
-        wrap.appendChild(head);
-        wrap.appendChild(Dom.el("div", "bubble bubble-user", promptText));
+        var userTurn = Dom.el("div", "turn turn-user");
+        userTurn.appendChild(memberAvatar());
+        userTurn.appendChild(turnHead(t("You")));
+        var userBody = Dom.el("div", "turn-body");
+        userBody.appendChild(Dom.el("div", "bubble bubble-user", promptText));
+        userTurn.appendChild(userBody);
+        wrap.appendChild(userTurn);
 
         var card = Dom.el("div", "bubble bubble-blocked");
 
@@ -962,7 +1058,15 @@
         });
 
         card.appendChild(panel);
-        wrap.appendChild(card);
+
+        var aiTurn = Dom.el("div", "turn turn-ai");
+        aiTurn.appendChild(aiAvatar());
+        aiTurn.appendChild(turnHead("CyberSyn"));
+        var aiBody = Dom.el("div", "turn-body turn-body-wide");
+        aiBody.appendChild(card);
+        aiTurn.appendChild(aiBody);
+        wrap.appendChild(aiTurn);
+
         nodes.stream.appendChild(wrap);
         scrollToEnd(true);
     }
@@ -981,7 +1085,7 @@
     function send(text, bypass, adminToken, rawPrompt, confirmWarn) {
         if (state.busy) return;
         state.busy = true;
-        nodes.send.disabled = true;
+        setSendBusy(true);
 
         var originalPrompt = typeof rawPrompt === "string" ? rawPrompt : text;
         var preSendKey = currentChatKey();
@@ -1069,7 +1173,7 @@
             })
             .finally(function () {
                 state.busy = false;
-                nodes.send.disabled = false;
+                setSendBusy(false);
                 if (!paused) nodes.input.focus();
             });
     }
@@ -1254,6 +1358,75 @@
     Dom.on(nodes.newChat, "click", newChat);
     Dom.on(nodes.deleteChat, "click", function () { deleteChat(nodes.deleteChat); });
     Dom.on(nodes.rename, "click", renameChat);
+
+    /* Overflow menu — the same two actions, nothing invented. Escape closes
+       and returns focus to the trigger; a click or focus anywhere else closes
+       it, so no focus trap is needed for a two-item menu. */
+    function setChatMenu(open) {
+        if (!nodes.menu || !nodes.menuButton) return;
+        nodes.menu.hidden = !open;
+        nodes.menuButton.setAttribute("aria-expanded", open ? "true" : "false");
+        if (open) {
+            var first = nodes.menu.querySelector(".menu-item");
+            if (first && typeof first.focus === "function") first.focus();
+        }
+    }
+
+    function chatMenuOpen() {
+        return !!(nodes.menu && !nodes.menu.hidden);
+    }
+
+    Dom.on(nodes.menuButton, "click", function (event) {
+        event.stopPropagation();
+        setChatMenu(!chatMenuOpen());
+    });
+
+    if (nodes.menu) {
+        Dom.on(nodes.menu, "keydown", function (event) {
+            var items = Dom.$$(".menu-item", nodes.menu);
+            var index = items.indexOf(document.activeElement);
+            if (event.key === "ArrowDown" && items.length) {
+                event.preventDefault();
+                items[(index + 1) % items.length].focus();
+            } else if (event.key === "ArrowUp" && items.length) {
+                event.preventDefault();
+                items[(index - 1 + items.length) % items.length].focus();
+            } else if (event.key === "Escape") {
+                event.preventDefault();
+                setChatMenu(false);
+                nodes.menuButton.focus();
+            }
+        });
+    }
+
+    Dom.on(nodes.menuRename, "click", function () {
+        setChatMenu(false);
+        renameChat();
+    });
+
+    Dom.on(nodes.menuDelete, "click", function () {
+        setChatMenu(false);
+        deleteChat(nodes.deleteChat);
+    });
+
+    Dom.on(document, "click", function (event) {
+        if (!chatMenuOpen()) return;
+        if (nodes.menuWrap && nodes.menuWrap.contains(event.target)) return;
+        setChatMenu(false);
+    });
+
+    Dom.on(document, "focusin", function (event) {
+        if (!chatMenuOpen()) return;
+        if (nodes.menuWrap && nodes.menuWrap.contains(event.target)) return;
+        setChatMenu(false);
+    });
+
+    Dom.on(document, "keydown", function (event) {
+        if (event.key === "Escape" && chatMenuOpen()) {
+            setChatMenu(false);
+            if (nodes.menuButton) nodes.menuButton.focus();
+        }
+    });
 
     Dom.on(nodes.search, "input", Dom.debounce(applySearch, 180));
     Dom.on(nodes.search, "keydown", function (e) {

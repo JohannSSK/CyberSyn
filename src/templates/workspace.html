@@ -22,13 +22,16 @@
 
                 <button type="button" class="topbar-title" id="btn-rename-chat"
                         title="Rename this chat">
-                    <span id="active-chat-title">New chat</span>
-                    <span data-icon="edit"></span>
-                    <span class="topbar-rename-hint" aria-hidden="true">
-                        <span class="topbar-rename-word">Rename</span>
-                        <kbd class="kbd" data-no-i18n>Enter</kbd>
-                        <kbd class="kbd" data-no-i18n>Esc</kbd>
+                    <span class="topbar-title-row">
+                        <span id="active-chat-title">New chat</span>
+                        <span data-icon="edit"></span>
+                        <span class="topbar-rename-hint" aria-hidden="true">
+                            <span class="topbar-rename-word">Rename</span>
+                            <kbd class="kbd" data-no-i18n>Enter</kbd>
+                            <kbd class="kbd" data-no-i18n>Esc</kbd>
+                        </span>
                     </span>
+                    <span class="topbar-subtitle">A conversation with CyberSyn</span>
                 </button>
 
                 <div class="search-box">
@@ -53,6 +56,24 @@
                         title="Delete this chat" aria-label="Delete this chat">
                     <span data-icon="delete"></span>
                 </button>
+
+                {# Overflow menu: only the two actions that already exist. It is
+                   keyboard-operable and closes on Escape, outside click or blur. #}
+                <div class="topbar-menu-wrap">
+                    <button type="button" class="icon-btn" id="btn-chat-menu"
+                            title="More actions" aria-label="More actions"
+                            aria-haspopup="menu" aria-expanded="false" aria-controls="chat-menu">
+                        <span class="menu-dots" aria-hidden="true">⋯</span>
+                    </button>
+                    <div class="topbar-menu" id="chat-menu" role="menu" aria-label="Chat actions" hidden>
+                        <button type="button" class="menu-item" role="menuitem" id="menu-rename-chat">
+                            <span data-icon="edit"></span><span>Rename this chat</span>
+                        </button>
+                        <button type="button" class="menu-item is-danger" role="menuitem" id="menu-delete-chat">
+                            <span data-icon="delete"></span><span>Delete this chat</span>
+                        </button>
+                    </div>
+                </div>
             </header>
 
             <div class="stream" id="chat-stream">
@@ -95,15 +116,19 @@
                             <span data-icon="close"></span>
                         </button>
                     </div>
-                    <form id="form-send" class="composer-box">
-                        <textarea id="prompt-input" rows="1"
-                                  placeholder="Write a message (Enter to send, Shift+Enter for a new line)"
-                                  aria-label="Message"></textarea>
+                    <form id="form-send" class="composer-row">
+                        <div class="composer-box">
+                            <textarea id="prompt-input" rows="1"
+                                      placeholder="Type a message…"
+                                      aria-label="Message"></textarea>
+                            <kbd class="kbd composer-chip">Shift + Enter for a new line</kbd>
+                        </div>
                         <button type="submit" class="composer-send" id="btn-send"
                                 title="Send message" aria-label="Send message">
                             <span data-icon="send" data-icon-svg></span>
                         </button>
                     </form>
+                    <p class="composer-trust">Checked on this computer before anything reaches the AI.</p>
                 </div>
             </footer>
         </main>

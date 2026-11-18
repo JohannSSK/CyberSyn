@@ -1,9 +1,9 @@
 /* ==========================================================================
    sidebar.css — shared navigation chrome.
 
-   Loaded on every page from base.html. Entries stay quiet warm charcoal;
-   the active page earns a subtle surface step-up and a crisp 3px warm-grey
-   rail on its leading edge — never a coloured wash.
+   Loaded on every page from base.html. Entries stay quiet cool slate; the
+   active page or chat earns a soft rounded-rectangle fill — never a bar, never
+   a coloured wash.
    ========================================================================== */
 
 .sidebar {
@@ -33,7 +33,7 @@
 .sidebar-brand span {
     font-size: var(--text-lg);
     font-weight: 600;
-    letter-spacing: -0.015em;
+    letter-spacing: var(--tracking-heading);
     color: var(--text-strong);
 }
 
@@ -76,7 +76,7 @@
     text-decoration: none;
 }
 
-/* Active item: subtle neutral step-up plus a 3px warm-grey rail on the left. */
+/* Active item: a soft rounded-rectangle fill, and a brighter glyph. */
 .nav-item.is-active {
     color: var(--text-strong);
     font-weight: 600;
@@ -84,22 +84,11 @@
     border-color: transparent;
 }
 
-.nav-item.is-active::before {
-    content: "";
-    position: absolute;
-    left: 0;
-    top: 8px;
-    bottom: 8px;
-    width: 3px;
-    border-radius: var(--r-sm);
-    background: var(--accent);
-}
-
 .nav-item .icon {
     width: var(--icon-sm);
     height: var(--icon-sm);
     flex: none;
-    color: var(--text-muted);
+    color: var(--text-dim);
     transition: color var(--fast) var(--ease);
 }
 
@@ -181,22 +170,11 @@
     font-weight: 500;
 }
 
-.chat-item.is-active::before {
-    content: "";
-    position: absolute;
-    left: 0;
-    top: 8px;
-    bottom: 8px;
-    width: 3px;
-    border-radius: var(--r-sm);
-    background: var(--accent);
-}
-
 .chat-item .icon {
     width: var(--icon-xs);
     height: var(--icon-xs);
     flex: none;
-    color: var(--text-muted);
+    color: var(--text-dim);
 }
 
 .chat-item.is-active .icon { color: var(--text-strong); }
@@ -276,7 +254,7 @@
 }
 
 /* --------------------------------------------------------------------------
-   Narrow screens: drawer over an opaque-feeling warm scrim
+   Narrow screens: drawer over an opaque-feeling slate scrim
    -------------------------------------------------------------------------- */
 
 @media (max-width: 900px) {

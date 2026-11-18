@@ -423,6 +423,237 @@ function runSidebar() {
    Blocked wording, in-place editing, browser boundaries & signed-in screens
    -------------------------------------------------------------------------- */
 
+/* --------------------------------------------------------------------------
+   The night-slate chat skin: cool ground, two labelled voices, one date line,
+   one instrument below the words.
+   -------------------------------------------------------------------------- */
+
+const luminance = (hex) => {
+    const n = hex.replace("#", "");
+    const parts = [0, 2, 4].map((i) => parseInt(n.slice(i, i + 2), 16) / 255)
+        .map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * parts[0] + 0.7152 * parts[1] + 0.0722 * parts[2];
+};
+const contrast = (a, b) => {
+    const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+    return (hi + 0.05) / (lo + 0.05);
+};
+const tokenOf = (css, name) => (css.match(new RegExp("--" + name + ":\\s*(#[0-9a-f]{6})")) || [])[1];
+
+function testChatReskin() {
+    console.log("\nNight-slate ground");
+    const base = sheet("base.css");
+    const palette = {
+        bg: "#101318", surface: "#161a21", "surface-2": "#1c212a",
+        "surface-3": "#232936", "surface-4": "#2b3242",
+    };
+    for (const [name, hex] of Object.entries(palette)) {
+        check(`--${name} is the cool slate value ${hex}`, tokenOf(base, name) === hex, tokenOf(base, name));
+    }
+    check("the cream accent is the one warm survivor", tokenOf(base, "accent") === "#ecebe7");
+    check("status hues are unchanged from v5",
+        tokenOf(base, "success") === "#97ab91" && tokenOf(base, "warn") === "#bfa273" &&
+        tokenOf(base, "danger") === "#bd8a80");
+    check("the sidebar narrows from 268px to 240px", /--sidebar-w:\s*240px/.test(base));
+    check("body copy clears 4.5:1 on the ground, panel and raised fills",
+        contrast("#e8eaee", "#101318") >= 4.5 && contrast("#e8eaee", "#161a21") >= 4.5 &&
+        contrast("#e8eaee", "#1c212a") >= 4.5 && contrast("#e8eaee", "#232936") >= 4.5);
+    check("secondary copy clears 4.5:1 on every text surface",
+        contrast("#b9bec9", "#101318") >= 4.5 && contrast("#b9bec9", "#232936") >= 4.5);
+    check("muted copy clears 4.5:1 on --surface-3, where hover copy lives",
+        contrast("#8d93a1", "#232936") >= 4.5, contrast("#8d93a1", "#232936").toFixed(2));
+    check("the focus ring clears 3:1 against --surface-2",
+        contrast("#ecebe7", "#1c212a") >= 3);
+    check("every avatar pair still clears 4.5:1 internally",
+        [...base.matchAll(/--avatar-\w+-bg:\s*(#[0-9a-f]{6});\s*\n\s*--avatar-\w+-fg:\s*(#[0-9a-f]{6})/g)]
+            .every((m) => contrast(m[1], m[2]) >= 4.5));
+
+    console.log("\nSidebar without the rail");
+    const side = sheet("sidebar.css");
+    check("no rail terminology or 3px bar survives in the chrome",
+        !/rail|3px solid|sidebar-rail/.test(side) && !/is-active::before/.test(side));
+    check("the active row is a rounded fill with a bright glyph",
+        /\.nav-item\.is-active \{[^}]*background: var\(--surface-2\)[^}]*\}/.test(side) &&
+        /\.nav-item\.is-active \.icon \{ color: var\(--text-strong\)/.test(side));
+    check("resting nav glyphs sit at --text-dim", /\.nav-item \.icon \{[^}]*color: var\(--text-dim\)/.test(side));
+
+    console.log("\nTwo-line heading and overflow menu");
+    const wsHtml = template("workspace.html");
+    check("the title block carries a second line",
+        /class="topbar-subtitle">A conversation with CyberSyn</.test(wsHtml) &&
+        /class="topbar-title-row"/.test(wsHtml));
+    check("the overflow menu exposes exactly the two existing actions",
+        /id="btn-chat-menu"/.test(wsHtml) &&
+        (wsHtml.match(/class="menu-item[\s"]/g) || []).length === 2 &&
+        /id="menu-rename-chat"/.test(wsHtml) && /id="menu-delete-chat"/.test(wsHtml));
+    check("the menu is labelled and starts closed",
+        /aria-haspopup="menu"/.test(wsHtml) && /aria-expanded="false"/.test(wsHtml) &&
+        /id="chat-menu"[^>]*hidden/.test(wsHtml));
+
+    console.log("\nTurns, date dividers and bubbles");
+    const wsCss = sheet("workspace.css");
+    check("turns sit 30px apart", /\.stream-inner \{[^}]*gap: 30px/.test(wsCss));
+    check("the date divider is the app's second pill",
+        /\.stream-date > span \{[^}]*border-radius: var\(--r-pill\)/.test(wsCss) &&
+        /\.stream-date > span \{[^}]*background: var\(--surface\)/.test(wsCss) &&
+        !/\.stream-date[^{]*\{[^}]*border:/.test(wsCss));
+    check("avatars are 36px circles that centre on the bubble row",
+        /\.turn-avatar \{\s*width: 36px;\s*height: 36px;/.test(wsCss) &&
+        /\.turn-ai \.turn-avatar\s*\{ grid-column: 1; grid-row: 2; align-self: center/.test(wsCss));
+    check("the assistant avatar is the app's own shield on --surface-2",
+        /\.turn-avatar-ai \{[^}]*background: var\(--surface-2\)[^}]*color: var\(--accent\)/.test(wsCss));
+    check("ground < assistant bubble < your bubble",
+        /\.bubble-ai \{\s*background: var\(--surface-2\)/.test(wsCss) &&
+        /\.bubble-user \{\s*background: var\(--surface-3\)/.test(wsCss));
+    check("bubbles cap at a 62% measure and keep the 10px radius",
+        /\.turn-body \{[^}]*max-width: 62%/.test(wsCss) &&
+        /\.bubble \{[^}]*border-radius: var\(--r-lg\)/.test(wsCss));
+    check("the action rows brighten from muted to text with no fill",
+        /\.msg-actions \{[^}]*gap: 14px/.test(wsCss) &&
+        /\.msg-actions \.icon-btn \{[^}]*background: transparent;[^}]*color: var\(--text-muted\)/.test(wsCss) &&
+        /\.msg-actions \.icon-btn:hover:not\(:disabled\)[\s\S]{0,80}color: var\(--text\)/.test(wsCss));
+
+    console.log("\nComposer");
+    check("the send control is a ghost circle outside the box",
+        /\.composer-send \{[\s\S]*?background: transparent;[\s\S]*?border: 1px solid var\(--border\);/.test(wsCss) &&
+        !/\.composer-send \{[^}]*--accent/.test(wsCss));
+    check("the send control keeps a 44px target and a dimmed disabled state",
+        /\.composer-send \{[^}]*width: 44px;[\s\S]*?height: 44px;/.test(wsCss) &&
+        /\.composer-send:disabled \{[^}]*opacity: 0\.45[\s\S]*?cursor: not-allowed/.test(wsCss));
+    check("the shortcut chip sits inside the box and hides on narrow screens",
+        /\.composer-chip \{[^}]*align-self: flex-end/.test(wsCss) &&
+        /@media \(max-width: 640px\) \{\s*\.composer-chip \{ display: none; \}/.test(wsCss));
+    check("the composer box keeps the 1px --border and the focus recipe",
+        /\.composer-box \{[^}]*background: var\(--surface-2\);[^}]*border: 1px solid var\(--border\);/.test(wsCss) &&
+        /\.composer-box:focus-within \{[^}]*outline: 2px solid var\(--accent\)/.test(wsCss));
+    check("no attachment affordance ships anywhere",
+        !/paperclip/i.test(wsHtml + wsCss) && !/data-icon="clip|data-icon="attach|type="file"/.test(wsHtml));
+    check("the old mono key strap is gone", !/Enter · Shift\+Enter/.test(wsHtml));
+}
+
+async function testChatInBrowser() {
+    console.log("\nChat skin in the browser");
+    const answer = (key) => {
+        if (key === "SETTINGS") return { check1: true, check2: true, check3: true, API_KEY_MASK: "sk-***" };
+        if (key === "CHATS") return { chats: [{ id: 7, title: "Kept chat" }] };
+        if (key === "CHATS_OPEN") return { chat: { id: 7, title: "Kept chat", messages: [
+            { id: 21, prompt: "First question", answer: "First answer", created_at: "2026-11-17T22:05:00Z" },
+            { id: 22, prompt: "Second question", answer: "Second answer", created_at: "2026-11-17T23:30:00Z" },
+            { id: 23, prompt: "Third question", answer: "Third answer", created_at: "2026-11-18T09:00:00Z" }
+        ] } };
+        return {};
+    };
+    const p = screenFixture("workspace", answer);
+    await tick();
+    const { $, win } = p;
+    const doc = win.document;
+
+    const dividers = [...doc.querySelectorAll(".stream-date")];
+    check("one date divider per calendar day, in order",
+        dividers.length === 2 &&
+        dividers[0].textContent.trim() === "17 Nov 2026" &&
+        dividers[1].textContent.trim() === "18 Nov 2026",
+        dividers.map((d) => d.textContent.trim()).join(" | "));
+
+    const firstMsg = doc.querySelector('.msg[data-id="21"]');
+    check("each message opens with a speaker head and time only",
+        firstMsg.querySelector(".msg-head .who").textContent === "You" &&
+        firstMsg.querySelector(".msg-head .msg-time").textContent === "22:05 UTC" &&
+        !/Nov|2026/.test(firstMsg.querySelector(".msg-head").textContent));
+
+    const userTurn = firstMsg.querySelector(".turn-user");
+    const aiTurn = firstMsg.querySelector(".turn-ai");
+    check("your avatar carries your initials and sits on the right",
+        userTurn.querySelector(".turn-avatar-user").textContent === "SE" &&
+        !!userTurn.querySelector(".bubble-user"));
+    check("the assistant's face is an inline shield, not a vendor mark",
+        !!aiTurn.querySelector(".turn-avatar-ai .icon path") &&
+        !/openai|knot|assistant-logo/i.test(aiTurn.innerHTML));
+    check("the assistant head names CyberSyn and the reply keeps its bubble",
+        aiTurn.querySelector(".msg-head .who").textContent === "CyberSyn" &&
+        !!aiTurn.querySelector(".bubble-ai"));
+
+    /* The overflow menu opens, closes on Escape and never invents an action. */
+    const menu = $("#chat-menu");
+    const trigger = $("#btn-chat-menu");
+    trigger.dispatchEvent(new win.MouseEvent("click", { bubbles: true }));
+    check("the overflow menu opens from its trigger",
+        menu.hidden === false && trigger.getAttribute("aria-expanded") === "true");
+    check("the menu holds exactly two items",
+        menu.querySelectorAll(".menu-item").length === 2);
+    menu.dispatchEvent(new win.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    check("Escape closes the menu and returns focus",
+        menu.hidden === true && doc.activeElement === trigger);
+
+    let prompted = null, confirmed = null;
+    win.Shell.prompt = (options) => { prompted = options; return Promise.resolve(null); };
+    win.Shell.confirm = (options) => { confirmed = options; return Promise.resolve(false); };
+    trigger.dispatchEvent(new win.MouseEvent("click", { bubbles: true }));
+    $("#menu-rename-chat").dispatchEvent(new win.MouseEvent("click", { bubbles: true }));
+    await tick();
+    check("the menu's rename runs the same rename flow",
+        prompted && prompted.title === "Rename this chat");
+    check("picking an item closes the menu", menu.hidden === true);
+
+    trigger.dispatchEvent(new win.MouseEvent("click", { bubbles: true }));
+    $("#menu-delete-chat").dispatchEvent(new win.MouseEvent("click", { bubbles: true }));
+    await tick();
+    check("the menu's delete runs the same confirm flow",
+        confirmed && confirmed.title === "Delete this chat?");
+
+    /* A click elsewhere closes it. */
+    trigger.dispatchEvent(new win.MouseEvent("click", { bubbles: true }));
+    doc.body.dispatchEvent(new win.MouseEvent("click", { bubbles: true }));
+    check("a click outside closes the menu", menu.hidden === true);
+
+    win.close();
+
+    /* The send control swaps to a spinner while the request is open. */
+    let release = null;
+    const slow = screenFixture("workspace", (key) => {
+        if (key === "SETTINGS") return { check1: true, check2: true, check3: true, API_KEY_MASK: "sk-***" };
+        if (key === "CHATS") return { chats: [] };
+        if (key === "CHAT") {
+            return new Promise((resolve) => {
+                release = () => resolve({ chat_id: 1, message_id: 5, reply_message: "hi" });
+            });
+        }
+        return {};
+    });
+    await tick();
+    slow.$("#prompt-input").value = "A question";
+    slow.$("#form-send").dispatchEvent(new slow.win.Event("submit", { cancelable: true, bubbles: true }));
+    await tick();
+    check("the send button is disabled and spinning while a reply is pending",
+        slow.$("#btn-send").disabled && slow.$("#btn-send").classList.contains("is-loading") &&
+        !!slow.$("#btn-send .btn-spinner"));
+    if (release) release();
+    await tick();
+    await tick();
+    check("the send button returns to idle afterwards",
+        !slow.$("#btn-send").disabled && !slow.$("#btn-send").classList.contains("is-loading"));
+    slow.win.close();
+
+    /* Greek: the new strings and the runtime's genitive month. */
+    const el = screenFixture("workspace", answer);
+    await tick();
+    el.win.I18n.set("el");
+    await tick();
+    const elDoc = el.win.document;
+    check("the descriptor line is translated",
+        elDoc.querySelector(".topbar-subtitle").textContent === "Μια συζήτηση με το CyberSyn");
+    check("the composer placeholder is translated",
+        elDoc.querySelector("#prompt-input").placeholder === "Γράψτε ένα μήνυμα…");
+    check("the shortcut chip is translated",
+        elDoc.querySelector(".composer-chip").textContent === "Shift + Enter για νέα γραμμή");
+    check("the Greek divider takes the genitive month",
+        elDoc.querySelector(".stream-date").textContent.trim() === "17 Νοεμβρίου 2026",
+        elDoc.querySelector(".stream-date").textContent.trim());
+    check("chat titles stay untranslated",
+        elDoc.querySelector("#active-chat-title").textContent === "Kept chat");
+    el.win.close();
+}
+
 async function finish() {
     console.log("\nBlocked message wording");
     const dom = new JSDOM("<!doctype html><html><body></body></html>",
@@ -468,6 +699,8 @@ async function finish() {
     await runEditInPlace();
     testDesignOverhaul();
     await testDemoTiles();
+    testChatReskin();
+    await testChatInBrowser();
     testBrowserBoundaries();
     await testSignedInScreens();
     await testPortal();
@@ -677,6 +910,9 @@ function screenFixture(page, answer, opts = {}) {
     win.document.body.dataset.routes = JSON.stringify(routes);
     const posted = [], approvals = [], messages = [];
     if (opts.narrow) win.matchMedia = (query) => ({ matches: query.includes("max-width") });
+    /* A real frame is still queued when these one-off windows close, and jsdom
+       throws inside its own frame runner once the document is gone. */
+    win.requestAnimationFrame = (fn) => setTimeout(fn, 0);
     win.HTMLElement.prototype.scrollTo = function () {};
     win.HTMLElement.prototype.scrollIntoView = function () { this.dataset.scrolled = "1"; };
     win.fetch = (url, opts) => {
@@ -1221,7 +1457,7 @@ function testDesignOverhaul() {
         /\.composer-inner \{\s*max-width: 940px/.test(wsCss));
     check("vertical rhythm is tighter than the old 820px sheet",
         /\.stream \{[^}]*padding: 18px 0 12px/.test(wsCss) &&
-        /\.bubble \{\s*padding: 14px 18px/.test(wsCss));
+        /\.bubble \{\s*padding: 10px 14px/.test(wsCss));
     check("demo tiles form a 2x2 grid", /\.demo-grid \{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/.test(wsCss));
     check("a tile for a switched-off check is faded and inert",
         /\.demo-tile:disabled[\s\S]*?opacity:\s*0\.42[\s\S]*?pointer-events:\s*none/.test(wsCss));
@@ -1229,8 +1465,9 @@ function testDesignOverhaul() {
     check("four demo tiles ship in the template", (wsHtml.match(/data-starter/g) || []).length === 4);
     check("tiles 2-4 each name the check they trip",
         ["check1", "check2", "check3"].every((rule) => wsHtml.includes(`data-check="${rule}"`)));
-    check("the reassuring composer footer is gone",
-        !/composer-foot|Checked on this computer before anything reaches the AI/.test(wsHtml));
+    check("the trust line is the only thing under the composer",
+        /class="composer-trust">Checked on this computer before anything reaches the AI\./.test(wsHtml) &&
+        !/composer-foot|Enter · Shift\+Enter/.test(wsHtml));
     check("the coaching prompt and starter caption are gone",
         !/What are we working on today|Pick a starter|first-run-title|starter-chip/.test(wsHtml));
     check("the welcome copy no longer explains the checks twice",

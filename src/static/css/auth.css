@@ -145,7 +145,7 @@
     color: var(--danger);
 }
 
-/* Primary CTA: warm-grey fill paired with near-black ink (no brand hue). */
+/* Primary CTA: cream fill paired with near-black ink (no brand hue). */
 .auth-btn-primary {
     position: relative;
     display: inline-flex;
