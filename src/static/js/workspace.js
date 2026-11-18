@@ -64,9 +64,6 @@
         searchCount: $("#search-count"),
         checksSummary: $("#checks-summary"),
         checksStatus: $("#checks-status"),
-        checksPopover: $("#checks-popover"),
-        checksPopoverList: $("#checks-popover-list"),
-        checksPopoverSettings: $("#checks-popover-settings"),
         missingKeyNote: $("#missing-key-note"),
         dismissKeyNote: $("#btn-dismiss-key-note"),
         firstRunTpl: $("#first-run-template")
@@ -248,104 +245,27 @@
     }
 
     /* ------------------------------------------------------------------
-       Checks status pill + overview popover (B6 + D7 + v3 Item 1)
+       Flat local-checks status indicator
        ------------------------------------------------------------------ */
 
-    var CHECK_ROWS = [
-        {
-            key: "check1",
-            name: "Personal data",
-            desc: "AFM, AMKA, IBANs, phones, emails, cards and names."
-        },
-        {
-            key: "check2",
-            name: "Context",
-            desc: "Contracts, NDAs, internal financials, HR, credentials and code."
-        },
-        {
-            key: "check3",
-            name: "Prompt injection",
-            desc: "Hidden instructions in pasted emails, web pages and documents."
-        }
-    ];
-
-    function renderChecksPopover() {
-        if (!nodes.checksPopoverList) return;
-        nodes.checksPopoverList.textContent = "";
-        CHECK_ROWS.forEach(function (row) {
-            var enabled = state.settings[row.key] !== false;
-            var item = Dom.el("li", "checks-popover-row");
-
-            var copy = Dom.el("div", "checks-popover-copy");
-            copy.appendChild(Dom.el("span", "checks-popover-name", t(row.name)));
-            copy.appendChild(Dom.el("span", "checks-popover-desc", t(row.desc)));
-
-            var badge = Dom.el(
-                "span",
-                "checks-popover-state " + (enabled ? "is-on" : "is-off")
-            );
-            var dot = Dom.el("span", "dot");
-            dot.setAttribute("aria-hidden", "true");
-            badge.appendChild(dot);
-            badge.appendChild(document.createTextNode(t(enabled ? "On" : "Off")));
-
-            item.appendChild(copy);
-            item.appendChild(badge);
-            nodes.checksPopoverList.appendChild(item);
-        });
-    }
-
-    function isChecksPopoverOpen() {
-        return !!(nodes.checksPopover && !nodes.checksPopover.classList.contains("hidden"));
-    }
-
-    function setChecksPopoverOpen(open, restoreFocus) {
-        if (!nodes.checksPopover || !nodes.checksStatus) return;
-        if (open) renderChecksPopover();
-        nodes.checksPopover.classList.toggle("hidden", !open);
-        nodes.checksStatus.setAttribute("aria-expanded", open ? "true" : "false");
-        if (!open && restoreFocus) {
-            nodes.checksStatus.focus();
-        }
+    function checksSummaryText(on) {
+        if (on === 3) return t("All checks on");
+        if (on === 0) return t("All checks off");
+        return t("Checks: " + on + " of 3 on");
     }
 
     function updateChecksBadge() {
         var on = ["check1", "check2", "check3"].filter(function (k) {
             return state.settings[k];
         }).length;
-        var summary = t("Checks · " + on + " of 3 active");
+        var summary = checksSummaryText(on);
         nodes.checksSummary.textContent = summary;
-        nodes.checksStatus.title = summary;
+        nodes.checksStatus.removeAttribute("title");
         nodes.checksStatus.setAttribute("aria-label", summary);
-        nodes.checksStatus.classList.toggle("off", on === 0);
         nodes.checksStatus.classList.toggle("is-all-on", on === 3);
-        renderChecksPopover();
+        nodes.checksStatus.classList.toggle("is-partial", on > 0 && on < 3);
+        nodes.checksStatus.classList.toggle("is-off", on === 0);
     }
-
-    Dom.on(nodes.checksStatus, "click", function () {
-        setChecksPopoverOpen(!isChecksPopoverOpen(), false);
-    });
-
-    Dom.on(nodes.checksPopoverSettings, "click", function () {
-        setChecksPopoverOpen(false, false);
-    });
-
-    Dom.on(document, "mousedown", function (event) {
-        if (!isChecksPopoverOpen()) return;
-        var target = event.target;
-        if (nodes.checksPopover.contains(target) || nodes.checksStatus.contains(target)) {
-            return;
-        }
-        setChecksPopoverOpen(false, false);
-    });
-
-    Dom.on(document, "keydown", function (event) {
-        if (event.key === "Escape" && isChecksPopoverOpen()) {
-            event.preventDefault();
-            event.stopPropagation();
-            setChecksPopoverOpen(false, true);
-        }
-    });
 
     /* ------------------------------------------------------------------
        Missing provider key callout (v3 Item 2)

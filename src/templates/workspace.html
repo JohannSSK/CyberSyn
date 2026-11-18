@@ -42,22 +42,10 @@
 
                 <div class="topbar-spacer"></div>
 
-                <div class="topbar-checks">
-                    <button type="button" class="topbar-status is-all-on" id="checks-status"
-                            aria-expanded="false" aria-haspopup="dialog"
-                            aria-controls="checks-popover"
-                            title="Checks · 3 of 3 active"
-                            aria-label="Checks · 3 of 3 active">
-                        <span class="dot" aria-hidden="true"></span>
-                        <span class="topbar-status-text" id="checks-summary">Checks · 3 of 3 active</span>
-                    </button>
-                    <div class="checks-popover hidden" id="checks-popover"
-                         role="dialog" aria-label="Local safety checks">
-                        <ul class="checks-popover-list" id="checks-popover-list"></ul>
-                        <div class="checks-popover-foot">
-                            <a href="/settings" class="checks-popover-link" id="checks-popover-settings">Manage in Settings</a>
-                        </div>
-                    </div>
+                <div class="topbar-status is-all-on" id="checks-status"
+                     role="status" aria-label="All checks on">
+                    <span class="dot" aria-hidden="true"></span>
+                    <span class="topbar-status-text" id="checks-summary">All checks on</span>
                 </div>
 
                 <button type="button" class="icon-btn danger" id="btn-delete-chat"

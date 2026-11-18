@@ -261,16 +261,8 @@
             "Δεν έχει συνδεθεί ακόμη πάροχος ΤΝ σε αυτόν τον χώρο εργασίας — ζητήστε από τον διαχειριστή σας να προσθέσει έναν στις",
         "Dismiss notice": "Απόκρυψη ειδοποίησης",
         "Local safety checks": "Τοπικοί έλεγχοι ασφάλειας",
-        "Checks": "Έλεγχοι",
-        "On": "Ενεργός",
-        "Off": "Ανενεργός",
-        "Manage in Settings": "Διαχείριση στις Ρυθμίσεις",
-        "AFM, AMKA, IBANs, phones, emails, cards and names.":
-            "ΑΦΜ, ΑΜΚΑ, IBAN, τηλέφωνα, email, κάρτες και ονόματα.",
-        "Contracts, NDAs, internal financials, HR, credentials and code.":
-            "Συμβάσεις, NDA, εσωτερικά οικονομικά, HR, διαπιστευτήρια και κώδικας.",
-        "Hidden instructions in pasted emails, web pages and documents.":
-            "Κρυφές εντολές σε επικολλημένα email, ιστοσελίδες και έγγραφα.",
+        "All checks on": "Όλοι οι έλεγχοι ενεργοί",
+        "All checks off": "Όλοι οι έλεγχοι ανενεργοί",
         "Checking locally before sending…": "Τοπικός έλεγχος πριν την αποστολή…",
         "Still checking — normal on a long paste.":
             "Ο έλεγχος συνεχίζεται — φυσιολογικό σε μεγάλο κείμενο.",
@@ -700,8 +692,8 @@
        Patterns for strings with numbers or names filled in at runtime.
        ---------------------------------------------------------------------- */
     var PATTERNS = [
-        [/^Checks · (\d+) of 3 active$/, function (m) {
-            return "Έλεγχοι · " + m[1] + " από 3 ενεργοί";
+        [/^Checks: (\d+) of 3 on$/, function (m) {
+            return "Έλεγχοι: " + m[1] + " από 3 " + (m[1] === "1" ? "ενεργός" : "ενεργοί");
         }],
         [/^(\d+) of 3 checks active$/, function (m) {
             return m[1] + " από 3 έλεγχοι ενεργοί";
