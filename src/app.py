@@ -10,6 +10,7 @@ Seed:   python3 src/app.py seed
 Docker: docker compose up --build
 """
 
+import os
 import sys
 import threading
 
@@ -20,7 +21,7 @@ import admin_session
 import db
 import scanners
 from config import (BACKEND_DIR, DEBUG, HOST, PORT, TEMPLATES_DIR, DB_FILE,
-                    WARM_MODELS, STATIC_DIR)
+                    WARM_MODELS, STATIC_DIR, ROUTES)
 from errors import ApiError
 from secret_store import migrate_api_keys
 
@@ -28,7 +29,9 @@ from secret_store import migrate_api_keys
 def create_app():
     app = Flask(__name__, static_folder=str(STATIC_DIR),
                 template_folder=str(TEMPLATES_DIR))
+    app.jinja_env.globals["api_routes"] = ROUTES
     app.json.ensure_ascii = False
+    app.config["MAX_CONTENT_LENGTH"] = int(os.environ.get("CYBERSYN_MAX_BODY_BYTES", 256 * 1024))
 
     # ---- schema ----
     db.init_db()
@@ -44,6 +47,18 @@ def create_app():
     register_api(app)
 
     admin_session.register(app)
+
+    @app.after_request
+    def security_headers(response):
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
+            "font-src 'self'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'")
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        if response.is_json:
+            response.headers["Cache-Control"] = "no-store"
+        return response
 
     @app.teardown_appcontext
     def close_db(_exc):
@@ -65,10 +80,13 @@ def create_app():
     @app.errorhandler(Exception)
     def handle_unexpected(exc):
         # A JSON answer, never an HTML traceback: this app is an API first.
-        app.logger.exception("Unhandled error: %s", exc)
+        if DEBUG:
+            app.logger.exception("Unhandled request error")
+        else:
+            app.logger.error("Unhandled request error (%s)", type(exc).__name__)
         return jsonify({
             "error": True,
-            "error_message": f"Server error: {type(exc).__name__}: {exc}",
+            "error_message": f"Server error: {exc}" if DEBUG else "Internal server error.",
         }), 500
 
     return app

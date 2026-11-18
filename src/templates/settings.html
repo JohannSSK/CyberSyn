@@ -44,7 +44,7 @@
                         <div class="toggle-row" data-toggle="check2">
                             <div class="toggle-text">
                                 <strong>2. Context</strong>
-                                <p>Contracts and NDAs, internal financials, HR and payroll notes, credentials and source code.</p>
+                                <p>Confidential contracts, internal financials, HR and payroll records, and credentials</p>
                             </div>
                             <label class="switch">
                                 <input type="checkbox" id="setting-check2" checked aria-label="Context check">
@@ -62,13 +62,29 @@
                                 <span class="switch-track"></span>
                             </label>
                         </div>
+
+                        <div class="toggle-row" data-toggle="block_code">
+                            <div class="toggle-text">
+                                <strong>Block proprietary source code</strong>
+                                <p>Block source-code pastes from this member. Off allows code review; other enabled checks still apply.</p>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" id="setting-block-code" aria-label="Block proprietary source code">
+                                <span class="switch-track"></span>
+                            </label>
+                        </div>
                     </div>
+
+                    <label class="check-option">
+                        <input type="checkbox" id="also-default">
+                        <span>Also save these checks as the workspace default for new team members</span>
+                    </label>
 
                     <div id="checks-consequence" class="callout callout-warn checks-consequence hidden"
                          role="status" aria-live="polite"></div>
 
                     <div id="all-checks-off-note" class="callout callout-warn hidden" role="status">
-                        All three checks are turned off. Messages from this account will go straight to the AI provider until at least one check is turned back on.
+                        All checks are turned off. Messages from this account will go straight to the AI provider until at least one check is turned back on.
                     </div>
 
                     <div class="row">
@@ -85,15 +101,15 @@
                         <select id="setting-provider" class="select">
                             <option value="auto">Detect automatically</option>
                         </select>
-                        <span class="hint" id="provider-state">Leave this on automatic detection and your key is matched against each supported provider.</span>
+                        <span class="hint" id="provider-state">Automatic detection uses the key prefix. For unfamiliar or shared formats, select your provider before entering a key.</span>
                     </div>
 
-                    <div class="field hidden" id="field-base">
+                    <div class="field" id="field-base">
                         <label for="setting-base">Base URL</label>
                         <input type="text" id="setting-base" class="input mono"
-                               placeholder="http://localhost:11434" autocomplete="off"
+                               placeholder="https://gateway.example/v1" autocomplete="off"
                                spellcheck="false">
-                        <span class="hint">Address for that provider. Leave blank to use its standard hosted endpoint.</span>
+                        <span class="hint">Where that provider is reached. Leave empty for the hosted address.</span>
                     </div>
 
                     <div class="field">
@@ -104,7 +120,7 @@
                             </select>
                             <button type="button" class="btn" id="btn-refresh-models">Refresh list</button>
                         </div>
-                        <span class="hint" id="model-state">Paste an API key below and available models are listed automatically.</span>
+                        <span class="hint" id="model-state">Paste a key first to load the models it can reach.</span>
                     </div>
 
                     <div class="field">
@@ -114,10 +130,18 @@
                             <input type="password" id="setting-api-key" class="input mono"
                                    placeholder="Paste your API key…" autocomplete="off" spellcheck="false">
                         </div>
-                        <span class="hint mono" id="key-state">No key saved yet.</span>
+                        <div class="row wrap">
+                            <button type="button" class="btn btn-sm btn-danger hidden" id="btn-clear-key">Remove saved key</button>
+                            <span class="hint mono" id="key-state">No key saved yet.</span>
+                        </div>
                     </div>
 
-                    <div class="row">
+                    <label class="check-option">
+                        <input type="checkbox" id="connection-also-default">
+                        <span>Also save this connection, including its key, as the default for new team members</span>
+                    </label>
+
+                    <div class="row wrap">
                         <button type="button" class="btn btn-primary" id="btn-save-connection">Save connection</button>
                         <span class="tiny muted" id="connection-state" role="status" aria-live="polite"></span>
                         <span class="tiny muted">Encrypted on this computer and never sent back in full to the browser.</span>

@@ -2,6 +2,7 @@
   "HOST": "127.0.0.1",
   "PORT": 5000,
   "PATHS": {
+    "KEY_FILE": "src/backend/secret.key",
     "DB_FILE": "src/backend/app.db",
     "BACKEND_DIR": "src/backend",
     "FRONTEND_DIR": "src/static",
@@ -13,6 +14,7 @@
     "CHECK3_SCRIPT": "src/MLscripts/injection.py"
   },
   "ROUTES": {
+    "ADMIN_APPROVE": "/api/admin/approve",
     "ADMIN_LOGIN": "/api/admin/login",
     "ADMIN": "/api/admin",
     "ADMIN_PASSWORD": "/api/admin/password",

@@ -666,7 +666,105 @@
         "The new username is the same as the current one. Pick a different username.":
             "Το νέο όνομα χρήστη είναι ίδιο με το τρέχον. Επιλέξτε διαφορετικό όνομα.",
         "The new password must differ from the current one. Choose a new password.":
-            "Ο νέος κωδικός πρέπει να διαφέρει από τον τρέχοντα. Επιλέξτε νέο κωδικό."
+            "Ο νέος κωδικός πρέπει να διαφέρει από τον τρέχοντα. Επιλέξτε νέο κωδικό.",
+
+        // ---- Merged security & workspace features ----
+        "Registration token (if required)":
+            "Κωδικός εγγραφής (αν απαιτείται)",
+        "Leave empty for the first administrator.":
+            "Αφήστε το πεδίο κενό για τον πρώτο διαχειριστή.",
+        "Block proprietary source code":
+            "Αποκλεισμός ιδιόκτητου πηγαίου κώδικα",
+        "Block source-code pastes from this member. Off allows code review; other enabled checks still apply.":
+            "Αποκλείει αποσπάσματα πηγαίου κώδικα από αυτό το μέλος. Όταν είναι ανενεργό, επιτρέπεται η ανασκόπηση κώδικα· οι άλλοι ενεργοί έλεγχοι εξακολουθούν να ισχύουν.",
+        "Confidential contracts, internal financials, HR and payroll records, and credentials":
+            "Εμπιστευτικές συμβάσεις, εσωτερικά οικονομικά στοιχεία, μισθοδοσία και διαπιστευτήρια",
+        "Also save these checks as the workspace default for new team members":
+            "Αποθήκευση των ελέγχων και ως προεπιλογής για νέα μέλη του χώρου εργασίας",
+        "Also save this connection, including its key, as the default for new team members":
+            "Αποθήκευση αυτής της σύνδεσης, μαζί με το κλειδί της, και ως προεπιλογής για νέα μέλη",
+        "Automatic detection uses the key prefix. For unfamiliar or shared formats, select your provider before entering a key.":
+            "Η αυτόματη ανίχνευση βασίζεται στο πρόθεμα του κλειδιού. Για άγνωστες ή κοινές μορφές, επιλέξτε πάροχο πριν εισαγάγετε κλειδί.",
+        "Where that provider is reached. Leave empty for the hosted address.":
+            "Διεύθυνση του παρόχου. Αφήστε την κενή για την προεπιλεγμένη διεύθυνση της υπηρεσίας.",
+        "Remove saved key": "Αφαίρεση αποθηκευμένου κλειδιού",
+        "Other conversations": "Άλλες συνομιλίες",
+        "Search messages": "Αναζήτηση μηνυμάτων",
+        "Search messages…": "Αναζήτηση μηνυμάτων…",
+        "Team members": "Μέλη ομάδας",
+        "Member username": "Όνομα χρήστη μέλους",
+        "The member to remove": "Μέλος προς αφαίρεση",
+        "Select a member and confirm with your administrator password.":
+            "Επιλέξτε μέλος και επιβεβαιώστε με τον κωδικό διαχειριστή.",
+        "Select a team member to remove.": "Επιλέξτε ένα μέλος ομάδας προς αφαίρεση.",
+        "Change administrator password": "Αλλαγή κωδικού διαχειριστή",
+        "Refresh the list with administrator approval to use the saved key here.":
+            "Ανανεώστε τη λίστα με έγκριση διαχειριστή για χρήση του αποθηκευμένου κλειδιού εδώ.",
+        "Saved key removed.": "Το αποθηκευμένο κλειδί αφαιρέθηκε.",
+        "Administrator password updated. Previous sessions have ended.":
+            "Ο κωδικός διαχειριστή ενημερώθηκε. Οι προηγούμενες συνεδρίες έληξαν.",
+        "Invalid username or password.": "Λανθασμένο όνομα χρήστη ή κωδικός.",
+        "Fill in administrator username, current password and a new password.":
+            "Συμπληρώστε όνομα χρήστη διαχειριστή, τρέχοντα κωδικό και νέο κωδικό.",
+        "Model discovery": "Εντοπισμός μοντέλων",
+        "Checks & policy": "Έλεγχοι & πολιτική",
+        "Hosted address": "Προεπιλεγμένη διεύθυνση",
+        "All checks are turned off. Messages from this account will go straight to the AI provider until at least one check is turned back on.":
+            "Όλοι οι έλεγχοι είναι απενεργοποιημένοι. Τα μηνύματα αυτού του λογαριασμού θα στέλνονται απευθείας στον πάροχο ΤΝ μέχρι να ενεργοποιηθεί τουλάχιστον ένας έλεγχος.",
+        "Write a message below. Your enabled checks run here before the prompt reaches the AI.":
+            "Γράψτε ένα μήνυμα παρακάτω. Οι ενεργοί τοπικοί έλεγχοι εκτελούνται εδώ πριν φτάσει στον πάροχο ΤΝ.",
+        "Paste a key first to load the models it can reach.":
+            "Επικολλήστε πρώτα ένα κλειδί για να φορτώσουν τα διαθέσιμα μοντέλα.",
+        "Sessions": "Συνεδρίες",
+        "HttpOnly session cookies; server-side expiry and revocation":
+            "Cookies συνεδρίας HttpOnly· λήξη και ανάκληση στον διακομιστή",
+        "Prompt previews are off by default; when enabled via CYBERSYN_LOG_PROMPT_PREVIEW=1, only ordinary sent messages keep an 80-character preview (never blocked or overridden prompts).":
+            "Οι προεπισκοπήσεις μηνυμάτων είναι ανενεργές από προεπιλογή· όταν ενεργοποιούνται με CYBERSYN_LOG_PROMPT_PREVIEW=1, διατηρούνται μόνο 80 χαρακτήρες για κανονικά απεσταλμένα μηνύματα (ποτέ για αποκλεισμένα ή κατ’ εξαίρεση μηνύματα).",
+        "After entering the administrator password on Statistics or Team, an administrator can view message counts, block rates, which check and category triggered, and UTC timestamps. Prompt previews are off by default; when enabled via CYBERSYN_LOG_PROMPT_PREVIEW=1, only ordinary sent messages keep an 80-character preview (never blocked or overridden prompts).":
+            "Αφού εισαγάγει τον κωδικό διαχειριστή στα Στατιστικά ή στην Ομάδα, ο διαχειριστής βλέπει πλήθος μηνυμάτων, ποσοστά αποκλεισμού, ποιος έλεγχος και ποια κατηγορία ενεργοποιήθηκαν και χρονικές σημάνσεις UTC. Οι προεπισκοπήσεις μηνυμάτων είναι ανενεργές από προεπιλογή· όταν ενεργοποιούνται με CYBERSYN_LOG_PROMPT_PREVIEW=1, διατηρείται μόνο προεπισκόπηση 80 χαρακτήρων για κανονικά απεσταλμένα μηνύματα (ποτέ για αποκλεισμένα ή κατ’ εξαίρεση μηνύματα).",
+        "Provider API keys are encrypted before they are saved and shown masked everywhere on screen. Sessions use HttpOnly cookies stored as SHA-256 hashes on the server with server-side expiry and revocation. Typefaces are bundled locally (Instrument Serif, Noto Serif Display, Inter and JetBrains Mono under the SIL Open Font License 1.1) — CyberSyn makes outbound requests only to the AI provider configured for your seat.":
+            "Τα κλειδιά API των παρόχων κρυπτογραφούνται πριν αποθηκευτούν και εμφανίζονται με απόκρυψη σε κάθε οθόνη. Οι συνεδρίες χρησιμοποιούν cookies HttpOnly αποθηκευμένα ως κατακερματισμοί SHA-256 στον διακομιστή με λήξη και ανάκληση από τον διακομιστή. Οι γραμματοσειρές περιλαμβάνονται τοπικά (Instrument Serif, Noto Serif Display, Inter και JetBrains Mono υπό την άδεια SIL Open Font License 1.1) — το CyberSyn συνδέεται εξωτερικά μόνο με τον πάροχο ΤΝ της θέσης σας.",
+        "CyberSyn works with OpenAI, Anthropic Claude, Google Gemini, Mistral, Cohere, Groq, DeepSeek and xAI Grok. Automatic discovery uses recognized key prefixes only; select your provider explicitly for unfamiliar formats. An administrator selects the model and saves the matching provider API key for each signed-in member on the":
+            "Το CyberSyn συνεργάζεται με OpenAI, Anthropic Claude, Google Gemini, Mistral, Cohere, Groq, DeepSeek και xAI Grok. Ο αυτόματος εντοπισμός χρησιμοποιεί μόνο αναγνωρισμένα προθέματα κλειδιών· επιλέξτε πάροχο ρητά για μη οικείες μορφές. Ο διαχειριστής επιλέγει το μοντέλο και αποθηκεύει το αντίστοιχο κλειδί API για κάθε συνδεδεμένο μέλος στη σελίδα",
+        "Use the search box at the top of Chat to filter the open conversation and search across other chats; press":
+            "Χρησιμοποιήστε το πεδίο αναζήτησης πάνω στη Συνομιλία για φιλτράρισμα και αναζήτηση σε άλλες συνομιλίες· πατήστε",
+        "At least 8 characters, including a letter and a number.":
+            "Τουλάχιστον 8 χαρακτήρες, συμπεριλαμβανομένου ενός γράμματος και ενός αριθμού.",
+        "Select provider (auto-detect or explicit)":
+            "Επιλογή παρόχου (αυτόματη ανίχνευση ή ρητή επιλογή)",
+        "Custom / explicit base URL (optional)":
+            "Προσαρμοσμένη / ρητή διεύθυνση URL βάσης (προαιρετικά)",
+        "Leave blank for automatic discovery, or enter an explicit endpoint such as a local gateway.":
+            "Αφήστε το κενό για αυτόματο εντοπισμό ή εισαγάγετε ρητό τελικό σημείο, όπως τοπική πύλη.",
+        "Catches pasted source code and configuration fragments.":
+            "Εντοπίζει επικολλημένο πηγαίο κώδικα και αποσπάσματα ρυθμίσεων.",
+        "Block computer code": "Αποκλεισμός πηγαίου κώδικα",
+        "Also set as default for new members": "Ορισμός και ως προεπιλογής για νέα μέλη",
+        "Clear saved key": "Απαλοιφή αποθηκευμένου κλειδιού",
+        "Saved API key removed.": "Το αποθηκευμένο κλειδί API αφαιρέθηκε.",
+        "Clear saved API key": "Απαλοιφή αποθηκευμένου κλειδιού API",
+        "Removed: this workspace loses access until another key is saved. Kept: past chats stay untouched.":
+            "Αφαιρείται: ο χώρος εργασίας χάνει την πρόσβαση μέχρι να αποθηκευτεί άλλο κλειδί. Διατηρείται: οι παλαιές συνομιλίες μένουν ανέπαφες.",
+        "Signup token": "Διακριτικό εγγραφής",
+        "Optional invite token": "Προαιρετικό διακριτικό πρόσκλησης",
+        "Required only when your organisation locks administrator creation with CYBERSYN_ADMIN_SIGNUP_TOKEN.":
+            "Απαιτείται μόνο όταν ο οργανισμός σας κλειδώνει τη δημιουργία διαχειριστή με CYBERSYN_ADMIN_SIGNUP_TOKEN.",
+        "Select a team member": "Επιλέξτε μέλος ομάδας",
+        "Pick the team member whose account should be removed.":
+            "Επιλέξτε το μέλος ομάδας του οποίου ο λογαριασμός θα αφαιρεθεί.",
+        "Loading members…": "Φόρτωση μελών…",
+        "No members are left in this workspace.": "Δεν υπάρχουν άλλα μέλη σε αυτόν τον χώρο εργασίας.",
+        "Removing this account deletes all saved chats and API settings for that member.":
+            "Η αφαίρεση αυτού του λογαριασμού διαγράφει όλες τις αποθηκευμένες συνομιλίες και τις ρυθμίσεις API για αυτό το μέλος.",
+        "No matching members — create one before deleting.":
+            "Δεν βρέθηκαν μέλη — δημιουργήστε ένα μέλος πριν από τη διαγραφή.",
+        "Choose a provider or enter an API key first.":
+            "Επιλέξτε πάροχο ή εισαγάγετε πρώτα κλειδί API.",
+        "Automatic — detect from key": "Αυτόματα — ανίχνευση από το κλειδί",
+        "Ollama (local)": "Ollama (τοπικό)",
+        "Custom OpenAI-compatible": "Προσαρμοσμένο συμβατό με OpenAI",
+        "Write a message below. Your enabled local checks run here before the prompt reaches the AI.":
+            "Γράψτε ένα μήνυμα παρακάτω. Οι ενεργοί τοπικοί έλεγχοι εκτελούνται εδώ πριν φτάσει στον πάροχο ΤΝ."
     };
 
     /* ----------------------------------------------------------------------
@@ -807,7 +905,7 @@
        while skipping code blocks, user messages, model names and usernames.
        ---------------------------------------------------------------------- */
 
-    var SKIP_TEXT_TAGS = { SCRIPT: 1, STYLE: 1, CODE: 1, PRE: 1, TEXTAREA: 1 };
+    var SKIP_TEXT_TAGS = { SCRIPT: 1, STYLE: 1, CODE: 1, PRE: 1, TEXTAREA: 1, INPUT: 1, MARK: 1 };
     var SKIP_ATTR_TAGS = { SCRIPT: 1, STYLE: 1, CODE: 1, PRE: 1 };
     var SKIP_SELECTOR = [
         "[data-no-i18n]",
@@ -820,11 +918,17 @@
         ".avatar",
         ".user-name",
         "[data-member-name]",
+        "[data-member-avatar]",
+        "#active-admin-label",
+        "#info-username",
+        "#info-model",
         "#sidebar-username",
         "#profile-username",
         "#profile-model",
         "#admin-badge-name",
+        ".member-id strong",
         ".lang-switch",
+        "#setting-model",
         "select#setting-model"
     ].join(", ");
 
@@ -884,6 +988,7 @@
         applying = true;
         try {
             document.documentElement.lang = current;
+            document.documentElement.setAttribute("data-lang", current);
             applyTitle();
 
             var target = root.nodeType === 1 ? root : document.body;
@@ -1008,6 +1113,7 @@
 
     function init() {
         document.documentElement.lang = current;
+        document.documentElement.setAttribute("data-lang", current);
         mountSwitches();
         if (current === "el") applyRoot(document.body);
         startObserver();

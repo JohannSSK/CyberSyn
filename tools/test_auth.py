@@ -17,6 +17,7 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from datetime import timedelta
 from pathlib import Path
 
@@ -28,12 +29,14 @@ SRC = HERE.parent / "src"
 _TMP = tempfile.mkdtemp(prefix="cybersyn-test-")
 os.environ["CYBERSYN_DB_FILE"] = str(Path(_TMP) / "test.db")
 
+os.environ["CYBERSYN_KEY_FILE"] = str(Path(_TMP) / "secret.key")
 sys.path.insert(0, str(SRC))
 import app as cybersyn  # noqa: E402  (import after the path/env setup)
 import auth  # noqa: E402
 import ai_client  # noqa: E402
 import scanning  # noqa: E402
 
+from config import ROUTES  # noqa: E402
 DB = cybersyn.DB_FILE
 
 
@@ -67,6 +70,7 @@ class AuthModuleTests(unittest.TestCase):
         auth.init_tables(DB)
         import sqlite3
         con = sqlite3.connect(DB)
+        con.execute("INSERT OR IGNORE INTO EMPLOYEES (id, Parent_id, username, password) VALUES (7, 1, 'fixture', 'legacy')")
         con.execute("DELETE FROM EMPLOYEE_SESSIONS")
         con.commit()
         con.close()
@@ -132,15 +136,15 @@ class RouteTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         seed()
-        cls.client = cybersyn.app.test_client()
+        cls.client = cybersyn.app.test_client(use_cookies=False)
 
         cls.admin = cls.client.post(
-            "/api/admin/login",
+            ROUTES["ADMIN_LOGIN"],
             json={"username": "boss", "password": "admin-pw"},
         ).get_json()["session_token"]
 
         login = cls.client.post(
-            "/api/admin/employee/login",
+            ROUTES["EMPLOYEE_LOGIN"],
             json={"Parent_id": 1, "username": "member", "password": "member-pw"},
         ).get_json()
         cls.member_id = int(login["Employee_id"])
@@ -149,7 +153,7 @@ class RouteTests(unittest.TestCase):
         # The chat route needs a stored key before it will forward anything.
         # Setting one is an administrator action, so it carries the
         # administrator's approval as well as the member's session.
-        cls.client.post("/api/admin/employee/settings",
+        cls.client.post(ROUTES["SETTINGS"],
                         json={"Parent_id": 1, "Employee_id": cls.member_id,
                               "session_token": cls.member,
                               "admin_token": cls.admin,
@@ -164,7 +168,7 @@ class RouteTests(unittest.TestCase):
         # Screening passes each check the time left in its shared budget,
         # plus a stop flag the checks use to abandon a settled verdict.
         scanning.run_check = lambda stage, prompt, timeout=None, stop=None: {
-            "blocked": True, "stage": stage, "reason": "stub",
+            "blocked": prompt != "hello", "stage": stage, "reason": "stub",
             "line": 1, "start": 0, "end": 1, "snippet": "", "matches": [],
         }
 
@@ -177,26 +181,26 @@ class RouteTests(unittest.TestCase):
     # -- the attacks that used to succeed with no credentials at all ---------
 
     def test_prompt_without_a_session_is_refused(self):
-        r = self.client.post("/api/admin/employee/chat",
+        r = self.client.post(ROUTES["CHAT"],
                              json={"Parent_id": 1, "Employee_id": 1, "prompt": "hi"})
         self.assertEqual(r.status_code, 401)
 
     def test_chat_history_without_a_session_is_refused(self):
-        for path in ("chats", "chats/open", "chats/delete", "chats/rename"):
+        for path in ("CHATS", "CHATS_OPEN", "CHATS_DELETE", "CHATS_RENAME"):
             with self.subTest(path=path):
-                r = self.client.post(f"/api/admin/employee/{path}",
+                r = self.client.post(ROUTES[path],
                                      json={"Parent_id": 1, "Employee_id": 1,
                                            "chat_id": 1, "title": "x"})
                 self.assertEqual(r.status_code, 401)
 
     def test_turning_the_checks_off_without_a_session_is_refused(self):
-        r = self.client.post("/api/admin/employee/settings",
+        r = self.client.post(ROUTES["SETTINGS"],
                              json={"Parent_id": 1, "Employee_id": 1,
                                    "check1": False, "check2": False, "check3": False})
         self.assertEqual(r.status_code, 401)
 
     def test_model_discovery_without_a_session_is_refused(self):
-        r = self.client.post("/api/admin/employee/models", json={"API_KEY": "sk-x"})
+        r = self.client.post(ROUTES["MODELS"], json={"API_KEY": "sk-x"})
         self.assertEqual(r.status_code, 401)
 
     def test_override_without_an_administrator_session_is_refused(self):
@@ -204,31 +208,41 @@ class RouteTests(unittest.TestCase):
                       {"admin_token": self.member}):
             with self.subTest(**extra):
                 r = self.client.post(
-                    "/api/admin/employee/chat",
+                    ROUTES["CHAT"],
                     json=self.ids(prompt="send this anyway", bypass=True, **extra))
                 self.assertEqual(r.status_code, 401)
 
     def test_a_forged_or_borrowed_token_is_refused(self):
-        r = self.client.post("/api/admin/employee/chat",
+        r = self.client.post(ROUTES["CHAT"],
                              json=self.ids(prompt="hi", session_token="forged"))
         self.assertEqual(r.status_code, 401)
 
     def test_a_member_cannot_reach_another_members_history(self):
-        r = self.client.post("/api/admin/employee/chats",
+        r = self.client.post(ROUTES["CHATS"],
                              json=self.ids(Employee_id=self.member_id + 1))
         self.assertEqual(r.status_code, 401)
 
     # -- the calls that must still work -------------------------------------
 
     def test_a_signed_in_member_can_chat(self):
-        r = self.client.post("/api/admin/employee/chat",
-                             json=self.ids(prompt="hello", check1=False,
-                                           check2=False, check3=False))
+        r = self.client.post(ROUTES["CHAT"],
+                             json=self.ids(prompt="hello"))
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.get_json()["reply_message"], "stub reply")
 
+    def test_a_member_cannot_disable_checks_or_change_model_per_request(self):
+        from routes import chat_api
+        with patch.object(chat_api, "screen", return_value=None) as screen, \
+             patch.object(chat_api, "complete", return_value="ok") as complete:
+            r = self.client.post(ROUTES["CHAT"], json=self.ids(
+                prompt="hello", check1=False, check2=False, check3=False, block_code=True,
+                MODEL_NAME="other/model"))
+            self.assertEqual(r.status_code, 200)
+            screen.assert_called_once_with("hello", {"check1": True, "check2": True, "check3": True, "block_code": False})
+            self.assertEqual(complete.call_args.args[1], "gpt-4o-mini")
+
     def test_a_signed_in_member_can_read_their_own_settings(self):
-        r = self.client.post("/api/admin/employee/settings", json=self.ids())
+        r = self.client.post(ROUTES["SETTINGS"], json=self.ids())
         self.assertEqual(r.status_code, 200)
         self.assertIn("MODEL_NAME", r.get_json())
 
@@ -237,12 +251,12 @@ class RouteTests(unittest.TestCase):
         for change in ({"check1": False}, {"MODEL_NAME": "gpt-4o"},
                        {"API_KEY": "sk-another"}, {"PROVIDER": "groq"}):
             with self.subTest(**change):
-                r = self.client.post("/api/admin/employee/settings",
+                r = self.client.post(ROUTES["SETTINGS"],
                                      json=self.ids(**change))
                 self.assertEqual(r.status_code, 401)
 
     def test_policy_changes_work_once_approved(self):
-        r = self.client.post("/api/admin/employee/settings",
+        r = self.client.post(ROUTES["SETTINGS"],
                              json=self.ids(admin_token=self.admin,
                                            MODEL_NAME="gpt-4o-mini"))
         self.assertEqual(r.status_code, 200)
@@ -250,9 +264,9 @@ class RouteTests(unittest.TestCase):
     def test_approval_from_another_workspace_is_refused(self):
         """An administrator may only approve inside their own workspace."""
         other = self.client.post(
-            "/api/admin/login",
+            ROUTES["ADMIN_LOGIN"],
             json={"username": "boss", "password": "admin-pw"}).get_json()
-        r = self.client.post("/api/admin/employee/settings",
+        r = self.client.post(ROUTES["SETTINGS"],
                              json=self.ids(Parent_id=99,
                                            admin_token=other["session_token"],
                                            check1=False))
@@ -261,19 +275,19 @@ class RouteTests(unittest.TestCase):
     def test_signing_out_revokes_the_token_on_the_server(self):
         """Clearing localStorage alone would leave it replayable for a week."""
         login = self.client.post(
-            "/api/admin/employee/login",
+            ROUTES["EMPLOYEE_LOGIN"],
             json={"Parent_id": 1, "username": "member", "password": "member-pw"}
         ).get_json()
         token = login["session_token"]
 
-        r = self.client.post("/api/admin/employee/chats", json=self.ids(
+        r = self.client.post(ROUTES["CHATS"], json=self.ids(
             Employee_id=int(login["Employee_id"]), session_token=token))
         self.assertEqual(r.status_code, 200, "the token works before sign-out")
 
-        self.client.post("/api/admin/employee/logout", json=self.ids(
+        self.client.post(ROUTES["EMPLOYEE_LOGOUT"], json=self.ids(
             Employee_id=int(login["Employee_id"]), session_token=token))
 
-        r = self.client.post("/api/admin/employee/chats", json=self.ids(
+        r = self.client.post(ROUTES["CHATS"], json=self.ids(
             Employee_id=int(login["Employee_id"]), session_token=token))
         self.assertEqual(r.status_code, 401, "the token is dead after sign-out")
 
@@ -308,17 +322,17 @@ class RouteTests(unittest.TestCase):
             admin_session.MAX_SESSIONS_PER_ADMIN = before
 
     def test_a_forged_approval_token_is_refused(self):
-        r = self.client.post("/api/admin/employee/settings",
+        r = self.client.post(ROUTES["SETTINGS"],
                              json=self.ids(admin_token="forged", check1=False))
         self.assertEqual(r.status_code, 401)
 
     def test_a_signed_in_member_can_read_their_own_history(self):
-        r = self.client.post("/api/admin/employee/chats", json=self.ids())
+        r = self.client.post(ROUTES["CHATS"], json=self.ids())
         self.assertEqual(r.status_code, 200)
         self.assertIn("chats", r.get_json())
 
     def test_an_administrator_can_set_a_members_policy(self):
-        r = self.client.post("/api/admin/employee/settings",
+        r = self.client.post(ROUTES["SETTINGS"],
                              json=self.ids(session_token=self.admin,
                                            admin_token=self.admin,
                                            MODEL_NAME="gpt-4o-mini"))
@@ -329,25 +343,25 @@ class RouteTests(unittest.TestCase):
         for url in ("http://169.254.169.254/latest", "ftp://example.com",
                     "https://user:pw@example.com", "file:///etc/passwd"):
             with self.subTest(url=url):
-                r = self.client.post("/api/admin/employee/settings",
+                r = self.client.post(ROUTES["SETTINGS"],
                                      json=self.ids(admin_token=self.admin,
                                                    API_BASE=url))
                 self.assertEqual(r.status_code, 400, url)
 
     def test_an_unknown_provider_is_refused(self):
-        r = self.client.post("/api/admin/employee/settings",
+        r = self.client.post(ROUTES["SETTINGS"],
                              json=self.ids(admin_token=self.admin,
                                            PROVIDER="made-up"))
         self.assertEqual(r.status_code, 400)
 
     def test_an_administrator_cannot_read_a_members_history(self):
         """Deliberate: policy is the administrator's job, the content is not."""
-        r = self.client.post("/api/admin/employee/chats",
+        r = self.client.post(ROUTES["CHATS"],
                              json=self.ids(session_token=self.admin))
         self.assertEqual(r.status_code, 401)
 
     def test_an_approved_override_goes_through_and_is_logged(self):
-        r = self.client.post("/api/admin/employee/chat",
+        r = self.client.post(ROUTES["CHAT"],
                              json=self.ids(prompt="send this anyway", bypass=True,
                                            admin_token=self.admin,
                                            check1=True, check2=True, check3=True))
@@ -362,7 +376,7 @@ class RouteTests(unittest.TestCase):
         self.assertGreaterEqual(rows, 1, "an override must leave an audit trail")
 
     def test_a_blocked_prompt_is_logged_and_not_forwarded(self):
-        r = self.client.post("/api/admin/employee/chat",
+        r = self.client.post(ROUTES["CHAT"],
                              json=self.ids(prompt="my AFM is 123456789",
                                            check1=True, check2=True, check3=True))
         body = r.get_json()
@@ -370,7 +384,7 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(body.get("reply_message"), "NULL", "nothing is forwarded when blocked")
 
     def test_the_administrator_dashboard_still_works(self):
-        r = self.client.post("/api/admin/team", json={"token": self.admin})
+        r = self.client.post(ROUTES["TEAM"], json={"token": self.admin})
         self.assertEqual(r.status_code, 200)
         member = [m for m in r.get_json()["members"] if m["username"] == "member"][0]
         # A blocked prompt counts as a block; an approved override does not.
@@ -401,50 +415,50 @@ class MemberManagementTests(unittest.TestCase):
         con.commit()
         con.close()
 
-        cls.client = cybersyn.app.test_client()
+        cls.client = cybersyn.app.test_client(use_cookies=False)
         cls.admin = cls.client.post(
-            "/api/admin/login",
+            ROUTES["ADMIN_LOGIN"],
             json={"username": "mm_boss", "password": "mm-pw"},
         ).get_json()["session_token"]
         cls.foreign = cls.client.post(
-            "/api/admin/login",
+            ROUTES["ADMIN_LOGIN"],
             json={"username": "mm_foreign", "password": "mm-pw"},
         ).get_json()["session_token"]
 
     def test_adding_a_member_without_an_admin_session_is_refused(self):
-        r = self.client.post("/api/admin/employee",
+        r = self.client.post(ROUTES["EMPLOYEE"],
                              json={"method": "add", "Parent_id": self.mm_parent,
                                    "username": "intruder", "password": "pw-12345a"})
         self.assertEqual(r.status_code, 401)
 
     def test_adding_a_member_with_the_admin_session_is_allowed(self):
-        r = self.client.post("/api/admin/employee",
+        r = self.client.post(ROUTES["EMPLOYEE"],
                              json={"method": "add", "Parent_id": self.mm_parent,
                                    "username": "legit", "password": "pw-12345a",
                                    "token": self.admin})
         self.assertEqual(r.status_code, 201)
 
     def test_an_admin_of_another_workspace_is_refused(self):
-        r = self.client.post("/api/admin/employee",
+        r = self.client.post(ROUTES["EMPLOYEE"],
                              json={"method": "add", "Parent_id": self.mm_parent,
                                    "username": "intruder2", "password": "pw-12345a",
                                    "token": self.foreign})
         self.assertEqual(r.status_code, 401)
 
     def test_removing_a_member_without_an_admin_session_is_refused(self):
-        r = self.client.post("/api/admin/employee",
+        r = self.client.post(ROUTES["EMPLOYEE"],
                              json={"method": "remove", "Parent_id": self.mm_parent,
                                    "username": "legit", "password": "pw-12345a"})
         self.assertEqual(r.status_code, 401)
 
     def test_removing_a_member_with_the_admin_session_is_allowed(self):
-        self.client.post("/api/admin/employee",
+        self.client.post(ROUTES["EMPLOYEE"],
                          json={"method": "add", "Parent_id": self.mm_parent,
                                "username": "throwaway", "password": "pw-12345a",
                                "token": self.admin})
-        r = self.client.post("/api/admin/employee",
+        r = self.client.post(ROUTES["EMPLOYEE"],
                              json={"method": "remove", "Parent_id": self.mm_parent,
-                                   "username": "throwaway", "password": "pw-12345a",
+                                   "username": "throwaway", "admin_password": "mm-pw",
                                    "token": self.admin})
         self.assertEqual(r.status_code, 200)
 

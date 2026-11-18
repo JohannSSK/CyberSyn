@@ -16,7 +16,6 @@ FROM python:3.11-slim AS builder
 ENV PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     HF_HOME=/opt/cybersyn/model-cache \
-    TRANSFORMERS_CACHE=/opt/cybersyn/model-cache \
     TOKENIZERS_PARALLELISM=false
 
 # build-essential stays in this stage only: it lets any dependency without a
@@ -30,12 +29,13 @@ ENV PATH="/opt/venv/bin:${PATH}"
 
 COPY requirements.txt /tmp/requirements.txt
 RUN pip install --upgrade pip \
- && pip install --extra-index-url https://download.pytorch.org/whl/cpu -r /tmp/requirements.txt
+ && pip install --index-url https://download.pytorch.org/whl/cpu "$(grep '^torch==' /tmp/requirements.txt)" \
+ && pip install -r /tmp/requirements.txt \
+ && pip check
 
-# Bake the classification model used by the context and prompt-injection checks.
-RUN python -c "from transformers import pipeline; \
-pipeline('zero-shot-classification', model='valhalla/distilbart-mnli-12-1'); \
-print('CyberSyn: model cached')"
+# Use the production loader to verify NER and an actual DistilBART forward pass.
+COPY src/MLscripts/model_cache.py /tmp/model_cache.py
+RUN python /tmp/model_cache.py
 
 # ---------------------------------------------------------------------------
 # Stage 2 — runtime
@@ -49,37 +49,33 @@ LABEL org.opencontainers.image.title="CyberSyn" \
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     HF_HOME=/opt/cybersyn/model-cache \
-    TRANSFORMERS_CACHE=/opt/cybersyn/model-cache \
+    HF_HUB_OFFLINE=1 \
     TORCH_HOME=/opt/cybersyn/model-cache \
     TOKENIZERS_PARALLELISM=false \
     CYBERSYN_HOST=0.0.0.0 \
     CYBERSYN_PORT=5000 \
+    CYBERSYN_SCANNER_FALLBACK=0 \
+    CYBERSYN_KEY_FILE=/app/secrets/secret.key \
     CYBERSYN_DEBUG=0 \
     PATH="/opt/venv/bin:${PATH}"
 
-RUN apt-get update \
- && apt-get install -y --no-install-recommends curl \
- && rm -rf /var/lib/apt/lists/*
+RUN useradd --create-home --shell /bin/bash cybersyn \
+ && install -d -o cybersyn -g cybersyn -m 700 /app/src/backend /app/secrets
 
 COPY --from=builder /opt/venv /opt/venv
-COPY --from=builder /opt/cybersyn/model-cache /opt/cybersyn/model-cache
-
-# Run as a non-root user. /app/src/backend holds the SQLite database and the
-# generated Fernet key, so it must be writable by that user before the code is
-# copied in (a named volume mounted there inherits the image's ownership).
-RUN useradd --create-home --shell /bin/bash cybersyn \
- && mkdir -p /app/src/backend \
- && chown -R cybersyn:cybersyn /app /opt/cybersyn
+COPY --from=builder --chown=cybersyn:cybersyn /opt/cybersyn/model-cache /opt/cybersyn/model-cache
 
 WORKDIR /app
-COPY --chown=cybersyn:cybersyn . /app
+COPY src /app/src
+COPY includes /app/includes
+COPY assets /app/assets
 
 USER cybersyn
 EXPOSE 5000
-VOLUME ["/app/src/backend"]
+VOLUME ["/app/src/backend", "/app/secrets"]
 
 HEALTHCHECK --interval=30s --timeout=15s --start-period=90s --retries=5 \
   CMD python -c "import os, urllib.request; \
 urllib.request.urlopen('http://127.0.0.1:' + os.environ.get('CYBERSYN_PORT', '5000') + '/', timeout=10).read()"
 
-CMD ["python", "src/app.py"]
+CMD ["gunicorn", "--config", "src/gunicorn_conf.py", "app:app"]

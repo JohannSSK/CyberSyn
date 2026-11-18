@@ -718,8 +718,10 @@ html[lang="el"] .bubble { line-height: 1.74; }
 .override-form { max-width: 360px; }
 
 .override-label {
-    display: block;
-    margin-bottom: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 10px;
     font-size: var(--text-xs);
     font-weight: 600;
     color: var(--text-muted);
@@ -884,11 +886,14 @@ mark {
 }
 
 @media (max-width: 760px) {
-    .search-box { display: none; }
+    /* Keep message and cross-chat search reachable without crowding the bar. */
+    .topbar { flex-wrap: wrap; min-height: var(--topbar-h); height: auto; padding-block: 8px; row-gap: 8px; }
+    .search-box { order: 1; flex: 0 0 100%; }
+    .search-box input { width: 100%; }
 }
 
 @media (max-width: 620px) {
-    .topbar { padding: 0 12px; gap: 8px; }
+    .topbar { padding-inline: 12px; gap: 8px; }
     .topbar-title > #active-chat-title { max-width: 130px; }
     .stream-inner { padding: 0 16px; }
     .first-run { margin-top: 20px; }
@@ -902,4 +907,43 @@ mark {
    aria-label so Greek labels never clip the topbar. */
 @media (max-width: 480px) {
     .topbar-status-text { display: none; }
+}
+
+/* Cross-chat search hits stay beside the search box, separate from this chat. */
+#other-chat-results {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: 30;
+    width: min(360px, 78vw);
+    max-height: 45vh;
+    overflow: auto;
+    padding: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+}
+
+#other-chat-results .eyebrow {
+    display: block;
+    margin-bottom: 8px;
+}
+
+.search-hit {
+    display: block;
+    width: 100%;
+    min-height: 44px;
+    text-align: left;
+    padding: 8px 10px;
+    border-radius: var(--r-sm);
+    font-size: var(--text-sm);
+    line-height: 1.45;
+    color: var(--text);
+    overflow-wrap: anywhere;
+    transition: background var(--fast) var(--ease);
+}
+
+.search-hit:hover:not(:disabled),
+.search-hit:focus-visible:not(:disabled) {
+    background: var(--surface-2);
 }

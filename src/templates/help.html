@@ -8,7 +8,7 @@
 {% endblock %}
 
 {% block body %}
-<div class="app-shell">
+<div class="app-shell" data-guard="member">
     <div class="layout">
         {% include "partials/sidebar.html" %}
 
@@ -92,7 +92,7 @@
                         </div>
                         <div class="privacy-row">
                             <strong>What administrators can see</strong>
-                            <p>After entering the administrator password on Statistics or Team, an administrator can view message counts, block rates, which check and category triggered, UTC timestamps, and the first 80 characters of logged prompts (sent, regenerated, blocked and approved messages) in the activity log.</p>
+                            <p>After entering the administrator password on Statistics or Team, an administrator can view message counts, block rates, which check and category triggered, and UTC timestamps. Prompt previews are off by default; when enabled via CYBERSYN_LOG_PROMPT_PREVIEW=1, only ordinary sent messages keep an 80-character preview (never blocked or overridden prompts).</p>
                         </div>
                         <div class="privacy-row">
                             <strong>Deleting messages, chats and accounts</strong>
@@ -100,21 +100,21 @@
                         </div>
                         <div class="privacy-row">
                             <strong>API keys, sessions and external requests</strong>
-                            <p>Provider API keys are encrypted before they are saved and shown masked everywhere on screen. Session tokens are stored as SHA-256 hashes and expire after 7 days. Typefaces are bundled locally (Instrument Serif, Inter and JetBrains Mono under the SIL Open Font License 1.1) — CyberSyn makes outbound requests only to the AI provider configured for your seat.</p>
+                            <p>Provider API keys are encrypted before they are saved and shown masked everywhere on screen. Sessions use HttpOnly cookies stored as SHA-256 hashes on the server with server-side expiry and revocation. Typefaces are bundled locally (Instrument Serif, Noto Serif Display, Inter and JetBrains Mono under the SIL Open Font License 1.1) — CyberSyn makes outbound requests only to the AI provider configured for your seat.</p>
                         </div>
                     </div>
                 </section>
 
                 <section class="card stack">
                     <div class="card-title"><span data-icon="key"></span><span>Models and API keys</span></div>
-                    <p>CyberSyn works with OpenAI, Anthropic Claude, Google Gemini, Mistral, Cohere, Groq, DeepSeek and xAI Grok. An administrator selects the model and saves the matching provider API key for each signed-in member on the <a href="/settings">Settings</a> page.</p>
+                    <p>CyberSyn works with OpenAI, Anthropic Claude, Google Gemini, Mistral, Cohere, Groq, DeepSeek and xAI Grok. Automatic discovery uses recognized key prefixes only; select your provider explicitly for unfamiliar formats. An administrator selects the model and saves the matching provider API key for each signed-in member on the <a href="/settings">Settings</a> page.</p>
                 </section>
 
                 <section class="card stack">
                     <div class="card-title"><span data-icon="check"></span><span>Everyday shortcuts and tips</span></div>
                     <ul class="help-list">
                         <li>Press <span class="kbd">Enter</span> to send a message and <span class="kbd">Shift</span> + <span class="kbd">Enter</span> to add a new line.</li>
-                        <li>Use the search box at the top of Chat to filter the open conversation; press <span class="kbd">Esc</span> to clear it.</li>
+                        <li>Use the search box at the top of Chat to filter the open conversation and search across other chats; press <span class="kbd">Esc</span> to clear it.</li>
                         <li>Administrator pages stay unlocked in the current tab for 15 minutes after entering the password. Use <strong>Lock</strong> in the sidebar to close that window immediately.</li>
                         <li>On Statistics, use <strong>Download CSV</strong> to export workspace totals and trends, or print either Statistics or Team cleanly to A4 — API keys and prompt excerpts are omitted on paper.</li>
                     </ul>
@@ -124,8 +124,4 @@
         </main>
     </div>
 </div>
-{% endblock %}
-
-{% block scripts %}
-<script>window.Shell.guard();</script>
 {% endblock %}

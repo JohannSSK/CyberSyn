@@ -92,17 +92,14 @@
     function signOut() {
         var jobs = [];
         var member = Session.getMember() || {};
-        var adminToken = Session.getAdminToken();
 
-        // End sessions on the server too so copied tokens cannot be replayed.
+        // End sessions on the server too so HttpOnly cookies and grants cannot be replayed.
         if (member.parentId) {
-            jobs.push(global.Api.post("/api/admin/employee/logout", {},
+            jobs.push(global.Api.post("EMPLOYEE_LOGOUT", {},
                 { onUnauthorised: false }).catch(function () {}));
         }
-        if (adminToken) {
-            jobs.push(global.Api.post("/api/admin/logout", { token: adminToken },
-                { member: false, onUnauthorised: false }).catch(function () {}));
-        }
+        jobs.push(global.Api.post("ADMIN_LOGOUT", {},
+            { member: false, onUnauthorised: false }).catch(function () {}));
 
         var settled = false;
         var leave = function () {
@@ -136,7 +133,8 @@
     /** Administrator pages may be entered by a signed-in member (step-up) or
         directly from step 2 of the portal while an admin session is held. */
     function guardAdmin() {
-        if (!Session.ready() && !Session.getAdminToken()) {
+        var admin = Session.getAdmin() || {};
+        if (!Session.ready() && !admin.parentId) {
             location.replace("/");
             return false;
         }
@@ -331,12 +329,12 @@
     /* ------------------------------------------------------------------
        Administrator step-up
 
-       Anything that exposes other people's activity or lowers the gate asks
-       for the administrator password again and keeps the unlock only in
-       this tab's sessionStorage for 15 minutes.
+       Only the display timestamp hint is kept in this tab. The short-lived
+       page grant lives in an HttpOnly cookie; a settings or override approval
+       is used once from memory and never unlocks a page.
        ------------------------------------------------------------------ */
 
-    var UNLOCK_KEY = "cybersyn_admin_unlock";
+    var UNLOCK_KEY = "cybersyn_page_hint";
     var UNLOCK_MINUTES = 15;
     var ticker = null;
 
@@ -348,16 +346,21 @@
         }
     }
 
-    function lockAdmin() {
+    function forgetUnlock() {
         try {
             sessionStorage.removeItem(UNLOCK_KEY);
         } catch (err) { /* private mode: nothing to clear */ }
         paintUnlock();
     }
 
-    function writeUnlock(token, username, parentId) {
+    function lockAdmin() {
+        forgetUnlock();
+        return global.Api.post("ADMIN_LOGOUT", { scope: "page" },
+            { member: false, onUnauthorised: false });
+    }
+
+    function writeUnlock(username, parentId) {
         var record = {
-            token: token,
             username: username,
             parentId: parentId,
             until: Date.now() + UNLOCK_MINUTES * 60000
@@ -373,15 +376,15 @@
         return Math.max(0, Math.ceil((record.until - Date.now()) / 60000));
     }
 
-    /** The live unlock for this tab and workspace, or null. */
+    /** The live unlock hint for this tab and workspace, or null. */
     function currentUnlock() {
         var record = readUnlock();
-        if (!record || !record.token || !record.until) return null;
-        if (Date.now() >= record.until) { lockAdmin(); return null; }
+        if (!record || !record.until) return null;
+        if (Date.now() >= record.until) { forgetUnlock(); return null; }
         var member = Session.getMember() || {};
         if (record.parentId && member.parentId &&
             String(record.parentId) !== String(member.parentId)) {
-            lockAdmin();
+            forgetUnlock();
             return null;
         }
         return record;
@@ -412,8 +415,10 @@
         slot.appendChild(badge);
 
         global.Dom.on(badge.querySelector("[data-action='lock-admin']"), "click", function () {
-            lockAdmin();
-            global.Loading.toast("Administrator access locked.", "info");
+            lockAdmin().then(function () {
+                global.Loading.toast("Administrator access locked.", "info");
+                if (isAdminOnly(location.pathname)) location.replace("/workspace");
+            }).catch(function (err) { global.Loading.toast(err.message, "error"); });
         });
     }
 
@@ -491,31 +496,29 @@
         function submit() {
             var password = input.value;
             if (!password) {
-                message.textContent = t("Enter the administrator password to continue.");
+                message.textContent = t("Enter the administrator password.");
                 input.focus();
                 return;
             }
             message.textContent = "";
             var username = known ? admin.username : usernameField.value.trim();
             if (!username) {
-                message.textContent = t("Enter the administrator username to continue.");
+                message.textContent = t("Enter the administrator username.");
                 usernameField.focus();
                 return;
             }
             global.Loading.withButton(unlock, function () {
-                return global.Api.post("/api/admin/login", {
+                return global.Api.post("ADMIN_APPROVE", {
+                    Parent_id: (Session.getMember() || {}).parentId,
+                    scope: opts.fresh ? "once" : "page",
                     username: username,
                     password: password
                 }, { member: false, onUnauthorised: false });
             }).then(function (data) {
                 var parentId = parseInt(data.Parent_id, 10);
-                Session.setAdmin(data.session_token, {
-                    parentId: parentId,
-                    username: data.username
-                });
                 close();
                 onUnlock({
-                    token: data.session_token,
+                    token: data.admin_token,
                     username: data.username,
                     parentId: parentId
                 });
@@ -546,17 +549,24 @@
     function withAdmin(options) {
         var opts = options || {};
         var record = opts.fresh ? null : currentUnlock();
-        if (record) return Promise.resolve(record.token);
-
-        return new Promise(function (resolve, reject) {
-            adminGate(opts, function (data) {
-                writeUnlock(data.token, data.username, data.parentId);
-                resolve(data.token);
-            }, function () {
-                var err = new Error("Administrator approval was cancelled.");
-                err.cancelled = true;
-                reject(err);
+        function ask() {
+            return new Promise(function (resolve, reject) {
+                adminGate(opts, function (data) {
+                    if (!opts.fresh) writeUnlock(data.username, data.parentId);
+                    resolve(data.token);
+                }, function () {
+                    var err = new Error("Administrator approval was cancelled.");
+                    err.cancelled = true;
+                    reject(err);
+                });
             });
+        }
+        if (!record) return ask();
+        return global.Api.post("OVERRIDE_CHECK", { Parent_id: record.parentId },
+            { onUnauthorised: false }).then(function (result) {
+            if (result.allowed) return;
+            forgetUnlock();
+            return ask();
         });
     }
 
@@ -634,6 +644,7 @@
     }
 
     document.addEventListener("DOMContentLoaded", function () {
+        if (global.Dom.$("[data-guard='member']") && !guard()) return;
         paintIcons(document);
         markActive();
         paintMember();

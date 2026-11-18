@@ -2,8 +2,9 @@
    settings.js — local safety check toggles and the AI connection.
 
    The API key is write-only: it is stored encrypted on the server and the
-   browser only ever receives a mask back. Changing checks or connection
-   details requires a fresh administrator password confirmation every time.
+   browser only ever receives a mask back. Changing checks, removing the key,
+   or probing a saved key at another destination asks for fresh administrator
+   approval and is recorded in the audit log.
    ========================================================================== */
 
 (function () {
@@ -27,14 +28,20 @@
         return !!(window.I18n && window.I18n.current() === "el");
     }
 
-    var checks = { check1: true, check2: true, check3: true };
+    var flags = ["check1", "check2", "check3", "block_code"];
     var savedMask = "";
     var dirty = false;
+    var savedConnection = { provider: "auto", base: "", hasKey: false };
+    var discoveryVersion = 0;
 
     var nodes = {
         check1: $("#setting-check1"),
         check2: $("#setting-check2"),
         check3: $("#setting-check3"),
+        block_code: $("#setting-block-code"),
+        alsoDefault: $("#also-default"),
+        connectionDefault: $("#connection-also-default"),
+        clearKey: $("#btn-clear-key"),
         consequence: $("#checks-consequence"),
         allOff: $("#all-checks-off-note"),
         saveChecks: $("#btn-save-checks"),
@@ -47,12 +54,8 @@
         saveConnection: $("#btn-save-connection"),
         connectionState: $("#connection-state"),
         provider: $("#setting-provider"),
-        base: $("#setting-base"),
-        baseField: $("#field-base")
+        base: $("#setting-base")
     };
-
-    var probedKey = null;
-    var BASE_NEEDED = {};
 
     var CHECK_CONSEQUENCES = [
         {
@@ -76,7 +79,8 @@
         var off = CHECK_CONSEQUENCES.filter(function (item) {
             return nodes[item.key] && !nodes[item.key].checked;
         });
-        var noneOn = off.length === CHECK_CONSEQUENCES.length;
+        var codeBlocked = !!(nodes.block_code && nodes.block_code.checked);
+        var noneOn = off.length === CHECK_CONSEQUENCES.length && !codeBlocked;
         var partialOff = off.length > 0 && !noneOn;
 
         if (nodes.allOff) {
@@ -149,13 +153,13 @@
     }
 
     function apply(data) {
-        ["check1", "check2", "check3"].forEach(function (key) {
-            checks[key] = data[key] !== false;
-            nodes[key].checked = checks[key];
+        flags.forEach(function (key) {
+            if (nodes[key]) nodes[key].checked = !!data[key];
         });
         updateAllOff();
-        if (data.MODEL_NAME && !nodes.model.querySelector(
-                'option[value="' + data.MODEL_NAME.replace(/"/g, "") + '"]')) {
+        if (data.MODEL_NAME && !Array.from(nodes.model.options).some(function (o) {
+            return o.value === data.MODEL_NAME;
+        })) {
             var option = document.createElement("option");
             option.value = data.MODEL_NAME;
             option.textContent = data.MODEL_NAME;
@@ -164,8 +168,14 @@
         if (data.MODEL_NAME) nodes.model.value = data.MODEL_NAME;
         if (data.PROVIDER) nodes.provider.value = data.PROVIDER;
         nodes.base.value = data.API_BASE || "";
-        showBaseField(nodes.provider.value);
+
         savedMask = data.API_KEY_MASK || "";
+        savedConnection = {
+            provider: data.PROVIDER || "auto",
+            base: nodes.base.value,
+            hasKey: !!savedMask
+        };
+        if (nodes.clearKey) nodes.clearKey.classList.toggle("hidden", !savedMask);
         paintKeyState();
         clearChecksSaved();
         dirty = false;
@@ -173,7 +183,7 @@
     }
 
     function load() {
-        return Api.post("/api/admin/employee/settings", {}).then(function (data) {
+        return Api.post("SETTINGS", {}).then(function (data) {
             apply(data);
             return data;
         });
@@ -200,14 +210,17 @@
             "Changing the local safety checks requires the administrator password and is recorded in the audit log."
         ).then(function (token) {
             return Loading.withButton(nodes.saveChecks, function () {
-                return Api.post("/api/admin/employee/settings", {
+                return Api.post("SETTINGS", {
                     check1: nodes.check1.checked,
                     check2: nodes.check2.checked,
                     check3: nodes.check3.checked,
+                    block_code: nodes.block_code.checked,
+                    also_default: nodes.alsoDefault.checked,
                     admin_token: token
                 });
             }).then(function (data) {
                 apply(data);
+                nodes.alsoDefault.checked = false;
                 flashChecksSaved();
                 Loading.toast("Safety checks saved.", "success");
             }).catch(function (err) {
@@ -220,13 +233,10 @@
         var payload = {};
         if (nodes.model.value.trim()) payload.MODEL_NAME = nodes.model.value.trim();
         if (nodes.provider.value) payload.PROVIDER = nodes.provider.value;
-        if (nodes.base.value.trim()) payload.API_BASE = nodes.base.value.trim();
+        payload.API_BASE = nodes.base.value.trim();
+        payload.also_default = nodes.connectionDefault.checked;
         var key = nodes.key.value.trim();
         if (key) payload.API_KEY = key;
-        if (!Object.keys(payload).length) {
-            Loading.toast("Choose a model or paste an API key before saving.", "info");
-            return;
-        }
 
         approveChange(
             "AI connection",
@@ -234,14 +244,14 @@
         ).then(function (token) {
             payload.admin_token = token;
             return Loading.withButton(nodes.saveConnection, function () {
-                return Api.post("/api/admin/employee/settings", payload);
+                return Api.post("SETTINGS", payload);
             }).then(function (data) {
                 nodes.key.value = "";
                 apply(data);
+                nodes.connectionDefault.checked = false;
                 flashConnectionSaved();
                 Loading.toast("Connection saved.", "success");
-                probedKey = null;
-                refreshModels();
+                if (savedConnection.hasKey) refreshModels();
             }).catch(function (err) {
                 Loading.toast(err.message, "error");
             });
@@ -252,16 +262,8 @@
        Provider choice & model discovery
        ------------------------------------------------------------------ */
 
-    function showBaseField(provider) {
-        var needs = !!BASE_NEEDED[provider];
-        nodes.baseField.classList.toggle("hidden", !needs);
-    }
-
     function loadProviders() {
-        return Api.post("/api/admin/employee/providers", {}).then(function (data) {
-            (data.providers || []).forEach(function (item) {
-                if (item.needs_base) BASE_NEEDED[item.key] = true;
-            });
+        return Api.post("PROVIDERS", {}).then(function (data) {
             var current = nodes.provider.value;
             nodes.provider.innerHTML = (data.providers || []).map(function (item) {
                 var label = item.key === "auto" ? t("Detect automatically") : item.label;
@@ -295,41 +297,70 @@
     function refreshModels(options) {
         var opts = options || {};
         var key = nodes.key.value.trim();
-        if (key === probedKey && !opts.force) return Promise.resolve(null);
-        probedKey = key;
-
-        var body = key ? { API_KEY: key } : {};
-        if (nodes.provider.value && nodes.provider.value !== "auto") {
-            body.provider = nodes.provider.value;
+        var body = {
+            provider: nodes.provider.value || "auto",
+            API_BASE: nodes.base.value.trim()
+        };
+        var version = ++discoveryVersion;
+        if (key) body.API_KEY = key;
+        if (!key && !savedConnection.hasKey) {
+            setModelState(t("Paste a key first to load the models it can reach."));
+            return Promise.resolve(null);
         }
-        if (nodes.base.value.trim()) body.API_BASE = nodes.base.value.trim();
-        var request = Api.post("/api/admin/employee/models", body);
+
+        var changed = !key && (
+            body.API_BASE !== savedConnection.base ||
+            body.provider !== savedConnection.provider
+        );
+        if (changed && !opts.button) {
+            setModelState(t("Refresh the list with administrator approval to use the saved key here."));
+            return Promise.resolve(null);
+        }
+
+        function request() {
+            var grant = changed
+                ? Shell.withAdmin({
+                    title: "Model discovery",
+                    fresh: true,
+                    what: "Use the saved key at " + body.provider + " · " +
+                        (body.API_BASE || t("Hosted address")) + "?",
+                    confirmLabel: "Approve",
+                    cancelLabel: "Cancel"
+                })
+                : Promise.resolve(null);
+            return grant.then(function (token) {
+                if (version !== discoveryVersion) return null;
+                if (token) body.admin_token = token;
+                return Api.post("MODELS", body);
+            });
+        }
+
         setModelState(t("Checking which models this key can reach…"));
-        if (opts.button) {
-            request = Loading.withButton(nodes.refresh, function () { return request; });
-        }
-
-        return request.then(function (data) {
-            if (!data.models || !data.models.length) {
-                var emptyMsg = data.message
-                    ? Api.withRemedy(data.message)
-                    : "That key returned no usable models. Check the provider and key.";
-                setModelState(t(emptyMsg), "is-error");
+        return (opts.button ? Loading.withButton(nodes.refresh, request) : request())
+            .then(function (data) {
+                if (!data || version !== discoveryVersion) return null;
+                if (!data.models || !data.models.length) {
+                    var emptyMsg = data.message && Api.withRemedy
+                        ? Api.withRemedy(data.message)
+                        : (data.message || "That key returned no usable models. Check the provider and key.");
+                    setModelState(t(emptyMsg), "is-error");
+                    return null;
+                }
+                showModels(data.models, data.provider_label);
+                if (key && data.provider && data.provider !== "auto") {
+                    nodes.provider.value = data.provider;
+                }
+                return data.models;
+            })
+            .catch(function (err) {
+                if (version === discoveryVersion && !err.cancelled) {
+                    setModelState(
+                        t(err.message || "Could not load models. Check the key and try again."),
+                        "is-error"
+                    );
+                }
                 return null;
-            }
-            showModels(data.models, data.provider_label);
-            if (data.provider && data.provider !== "auto") {
-                nodes.provider.value = data.provider;
-                showBaseField(data.provider);
-            }
-            return data.models;
-        }).catch(function (err) {
-            setModelState(
-                t(err.message || "Could not load models. Check the key and try again."),
-                "is-error"
-            );
-            return null;
-        });
+            });
     }
 
     var autoProbe = Dom.debounce(function () { refreshModels(); }, 900);
@@ -338,24 +369,51 @@
        Wiring
        ------------------------------------------------------------------ */
 
-    ["check1", "check2", "check3"].forEach(function (key) {
-        Dom.on(nodes[key], "change", markDirty);
+    flags.forEach(function (key) {
+        if (nodes[key]) Dom.on(nodes[key], "change", markDirty);
     });
+
+    if (nodes.clearKey) {
+        Dom.on(nodes.clearKey, "click", function () {
+            approveChange(
+                "Saved key",
+                "Removing the saved API key requires the administrator password and is recorded in the audit log."
+            ).then(function (token) {
+                return Loading.withButton(nodes.clearKey, function () {
+                    return Api.post("SETTINGS", {
+                        CLEAR_API_KEY: true,
+                        admin_token: token,
+                        also_default: nodes.connectionDefault.checked
+                    });
+                });
+            }).then(function (data) {
+                nodes.key.value = "";
+                discoveryVersion++;
+                nodes.connectionDefault.checked = false;
+                apply(data);
+                setModelState(t("No key saved yet."));
+                Loading.toast("Saved key removed.", "success");
+            }).catch(function (err) {
+                if (err && !err.cancelled) Loading.toast(err.message, "error");
+            });
+        });
+    }
 
     Dom.on(nodes.saveChecks, "click", saveChecks);
     Dom.on(nodes.saveConnection, "click", saveConnection);
-    Dom.on(nodes.refresh, "click", function () {
-        refreshModels({ button: true, force: true });
-    });
+    Dom.on(nodes.refresh, "click", function () { refreshModels({ button: true }); });
     Dom.on(nodes.model, "change", markDirty);
     Dom.on(nodes.provider, "change", function () {
-        showBaseField(nodes.provider.value);
+        nodes.base.value = nodes.provider.value === savedConnection.provider
+            ? savedConnection.base
+            : "";
         markDirty();
-        probedKey = null;
-        refreshModels({ force: true });
+        refreshModels();
     });
 
+    Dom.on(nodes.base, "input", function () { discoveryVersion++; });
     Dom.on(nodes.key, "input", function () {
+        discoveryVersion++;
         if (nodes.key.value.trim().length >= 8) autoProbe();
     });
 

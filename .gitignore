@@ -1,4 +1,10 @@
 *.db
+*.db-wal
+*.db-shm
+*.db-journal
+.fernet-*
+*.key
+node_modules/
 
 # Python
 __pycache__/
@@ -12,6 +18,10 @@ src/backend/secret.key
 
 # Local environment overrides
 .env
+.env.*
+!.env.example
+secrets/
+*.sqlite*
 
 # Editor / scratch backups
 *.bak

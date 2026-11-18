@@ -10,9 +10,9 @@ from flask import Blueprint
 import chat_store
 from auth import require_member
 from block_log import record_activity
-from config import DB_FILE, ROUTES
+from config import DB_FILE, MAX_PROMPT_CHARS, ROUTES
 from errors import ApiError
-from web import fail, get_json_dict, ok
+from web import activity_detail, fail, get_json_dict, ok, to_int
 
 chat_history = Blueprint("chat_history", __name__)
 
@@ -33,10 +33,7 @@ def _ids(data):
 
 
 def _chat_id(data):
-    try:
-        return int(data.get("chat_id"))
-    except (TypeError, ValueError):
-        return None
+    return to_int(data.get("chat_id"))
 
 
 @chat_history.post(ROUTES["CHATS"])
@@ -119,7 +116,10 @@ def message_edit():
     if chat_id is None:
         return fail("chat_id is required.", 400)
     message_id = data.get("message_id")
-    text = str(data.get("text") or "").strip()
+    text = data.get("text")
+    if not isinstance(text, str) or len(text) > MAX_PROMPT_CHARS:
+        return fail(f"Message must be text of at most {MAX_PROMPT_CHARS} characters.", 400)
+    text = text.strip()
     if not message_id:
         return fail("message_id is required.", 400)
     if not text:
@@ -130,7 +130,7 @@ def message_edit():
     )
     if messages is None:
         return fail("That message was not found.", 404)
-    record_activity(DB_FILE, ids[0], ids[1], "message_edited", text[:80])
+    record_activity(DB_FILE, ids[0], ids[1], "message_edited", activity_detail(chat_id, text))
     return ok(messages=messages)
 
 

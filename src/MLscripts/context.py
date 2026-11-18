@@ -1,24 +1,27 @@
 import json
-import os
 import re
 import sys
-import warnings
 
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
-os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
-os.environ["HF_HUB_VERBOSITY"] = "error"
-warnings.filterwarnings("ignore")
+try:
+    from identifiers import CARD, GREEK_ID, IBAN, credential_matches, iban_score, id_score, is_valid_luhn
+    from text_chunks import embedded, lines
+except ImportError:
+    from .identifiers import CARD, GREEK_ID, IBAN, credential_matches, iban_score, id_score, is_valid_luhn
+    from .text_chunks import embedded, lines
 
 LABELS = [
     "computer source code",
     "legal contract or NDA",
     "internal company financial data",
     "confidential HR, payroll, or customer records",
+    "general educational or technical question about business, law, or software",
+    "leaked internal company document or confidential record",
     "normal everyday question",
 ]
 SAFE_LABEL = "normal everyday question"
 CODE_LABEL = "computer source code"
 BLOCKED_LABELS = {
+    "leaked internal company document or confidential record",
     "legal contract or NDA",
     "internal company financial data",
     "confidential HR, payroll, or customer records",
@@ -26,53 +29,23 @@ BLOCKED_LABELS = {
 }
 THRESHOLD = 0.55
 
-# 1. Financial, Revenue, Valuation, Accounting (English + Greek)
+# Strict indicators describe records, not merely their subject matter.
 FINANCE_PATTERNS = re.compile(
-    r"(\b(confidential|do not distribute|internal use only|strictly private|"
-    r"series [a-e]|post-money|pre-money|valuation|term sheet|ebitda|gross margin|"
-    r"net burn|burn rate|runway|p&l|profit and loss|balance sheet|cash flow|"
-    r"cap table|revenue forecast|financial projection|audit report|tax return|"
-    r"q[1-4]\s+(revenue|financial|earnings|results|numbers)|"
-    r"unannounced\s+(revenue|merger|acquisition|deal|partnership)|"
-    r"arr\s+of\s+[\$€£]\d+|[\$€£]\d+(\.\d+)?\s*(m|b|k|million|billion)\s+(revenue|valuation|arr|funding|profit|loss))\b|"
-    r"(εμπιστευτικό|απόρρητο|ισολογισμός|έσοδα|κέρδη|ζημίες|προϋπολογισμός|οικονομικά στοιχεία|ρευστότητα))",
-    re.IGNORECASE,
-)
-
-# 2. Legal, Contracts, NDAs, Board/M&A (English + Greek)
+    r"\b(?:strictly confidential|do not distribute|internal use only|strictly private|"
+    r"(?:our|unannounced) (?:q[1-4] )?(?:revenue|financials|earnings|valuation)|"
+    r"(?:q[1-4] (?:revenue|earnings)|arr of|series [a-e])\b.{0,60}?[€$£]\s*\d)|"
+    r"απόρρητ[οαη]|εμπιστευτικ[όάή]", re.I)
 LEGAL_PATTERNS = re.compile(
-    r"(\b(non-disclosure agreement|nda|hereby agree|party a and party b|governing law|"
-    r"indemnification|breach of contract|proprietary trade secrets|memorandum of understanding|"
-    r"exclusivity clause|arbitration clause|intellectual property assignment|settlement agreement|"
-    r"board resolution|shareholder agreement|letter of intent|due diligence|liability waiver|"
-    r"attorney-client privilege|legally binding)\b|"
-    r"(σύμβαση|συμφωνητικό|ρήτρα|εχεμύθειας|πνευματικά δικαιώματα|νομικό τμήμα|διοικητικό συμβούλιο))",
-    re.IGNORECASE,
-)
-
-# 3. HR, Payroll, Layoffs, Customer/Medical Dumps (English + Greek)
+    r"\b(?:hereby agree|proprietary trade secrets|(?:governing law|non-disclosure agreement)"
+    r".{0,160}\bindemnification|indemnification.{0,160}\bgoverning law)\b", re.I)
 HR_CUSTOMER_PATTERNS = re.compile(
-    r"(\b(payroll|base salary|bonus structure|compensation package|stock options|"
-    r"layoff list|termination letter|severance package|performance improvement plan|"
-    r"employee ssn|background check|patient record|medical diagnosis|hipaa|gdpr dump|"
-    r"customer database|client list|crm export|lead list|"
-    r"customer names?|client names?|employee names?|personal data|surname|full name|pii dump|"
-    r"id\s+cards?|identity\s+cards?|greek\s+id)\b|"
-    r"(μισθοδοσία|μισθός|απόλυση|αποζημίωση|πελατολόγιο|ιατρικός φάκελος|προσωπικά δεδομένα|"
-    r"ονοματεπώνυμο|επώνυμο|επίθετο|αριθμός\s+ταυτότητας|δελτίο\s+ταυτότητας|ταυτότητα|αδτ))",
-    re.IGNORECASE,
-)
+    r"\b(?:layoff list|crm export|(?:attached|exported|our)\b.{0,35}\b(?:payroll|customer database)|"
+    r"dump (?:all )?client data)\b", re.I)
+_TOPICS = re.compile(r"\b(?:ebitda|valuation|balance sheet|cash flow|runway|nda|personal data|full name|surname|"
+                     r"id card|payroll|salary|customer database|μισθός|ταυτότητα|έσοδα|κέρδη|σύμβαση|πνευματικά δικαιώματα)\b", re.I)
+_EDUCATIONAL = re.compile(r"^(?:what (?:is|are|does)|explain|compare|describe|how (?:does|do|is)|write a sql (?:table|schema)|"
+                          r"τι είναι|πώς (?:εκδίδεται|ορίζεται|λειτουργεί))\b", re.I)
 
-# 4. Credentials, DB Connection Strings, Private Keys, IBANs, Credit Cards, ID Cards
-CREDENTIAL_PATTERNS = re.compile(
-    r"((postgres|postgresql|mysql|mongodb|redis)://[^\s]+|"
-    r"-----BEGIN\s+(RSA|OPENSSH|DSA|EC|PRIVATE)\s+KEY-----|"
-    r"\b(password|passwd|pwd|secret_key|client_secret|access_token|auth_token)\s*[:=]\s*['\"]?[^\s'\"]{4,}|"
-    r"\b[ABEZHIKMNOPTYXΑΒΕΖΗΙΚΜΝΟΡΤΥΧ][\s-]?\d{8}\b|"
-    r"\b[A-Za-z]{2}\d{2}(?:[\s-]?[A-Za-z0-9]){11,30}\b|"
-    r"\b(?:\d{4}[-\s]?){3}\d{4}\b)",
-    re.IGNORECASE,
-)
 
 # 5. Fast Source Code Syntax check
 CODE_SYNTAX = re.compile(
@@ -95,22 +68,7 @@ def get_classifier():
     return get_zero_shot()
 
 
-def _already_blocked(matches):
-    """True when a cheap regex has already decided the prompt is blocked.
-
-    The classifier is what decides *whether* to block. Once a regex has done
-    that by itself, running the model over the leftover lines can only add
-    extra highlights to a prompt that is already being refused — it cannot
-    un-block it, and it cannot change the verdict.
-
-    Deliberately narrow: a code-syntax hit is not blocking on its own, so a
-    pasted source file still goes to the classifier to find out whether it
-    carries anything worse than code.
-    """
-    return any(m["cause"] in BLOCKED_LABELS for m in matches)
-
-
-def analyze(raw_text, stop=None):
+def analyze(raw_text, stop=None, block_code=False, context_enabled=True):
     """Analyse a prompt.
 
     `stop` is a callable that returns True once the verdict is already
@@ -124,37 +82,65 @@ def analyze(raw_text, stop=None):
 
     matches = []
     unknown_chunks = []
-    offset = 0
+    blocked_labels = BLOCKED_LABELS.copy() if context_enabled else set()
+    if block_code:
+        blocked_labels.add(CODE_LABEL)
 
-    for line_num, line in enumerate(raw_text.splitlines(keepends=True), start=1):
-        stripped = line.strip()
-        if len(stripped) > 3:
-            start_char = offset + line.find(stripped)
-            end_char = start_char + len(stripped)
-            chunk = {
-                "line": line_num,
-                "start_offset": start_char,
-                "end_offset": end_char,
-                "text": stripped,
-            }
+    def hit(part, cause, score):
+        matches.append({**part, "cause": cause, "score": score, "snippet": part["text"]})
 
-            if CREDENTIAL_PATTERNS.search(stripped):
-                matches.append({**chunk, "cause": "credentials or banking data", "score": 0.96, "snippet": stripped})
-            elif LEGAL_PATTERNS.search(stripped):
-                matches.append({**chunk, "cause": "legal contract or NDA", "score": 0.92, "snippet": stripped})
-            elif FINANCE_PATTERNS.search(stripped):
-                matches.append({**chunk, "cause": "internal company financial data", "score": 0.92, "snippet": stripped})
-            elif HR_CUSTOMER_PATTERNS.search(stripped):
-                matches.append({**chunk, "cause": "confidential HR, payroll, or customer records", "score": 0.92, "snippet": stripped})
-            elif CODE_SYNTAX.search(stripped):
-                matches.append({**chunk, "cause": CODE_LABEL, "score": 0.90, "snippet": stripped})
+    def identifier(match, score):
+        if context_enabled:
+            hit({"text": match[0], "line": raw_text.count("\n", 0, match.start()) + 1,
+                 "start_offset": match.start(), "end_offset": match.end()}, "credentials or banking data", score)
+
+    # Inspect the full span for identifiers first: ID context and assigned
+    # credentials can cross a line boundary. Regex checks also see pure code.
+    for pattern, score in ((GREEK_ID, id_score), (IBAN, iban_score)):
+        for m in re.finditer(pattern, raw_text):
+            confidence = score(raw_text, m)
+            if confidence >= 0.8:
+                identifier(m, confidence)
+    for m in credential_matches(raw_text):
+        identifier(m, 0.96)
+    for m in CARD.finditer(raw_text):
+        if is_valid_luhn(m[0]):
+            identifier(m, 0.96)
+    secret_lines = {m["line"] for m in matches}
+    for part in lines(raw_text):
+        text = part["text"]
+        if len(text) <= 3:
+            continue
+        if block_code and CODE_SYNTAX.search(text):
+            hit(part, CODE_LABEL, 0.90)
+        if part["line"] in secret_lines:
+            continue
+        elif LEGAL_PATTERNS.search(text):
+            hit(part, "legal contract or NDA", 0.92)
+        elif FINANCE_PATTERNS.search(text):
+            hit(part, "internal company financial data", 0.92)
+        elif HR_CUSTOMER_PATTERNS.search(text):
+            hit(part, "confidential HR, payroll, or customer records", 0.92)
+        elif CODE_SYNTAX.search(text):
+            if not block_code:
+                hit(part, CODE_LABEL, 0.90)
+            for fragment in embedded(text):
+                unknown_chunks.append({**fragment, "line": part["line"],
+                                       "start_offset": part["start_offset"] + fragment["start_offset"],
+                                       "end_offset": part["start_offset"] + fragment["end_offset"]})
+        else:
+            topics = set(t.casefold() for t in _TOPICS.findall(text))
+            if (topics and len(text) <= 140 and _EDUCATIONAL.match(text) and
+                    re.fullmatch(r"[\w ,?;;.'’-]+", text) and not re.search(r"\d|\bour\b", text, re.I)):
+                continue  # a short definition/schema question without records or figures
+            if len(topics) >= 2 and re.search(r"(?:[€$£]\s*\d|\d[\d.,]*\s*(?:%|EUR|USD))", text, re.I):
+                hit(part, "leaked internal company document or confidential record", 0.90)
             else:
-                unknown_chunks.append(chunk)
-
-        offset += len(line)
+                unknown_chunks.append(part)
 
     for m in matches:
         m.pop("text", None)
+        m.pop("clean", None)
 
     # Only load & run the heavy neural network on lines not already caught above
     default_score = 0.0
@@ -174,7 +160,7 @@ def analyze(raw_text, stop=None):
         # Stop early only once the verdict is settled *and* the leftover is
         # big enough to be worth stopping for. A short prompt still gets the
         # complete report, because finishing it costs almost nothing.
-        settled = _already_blocked(matches) and len(keys) > DETAIL_LINES
+        settled = any(m["cause"] in blocked_labels for m in matches) and len(keys) > DETAIL_LINES
         if not settled:
             results = classify_batched(
                 keys,
@@ -223,7 +209,7 @@ def analyze(raw_text, stop=None):
     }
 
     if matches:
-        blocking_matches = [m for m in matches if m["cause"] in BLOCKED_LABELS]
+        blocking_matches = [m for m in matches if m["cause"] in blocked_labels]
         pool = blocking_matches if blocking_matches else matches
         worst = max(pool, key=lambda x: x["score"])
         response.update({
@@ -235,7 +221,8 @@ def analyze(raw_text, stop=None):
             "snippet": worst["snippet"],
         })
 
-    if response["main_cause"] in BLOCKED_LABELS:
+    if response["main_cause"] in blocked_labels:
+        response["matches"] = blocking_matches
         response["blocked"] = True
 
     return response
@@ -243,7 +230,8 @@ def analyze(raw_text, stop=None):
 
 def analyze_stdin():
     """CLI entry point: read the prompt from stdin and return the verdict."""
-    return analyze(sys.stdin.read())
+    return analyze(sys.stdin.read(), block_code="--block-code" in sys.argv,
+                   context_enabled="--code-only" not in sys.argv)
 
 
 if __name__ == "__main__":

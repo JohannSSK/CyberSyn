@@ -283,10 +283,10 @@
         var head = Dom.el("div", "member-head");
         head.innerHTML =
             Dom.avatarHTML(member.username, "avatar-md") +
-            '<span class="member-id"><strong>' + Dom.esc(member.username) + "</strong>" +
+            '<span class="member-id"><strong data-no-i18n>' + Dom.esc(member.username) + "</strong>" +
             '<span class="member-meta"><span>' +
             Dom.esc(t(member.checks_on + " of 3 checks on")) +
-            '</span><span>·</span><span class="mono">' +
+            '</span><span>·</span><span class="mono" data-no-i18n>' +
             Dom.esc(member.model) + "</span></span></span>";
 
         head.appendChild(buildDonut(member.block_rate, member.blocked, member.sent));
@@ -400,7 +400,7 @@
                 Dom.avatarHTML(who, "avatar-sm") +
                 '<span class="tl-mark" aria-hidden="true">' + Icons.html(info.icon) + "</span>" +
                 "</span>" +
-                '<span class="tl-body"><strong>' + Dom.esc(who) + " · " +
+                '<span class="tl-body"><strong><span data-no-i18n>' + Dom.esc(who) + "</span> · " +
                 Dom.esc(t(info.label)) + "</strong>" +
                 detailHtml + prefixHtml + "</span>" +
                 '<span class="tl-time">' + Dom.esc(Dom.stamp(item.at)) + "</span>";
@@ -570,9 +570,7 @@
 
     function load(button) {
         var task = function () {
-            return Api.post("/api/admin/team", {
-                token: Api.Session.getAdminToken()
-            }, { member: false, onUnauthorised: false });
+            return Api.post("TEAM", {}, { member: false, onUnauthorised: false });
         };
 
         var request = button ? Loading.withButton(button, task) : task();

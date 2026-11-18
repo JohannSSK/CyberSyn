@@ -57,7 +57,7 @@ die() { printf 'run.sh: %s\n' "$*" >&2; exit 1; }
 # has the dependencies, so it comes first.
 # ---------------------------------------------------------------------------
 
-PY=""
+. "$ROOT/tools/local_python.sh"
 
 if [ -x "$ROOT/.venv/Scripts/python.exe" ]; then
     # Created by setup.sh running under Git Bash or Cygwin on Windows.
@@ -67,23 +67,16 @@ if [ -x "$ROOT/.venv/Scripts/python.exe" ]; then
    or use Docker:  docker compose up --build"
 fi
 
-for candidate in "$ROOT/.venv/bin/python" "$ROOT/.venv/bin/python3"; do
-    if [ -x "$candidate" ]; then PY="$candidate"; break; fi
-done
-
-if [ -z "$PY" ]; then
-    # No virtual environment. Fall back to whatever the system has, so the
-    # error the user sees is about a missing dependency rather than about us.
-    for candidate in python3 python; do
-        if command -v "$candidate" >/dev/null 2>&1; then PY="$candidate"; break; fi
-    done
-    [ -n "$PY" ] || die "no Python found. Install Python 3.10 or newer."
-    say "==> No virtual environment found."
-    say "==> Run ./setup.sh first, or the app will start without its dependencies."
-    say ""
+if has_project_venv; then
+    PY=$(venv_python)
+else
+    # Keep supporting manually installed dependencies, including a versioned
+    # interpreter on PATH behind an incompatible system python3.
+    PY=$(path_python) || die "no Python 3.11–3.13 environment found. Run ./setup.sh first.
+   Setup can provision Python 3.12 with uv. On Arch, if uv is missing: sudo pacman -S --needed uv"
+    say "==> No project .venv found. Using Python from PATH; run ./setup.sh if dependencies are missing."
 fi
-
-say "==> Using $("$PY" -c 'import sys; print("Python %d.%d" % sys.version_info[:2])') at $PY"
+say "==> Using $("$PY" --version) at $PY"
 
 # ---------------------------------------------------------------------------
 # Host and port: constants.json, with the environment taking precedence.

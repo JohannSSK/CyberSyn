@@ -62,6 +62,7 @@
         searchBox: $(".search-box"),
         searchClear: $("#search-clear"),
         searchCount: $("#search-count"),
+        otherResults: $("#other-chat-results"),
         checksSummary: $("#checks-summary"),
         checksStatus: $("#checks-status"),
         missingKeyNote: $("#missing-key-note"),
@@ -313,7 +314,7 @@
             item.title = chat.title || t("New chat");
             if (chat.id === state.chatId) item.classList.add("is-active");
             item.innerHTML = Icons.html("chat") +
-                '<span class="chat-item-title">' + Dom.esc(chat.title) + "</span>" +
+                '<span class="chat-item-title" data-no-i18n>' + Dom.esc(chat.title) + "</span>" +
                 '<span class="chat-item-meta">' + Dom.esc(Dom.timeAgo(chat.updated_at)) + "</span>";
             Dom.on(item, "click", function () { openChat(chat.id); });
             nodes.list.appendChild(item);
@@ -321,7 +322,7 @@
     }
 
     function loadChats() {
-        return Api.post("/api/admin/employee/chats", {}).then(function (data) {
+        return Api.post("CHATS", {}).then(function (data) {
             state.chats = data.chats || [];
             state.chatsLoaded = true;
             renderChatList();
@@ -564,7 +565,7 @@
                 return;
             }
             Loading.withButton(save, function () {
-                return Api.post("/api/admin/employee/chats/message/edit", {
+                return Api.post("MESSAGE_EDIT", {
                     chat_id: state.chatId,
                     message_id: message.id,
                     text: next
@@ -613,7 +614,7 @@
         }).then(function (accepted) {
             if (!accepted) return null;
             return Loading.withButton(button, function () {
-                return Api.post("/api/admin/employee/chats/message/delete", {
+                return Api.post("MESSAGE_DELETE", {
                     chat_id: state.chatId,
                     message_id: message.id
                 });
@@ -631,7 +632,7 @@
     function regenerate(message, button) {
         if (button && button.dataset && button.dataset.busy === "1") return;
         Loading.withButton(button, function () {
-            return Api.post("/api/admin/employee/chat/regenerate", {
+            return Api.post("CHAT_REGENERATE", {
                 chat_id: state.chatId,
                 message_id: message.id
             }, { timeout: requestBudget() });
@@ -762,13 +763,15 @@
         }
 
         Dom.on(ask, "click", function () {
-            var passId = "override-password-" + Date.now();
             var form = Dom.el("div", "override-form");
             form.innerHTML =
-                '<label class="override-label" for="' + passId + '">' +
-                Dom.esc(t("Administrator password")) + "</label>" +
-                '<input type="password" id="' + passId + '" class="input" ' +
-                'placeholder="' + Dom.esc(t("Administrator password")) + '" autocomplete="off">' +
+                '<label class="override-label"><span>' +
+                Dom.esc(t("Administrator username")) + "</span>" +
+                '<input type="text" class="input override-name" autocomplete="username"></label>' +
+                '<label class="override-label"><span>' +
+                Dom.esc(t("Administrator password")) + "</span>" +
+                '<input type="password" class="input override-pass" ' +
+                'placeholder="' + Dom.esc(t("Administrator password")) + '" autocomplete="off"></label>' +
                 '<div class="override-actions">' +
                 '<button type="button" class="btn btn-sm btn-primary override-send">' +
                 Dom.esc(t("Approve & send")) + "</button>" +
@@ -777,9 +780,11 @@
                 "</div>";
             panel.replaceChild(form, ctaRow);
 
-            var input = form.querySelector("input");
+            var username = form.querySelector(".override-name");
+            username.value = (Api.Session.getAdmin() || {}).username || "";
+            var input = form.querySelector(".override-pass");
             var approve = form.querySelector(".override-send");
-            input.focus();
+            (username.value ? input : username).focus();
 
             Dom.on(form.querySelector(".override-cancel"), "click", function () {
                 panel.replaceChild(ctaRow, form);
@@ -788,22 +793,24 @@
 
             function submit() {
                 var password = input.value;
+                if (!username.value.trim()) {
+                    Loading.toast("Enter the administrator username.", "warn");
+                    username.focus();
+                    return;
+                }
                 if (!password) {
                     Loading.toast("Enter the administrator password to continue.", "warn");
                     input.focus();
                     return;
                 }
                 Loading.withButton(approve, function () {
-                    return Api.post("/api/admin/login", {
-                        username: (Api.Session.getAdmin() || {}).username,
-                        password: password
-                    }, { member: false, onUnauthorised: false });
+                    return Api.post("ADMIN_APPROVE", {
+                        username: username.value.trim(),
+                        password: password,
+                        scope: "once"
+                    }, { onUnauthorised: false });
                 }).then(function (data) {
-                    var token = data.session_token;
-                    Api.Session.setAdmin(token, {
-                        parentId: parseInt(data.Parent_id, 10),
-                        username: data.username
-                    });
+                    var token = data.admin_token;
                     wrap.remove();
                     send(promptText.trim(), true, token, promptText);
                 }).catch(function (err) {
@@ -823,6 +830,9 @@
                     panel.replaceChild(ctaRow, form);
                     ask.focus();
                 }
+            });
+            Dom.on(username, "keydown", function (e) {
+                if (e.key === "Enter") { e.preventDefault(); input.focus(); }
             });
             Dom.on(input, "keydown", function (e) {
                 if (e.key === "Enter") { e.preventDefault(); submit(); }
@@ -861,14 +871,11 @@
         var payload = {
             prompt: text,
             chat_id: state.chatId,
-            bypass: !!bypass,
-            check1: state.settings.check1,
-            check2: state.settings.check2,
-            check3: state.settings.check3
+            bypass: !!bypass
         };
         if (adminToken) payload.admin_token = adminToken;
 
-        Api.post("/api/admin/employee/chat", payload, { timeout: requestBudget() })
+        Api.post("CHAT", payload, { timeout: requestBudget() })
             .then(function (data) {
                 if (data.blocked) {
                     waiting.resolve((data.block_info || {}).stage || "check1");
@@ -909,7 +916,7 @@
                         var current = state.chats.filter(function (c) {
                             return c.id === state.chatId;
                         })[0];
-                        if (current && current.title) nodes.title.textContent = current.title;
+                        if (current && current.title) setTitle(current.title);
                         renderMessages();
                     });
                 }
@@ -952,13 +959,19 @@
        Chat management
        ------------------------------------------------------------------ */
 
+    function setTitle(title) {
+        if (!nodes.title) return;
+        nodes.title.toggleAttribute("data-no-i18n", !!title);
+        nodes.title.textContent = title || t("New chat");
+    }
+
     function openChat(chatId) {
-        return Api.post("/api/admin/employee/chats/open", { chat_id: chatId })
+        return Api.post("CHATS_OPEN", { chat_id: chatId })
             .then(function (data) {
                 state.chatId = chatId;
                 state.messages = (data.chat && data.chat.messages) || [];
                 var chat = data.chat || {};
-                nodes.title.textContent = chat.title || t("New chat");
+                setTitle(chat.title);
                 state.chats.forEach(function (c) {
                     if (c.id === chatId) c.title = chat.title || c.title;
                 });
@@ -972,7 +985,7 @@
         state.chatId = null;
         state.messages = [];
         delete state.blockedChats[DRAFT_CHAT_KEY];
-        nodes.title.textContent = t("New chat");
+        setTitle(null);
         renderChatList();
         renderMessages();
         nodes.input.focus();
@@ -994,7 +1007,7 @@
         }).then(function (accepted) {
             if (!accepted) return null;
             return Loading.withButton(button, function () {
-                return Api.post("/api/admin/employee/chats/delete", { chat_id: state.chatId });
+                return Api.post("CHATS_DELETE", { chat_id: state.chatId });
             }).then(function () {
                 Loading.toast("Chat deleted.", "success");
                 return loadChats();
@@ -1005,13 +1018,14 @@
     }
 
     function renameChat() {
-        var current = nodes.title.textContent.trim();
-        var isDefault = current === "New chat" || current === t("New chat");
+        var current = nodes.title.hasAttribute("data-no-i18n")
+            ? nodes.title.textContent.trim()
+            : "";
         Shell.prompt({
             eyebrow: "Conversation",
             title: "Rename this chat",
             label: "Chat title",
-            value: isDefault ? "" : current,
+            value: current,
             placeholder: "Short title for this conversation",
             maxLength: 80,
             confirmLabel: "Save title",
@@ -1020,12 +1034,12 @@
             if (raw === null) return null;
             var next = raw.trim().slice(0, 80);
             if (!next || next === current) return null;
-            if (!state.chatId) { nodes.title.textContent = next; return null; }
-            return Api.post("/api/admin/employee/chats/rename", {
+            if (!state.chatId) { setTitle(next); return null; }
+            return Api.post("CHATS_RENAME", {
                 chat_id: state.chatId,
                 title: next
             }).then(function () {
-                nodes.title.textContent = next;
+                setTitle(next);
                 return loadChats();
             }).then(function () {
                 Loading.toast("Chat renamed.", "success");
@@ -1034,15 +1048,58 @@
     }
 
     /* ------------------------------------------------------------------
-       Search within the current chat
+       Search within the open chat and across other conversations
        ------------------------------------------------------------------ */
 
+    var searchVersion = 0;
+
     function applySearch() {
-        state.query = nodes.search.value.trim();
+        var version = ++searchVersion;
+        var query = nodes.search.value.trim();
+        state.query = query;
         renderMessages();
+        if (nodes.otherResults) {
+            nodes.otherResults.replaceChildren();
+            nodes.otherResults.hidden = true;
+        }
+        if (!query || !nodes.otherResults) return;
+        Api.post("CHATS_SEARCH", { query: query }).then(function (data) {
+            if (version !== searchVersion || query !== nodes.search.value.trim()) return;
+            var hits = (data.results || []).filter(function (hit) {
+                return hit.chat_id !== state.chatId;
+            });
+            if (!hits.length) return;
+            nodes.otherResults.appendChild(Dom.el("strong", "eyebrow", t("Other conversations")));
+            hits.forEach(function (hit) {
+                var button = Dom.el("button", "search-hit", hit.chat_title + " — " + hit.excerpt);
+                button.type = "button";
+                button.setAttribute("data-no-i18n", "");
+                Dom.highlightText(button, query);
+                Dom.on(button, "click", function () {
+                    nodes.otherResults.hidden = true;
+                    openChat(hit.chat_id).then(function () {
+                        var match = Dom.$$(".msg", nodes.stream).find(function (node) {
+                            return node.dataset.id === String(hit.message_id);
+                        });
+                        if (match) {
+                            match.tabIndex = -1;
+                            match.focus({ preventScroll: true });
+                            match.scrollIntoView({ block: "center" });
+                        }
+                    });
+                });
+                nodes.otherResults.appendChild(button);
+            });
+            nodes.otherResults.hidden = false;
+        }).catch(function (err) { Loading.toast(err.message, "error"); });
     }
 
     function clearSearch() {
+        searchVersion++;
+        if (nodes.otherResults) {
+            nodes.otherResults.replaceChildren();
+            nodes.otherResults.hidden = true;
+        }
         if (!nodes.search.value && !state.query) return;
         nodes.search.value = "";
         state.query = "";
@@ -1088,9 +1145,9 @@
        ------------------------------------------------------------------ */
 
     (function start() {
-        Api.post("/api/admin/employee/settings", {}).then(function (data) {
+        Api.post("SETTINGS", {}).then(function (data) {
             state.settings.check1 = data.check1 !== false;
-            state.settings.check2 = data.check2 !== false;
+            state.settings.check2 = data.check2 !== false || !!data.block_code;
             state.settings.check3 = data.check3 !== false;
             updateChecksBadge();
             updateMissingKeyNote(data);

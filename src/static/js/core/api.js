@@ -1,20 +1,29 @@
 /* ==========================================================================
    api.js — session storage and the one place that talks to the server.
 
-   Every page needs the same three facts (who is signed in, which workspace,
-   which member) and the same fetch wrapper. Putting them here means a page
-   script never touches localStorage or builds a request body by hand.
-
-   Two different tokens exist, and confusing them is a security bug:
-     session_token — the team member's own session
-     admin_token   — an administrator's, needed only to approve an override
+   Every page needs the same facts (who is signed in, which workspace, which
+   member) and the same fetch wrapper. Only UI metadata is kept in
+   localStorage; session credentials are HttpOnly cookies, and one-time
+   approvals are passed directly to the single request they authorise.
    ========================================================================== */
 
 (function (global) {
     "use strict";
 
-    var ADMIN_KEY = "cybersyn_admin_token";
-    var MEMBER_KEY = "cybersyn_member_token";
+    var routes = {};
+    try {
+        routes = JSON.parse((document.body && document.body.dataset.routes) || "{}");
+    } catch (_err) {
+        routes = {};
+    }
+
+    // Purge credentials left behind by earlier browser builds.
+    try {
+        localStorage.removeItem("cybersyn_admin_token");
+        localStorage.removeItem("cybersyn_member_token");
+        sessionStorage.removeItem("cybersyn_admin_unlock");
+    } catch (_err) { /* storage unavailable */ }
+
     var ADMIN_META = "cybersyn_admin_meta";
     var MEMBER_META = "cybersyn_member_meta";
 
@@ -35,34 +44,25 @@
     }
 
     var Session = {
-        /* ---- administrator ---- */
+        /* ---- administrator metadata ---- */
         getAdmin: function () { return read(ADMIN_META, null); },
-        getAdminToken: function () { return localStorage.getItem(ADMIN_KEY) || null; },
-        setAdmin: function (token, meta) {
-            localStorage.setItem(ADMIN_KEY, token);
-            write(ADMIN_META, meta || null);
+        setAdmin: function (meta) {
+            write(ADMIN_META, meta ? { parentId: meta.parentId, username: meta.username } : null);
         },
-        clearAdmin: function () {
-            localStorage.removeItem(ADMIN_KEY);
-            write(ADMIN_META, null);
-        },
+        clearAdmin: function () { write(ADMIN_META, null); },
 
-        /* ---- team member ---- */
+        /* ---- team member metadata ---- */
         getMember: function () { return read(MEMBER_META, null); },
-        getMemberToken: function () { return localStorage.getItem(MEMBER_KEY) || null; },
-        setMember: function (token, meta) {
-            localStorage.setItem(MEMBER_KEY, token);
-            write(MEMBER_META, meta || null);
+        setMember: function (meta) {
+            write(MEMBER_META, meta
+                ? { parentId: meta.parentId, employeeId: meta.employeeId, username: meta.username }
+                : null);
         },
-        clearMember: function () {
-            localStorage.removeItem(MEMBER_KEY);
-            write(MEMBER_META, null);
-        },
+        clearMember: function () { write(MEMBER_META, null); },
 
         clearAll: function () {
-            [ADMIN_KEY, MEMBER_KEY, ADMIN_META, MEMBER_META].forEach(function (k) {
-                localStorage.removeItem(k);
-            });
+            Session.clearAdmin();
+            Session.clearMember();
         },
 
         /* Convenience: the identifiers every request body carries. */
@@ -70,14 +70,13 @@
             var m = Session.getMember() || {};
             return {
                 Parent_id: m.parentId || null,
-                Employee_id: m.employeeId || null,
-                session_token: Session.getMemberToken()
+                Employee_id: m.employeeId || null
             };
         },
 
         ready: function () {
             var m = Session.getMember() || {};
-            return !!(m.parentId && m.employeeId && Session.getMemberToken());
+            return !!(m.parentId && m.employeeId);
         }
     };
 
@@ -98,6 +97,8 @@
             "No API_KEY provided. Ask your administrator to add a provider key in Settings.",
         "Invalid password.":
             "Invalid password. Check it and try again.",
+        "Invalid username or password.":
+            "Invalid username or password. Check both fields and try again.",
         "Invalid employee password.":
             "Invalid employee password. Check it and try again.",
         "Invalid employee username or password.":
@@ -122,6 +123,8 @@
             "Paste an API key first, then select Refresh list.",
         "That key returned no models.":
             "That key returned no models. Check the provider and key, then try again.",
+        "That key returned no usable models.":
+            "That key returned no usable models. Check the provider and key, then try again.",
         "Adding or removing a team member needs a valid administrator session for this workspace.":
             "Adding or removing a team member needs an administrator session. Sign in again.",
         "Changing these settings needs the administrator password.":
@@ -156,12 +159,12 @@
         }
         m = text.match(/^Admin (?:username )?'(.+)' not found\.$/);
         if (m) {
-            return "Admin '" + clip(m[1], 32) +
+            return "Admin '" + clip(m[1], 28) +
                 "' not found. Check the spelling or create an account.";
         }
         m = text.match(/^Admin '(.+)' already exists\.$/);
         if (m) {
-            return "Admin '" + clip(m[1], 32) +
+            return "Admin '" + clip(m[1], 28) +
                 "' already exists. Choose a different username.";
         }
         m = text.match(/^Employee '(.+)' already exists under Parent_id \d+\.$/);
@@ -182,7 +185,7 @@
         return text;
     }
 
-    function post(path, body, options) {
+    function post(route, body, options) {
         var opts = options || {};
         var payload = Object.assign({}, body || {});
         if (opts.member !== false && Session.ready()) {
@@ -196,9 +199,14 @@
             timer = setTimeout(function () { controller.abort(); }, opts.timeout);
         }
 
-        return fetch(path, {
+        return fetch(routes[route] || route, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CyberSyn-Request": "1",
+                "X-CyberSyn-Session": "cookie"
+            },
             body: JSON.stringify(payload),
             signal: controller ? controller.signal : undefined
         })
@@ -248,7 +256,7 @@
     }
 
     function get(path) {
-        return fetch(path).then(function (res) { return res.json(); });
+        return fetch(path, { credentials: "same-origin" }).then(function (res) { return res.json(); });
     }
 
     global.Api = { post: post, get: get, withRemedy: withRemedy, Session: Session };

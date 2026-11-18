@@ -93,10 +93,35 @@
                             <label for="input-password-new">New password</label>
                             <input type="password" id="input-password-new" class="input"
                                    autocomplete="new-password" required>
+                            <span class="hint">At least 8 characters, including a letter and a number.</span>
                         </div>
                         <button type="submit" class="btn btn-primary" id="btn-save-password">Save</button>
                     </form>
                     <div class="form-msg" id="msg-password" role="status" aria-live="polite"></div>
+                </section>
+
+                <section class="card">
+                    <div class="card-title"><span data-icon="lock"></span><span>Administrator password</span></div>
+                    <form class="inline-form" id="form-admin-password" novalidate>
+                        <div class="field">
+                            <label for="input-admin-username">Administrator username</label>
+                            <input type="text" id="input-admin-username" name="username" class="input"
+                                   autocomplete="username" required>
+                        </div>
+                        <div class="field">
+                            <label for="input-admin-password-current">Current password</label>
+                            <input type="password" id="input-admin-password-current" name="current_password"
+                                   class="input" autocomplete="current-password" required>
+                        </div>
+                        <div class="field">
+                            <label for="input-admin-password-new">New password</label>
+                            <input type="password" id="input-admin-password-new" name="new_password"
+                                   class="input" autocomplete="new-password" minlength="8" maxlength="256" required>
+                            <span class="hint">At least 8 characters, including a letter and a number.</span>
+                        </div>
+                        <button type="submit" class="btn btn-primary" id="btn-save-admin-password">Change administrator password</button>
+                    </form>
+                    <div class="form-msg" id="msg-admin-password" role="status" aria-live="polite"></div>
                 </section>
 
             </div>
