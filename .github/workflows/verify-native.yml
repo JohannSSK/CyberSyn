@@ -1,0 +1,23 @@
+name: Verify native setup and restart
+
+# Opt in: the fresh setup downloads CPU PyTorch and the scanner weights.
+on: workflow_dispatch
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Set up once with an unrelated Hugging Face cache
+        run: HF_HUB_CACHE="$RUNNER_TEMP/install-shell-hub" ./setup.sh
+      - name: Verify inference from the installed weights without the setup shell's cache
+        run: HF_HUB_OFFLINE=1 .venv/bin/python src/MLscripts/model_cache.py
+      - name: Restart with fresh homes and warm the local models offline
+        run: .venv/bin/python tools/test_native_restart.py --models

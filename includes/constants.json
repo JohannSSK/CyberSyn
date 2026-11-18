@@ -5,6 +5,7 @@
     "KEY_FILE": "src/backend/secret.key",
     "DB_FILE": "src/backend/app.db",
     "BACKEND_DIR": "src/backend",
+    "MODEL_CACHE": "src/backend/model-cache",
     "FRONTEND_DIR": "src/static",
     "TEMPLATES_DIR": "src/templates",
     "ML_DIR": "src/MLscripts",

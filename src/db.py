@@ -66,7 +66,8 @@ CREATE TABLE IF NOT EXISTS DISCOVERY_EVENTS (
     method      TEXT NOT NULL,
     bytes_sent  INTEGER NOT NULL CHECK (bytes_sent >= 0),
     data_signal TEXT NOT NULL,
-    imported_at TEXT NOT NULL
+    imported_at TEXT NOT NULL,
+    is_sample   INTEGER NOT NULL DEFAULT 0 CHECK (is_sample IN (0, 1))
 );
 CREATE INDEX IF NOT EXISTS idx_discovery_workspace_time ON DISCOVERY_EVENTS (Parent_id, observed_at DESC, id DESC);
 """
@@ -79,7 +80,7 @@ EXPECTED_COLUMNS = {
                  *ACTION_FIELDS.values(), "restore_redactions"},
     "AI_TOOL_POLICY": {"Parent_id", "tool_key", "status", "note", "updated_at", "updated_by", "domain", "name"},
     "DISCOVERY_EVENTS": {"id", "Parent_id", "observed_at", "team", "actor", "host", "tool_key",
-                         "tool_name", "method", "bytes_sent", "data_signal", "imported_at"},
+                         "tool_name", "method", "bytes_sent", "data_signal", "imported_at", "is_sample"},
 }
 
 
@@ -115,6 +116,12 @@ def init_db():
     if "created_at" not in cols:
         con.execute("ALTER TABLE EMPLOYEES ADD COLUMN created_at TEXT")
     _add_settings_columns(con)
+    cols = {r[1] for r in con.execute("PRAGMA table_info(DISCOVERY_EVENTS)")}
+    if "is_sample" not in cols:
+        # Existing imports have no reliable provenance. Never guess which
+        # could be samples or remove them when refreshing generated data.
+        con.execute("ALTER TABLE DISCOVERY_EVENTS ADD COLUMN is_sample "
+                    "INTEGER NOT NULL DEFAULT 0 CHECK (is_sample IN (0, 1))")
     try:
         con.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_employees_parent_username "
                     "ON EMPLOYEES (Parent_id, username)")

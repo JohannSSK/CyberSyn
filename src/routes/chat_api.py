@@ -5,7 +5,7 @@ from flask import Blueprint
 from ai_client import complete
 from auth import admin_from_token, require_member
 from block_log import record_activity, record_block
-from chat_store import bump_answered, get_chat, replace_answer, save_exchange
+from chat_store import bump_answered, get_chat, normalise_title, replace_answer, save_exchange
 from config import DB_FILE, DEFAULT_MODEL, MAX_PROMPT_CHARS, ROUTES
 from db import get_db
 from errors import ApiError, ChatError
@@ -41,8 +41,7 @@ def _audit_detail(info, prompt):
 
 def _blocked(pid, eid, info, prompt, message=None):
     cause, detail = _audit_detail(info, prompt)
-    record_block(DB_FILE, pid, eid, info["stage"], cause)
-    record_activity(DB_FILE, pid, eid, "blocked", detail)
+    record_block(DB_FILE, pid, eid, info["stage"], cause, activity_detail=detail)
     message = message or (f"Blocked by {info['stage']} ({info['main_cause']}): "
                           f"'{info['snippet']}' on line {info['line']}")
     return chat_response(False, True, message=message, block_info=info, warned=False, redacted=False, action="block")
@@ -61,7 +60,7 @@ def _bool(data, field):
     return value
 
 
-def _exchange(data, pid, eid, prompt, chat_id, entry):
+def _exchange(data, pid, eid, prompt, chat_id, entry, title):
     confirm_warn = _bool(data, "confirm_warn")
     bypass = _bool(data, "bypass")
     admin = _authorise_override(data, pid) if bypass else None
@@ -80,7 +79,7 @@ def _exchange(data, pid, eid, prompt, chat_id, entry):
         return _tool_block(pid, eid, tool, prompt)
     api_key = decrypt_secret(saved["API_KEY"]).strip()
     if not api_key and (not connection or connection.needs_key):
-        raise ChatError("No API_KEY provided.", 400)
+        raise ChatError("No API_KEY provided.", 400, error_code="missing_api_key")
 
     if bypass:
         actions = redaction_only(saved)
@@ -105,8 +104,8 @@ def _exchange(data, pid, eid, prompt, chat_id, entry):
     if tool:
         return _tool_block(pid, eid, tool, prompt)
     if bypass:
-        record_block(DB_FILE, pid, eid, "override", f"approved by {admin['username']}")
-        record_activity(DB_FILE, pid, eid, "override", f"approved by {admin['username']} ({len(prompt)} chars)")
+        approval = f"approved by {admin['username']}"
+        record_block(DB_FILE, pid, eid, "override", approval, activity_detail=f"{approval} ({len(prompt)} chars)")
     if confirm_warn:
         detail = _audit_detail(warning, prompt)[1] if warning else "No warning under current policy"
         record_activity(DB_FILE, pid, eid, "warn_proceeded", detail)
@@ -125,7 +124,7 @@ def _exchange(data, pid, eid, prompt, chat_id, entry):
     if entry is None:
         created = chat_id is None
         chat_id, message = save_exchange(DB_FILE, pid, eid, chat_id, sent, stored_answer,
-                                         redaction_info=redaction_info, metadata_only=private)
+                                         redaction_info=redaction_info, metadata_only=private, title=title)
         if message is None:
             raise ChatError("That chat was not found for this team member.", 404)
         bump_answered(DB_FILE, pid, eid)
@@ -191,9 +190,14 @@ def _handle(*, regenerate=False):
             prompt.encode("utf-8")
         except UnicodeError:
             raise ChatError("Prompt must be valid UTF-8 text.", 400) from None
-        return _exchange(data, pid, eid, prompt, chat_id, entry)
+        title = None
+        if chat_id is None and "title" in data:
+            title = normalise_title(data["title"])
+            if not title:
+                raise ChatError("Title must be non-empty, valid UTF-8 text.", 400)
+        return _exchange(data, pid, eid, prompt, chat_id, entry, title)
     except ApiError as exc:
-        return chat_response(True, message=exc.message, status=exc.status)
+        return chat_response(True, message=exc.message, status=exc.status, **exc.payload)
 
 
 @chat_api.post(ROUTES["CHAT"])

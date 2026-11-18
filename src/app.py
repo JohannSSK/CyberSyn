@@ -16,6 +16,7 @@ import threading
 
 from flask import Flask, jsonify
 from werkzeug.exceptions import HTTPException
+from werkzeug.serving import is_running_from_reloader
 
 import admin_session
 import db
@@ -132,12 +133,8 @@ def warm_models(app=None):
             _import("ai_client").preload()
             print(f"Warmed scanners: {loaded}, models: {warmed['loaded']}")
             if warmed["skipped"]:
-                # Not an error -- the models are simply not on this machine
-                # yet, and fetching them at start-up would hold the scanner
-                # lock. Say so, because otherwise the first prompt is slow
-                # with no explanation why.
-                print("Models not loaded (will load on first use): "
-                      + ", ".join(warmed["skipped"]))
+                print("Local models unavailable: " + ", ".join(warmed["skipped"])
+                      + ". Run ./setup.sh (native) or rebuild the image.")
         except Exception as exc:
             print(f"Model warm-up skipped: {type(exc).__name__}: {exc}")
 
@@ -158,10 +155,10 @@ def main():
         if rule.endpoint != "static":
             print(f"  {sorted(rule.methods - {'HEAD', 'OPTIONS'})}  {rule.rule}")
 
-    if WARM_MODELS:
+    # With the debug reloader, only the serving child needs the models.
+    if WARM_MODELS and (not DEBUG or is_running_from_reloader()):
         warm_models(app)
 
-    # 0.0.0.0 so the container is reachable from outside it.
     app.run(host=HOST, port=PORT, debug=DEBUG, threaded=True)
     return 0
 

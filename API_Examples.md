@@ -131,7 +131,7 @@ With no pasted key, discovery uses the saved provider/base/key. A changed destin
 
 ## 6. `POST /api/admin/employee/chat`
 
-**6A — ordinary prompt:** send the member body plus `{"prompt":"What is the capital of Greece?"}`. The server uses the **saved** checks, model, key and base. Per-request policy fields, provider, model and keys do not override saved settings. Precedence is block → warn → redact → allow. A new chat is created only after a successful answer:
+**6A — ordinary prompt:** send the member body plus `{"prompt":"What is the capital of Greece?"}`. The server uses the **saved** checks, model, key and base. Per-request policy fields, provider, model and keys do not override saved settings. Precedence is block → warn → redact → allow. A new chat is created only after a successful answer. For a new chat only, pass an optional `title` (whitespace normalized, up to 80 characters) to save a chosen title instead of generating one from the prompt. The title is not forwarded to the provider:
 
 ```json
 {"error":false,"blocked":false,"warned":false,"redacted":false,"action":"allow","reply_message":"Athens.","error_message":"NULL","block_info":"NULL","chat_id":7,"message_id":"c88a9b82a35e28a0"}
@@ -145,7 +145,7 @@ With no pasted key, discovery uses the saved provider/base/key. A changed destin
 
 With this member's code blocking on, the context scanner can return `computer source code`. In either case, enabled secret/PII and injection checks still inspect the prompt.
 
-**6C — blocked:** HTTP `200` with `error:false`, `blocked:true`, `action:"block"`, `reply_message:"NULL"`, a reason and `block_info`. For a local check, `block_info` includes the stage, cause, line (1-based), start/end offsets (0-based, end exclusive), snippet and match list. Evidence is returned only to the sender and not logged. A denied destination returns `stage:"policy"`, `main_cause:"UNAPPROVED_AI_TOOL"` and `tool_name`, without prompt evidence. A failed, invalid or timed-out enabled scanner returns `503` and no provider call.
+**6C — blocked:** HTTP `200` with `error:false`, `blocked:true`, `action:"block"`, `reply_message:"NULL"`, a reason and `block_info`. For a local check, `block_info` includes the stage, cause, line (1-based), start/end offsets (0-based, end exclusive), snippet and match list. Evidence is returned only to the sender and not logged. A denied destination returns `stage:"policy"`, `main_cause:"UNAPPROVED_AI_TOOL"` and `tool_name`, without prompt evidence. A failed, invalid or timed-out enabled scanner returns `503` with `error_code:"screening_failed"` and actionable reasons for the failed checks, without raw scanner output or a provider call. Long pastes get more screening time, up to the server's configured ceiling.
 
 **6D — warned:** HTTP `200` with `error:false`, `blocked:false`, `warned:true`, `redacted:false`, `action:"warn"`, `reply_message:"NULL"`, `block_info:"NULL"` and `error_message` explaining the pause. Example `warn_info`:
 
@@ -170,7 +170,7 @@ Nothing is sent or saved to a chat on a pause. To proceed, send the request agai
 
 **6F — approved exception:** send `{"prompt":"<reviewed text>","bypass":true,"admin_token":"<fresh once grant>"}` with the member body. A live workspace admin session also works, but a page grant does not. Missing or replayed approval returns `401`. Approval can release a tool or local block; saved redact rules still apply. The audit records the approval, not the prompt or matches.
 
-**6G — other errors:** no saved key for a provider that needs one → `400`; provider error → `502` without the library exception or key; a missing or foreign chat (including deletion during a provider call) → `404`.
+**6G — other errors:** no saved key for a provider that needs one → `400` with `error_code:"missing_api_key"`; provider error → `502` without the library exception or key; a missing or foreign chat (including deletion during a provider call) → `404`.
 
 ## Chat history and regeneration
 
@@ -189,7 +189,9 @@ Each request below needs the **member body**. Edits affect local history only; i
 
 ## `POST /api/admin/team`
 
-`{"token":"<admin or page grant>"}` (or an authorized browser cookie). Returns `admin`, `members`, `stats:{members,sent,blocked,overrides,block_rate}`, `stages`, `reasons`, `trend`, `timeline`, `days` and ordinary success fields. No raw chat history. By default the timeline contains metadata only. Optional previews of ordinary sends, regenerations and edits are controlled by `CYBERSYN_LOG_PROMPT_PREVIEW`; **blocked, warned, redacted and overridden sends never log their text**.
+`{"token":"<admin or page grant>"}` (or an authorized browser cookie). Returns `admin`, `members`, `stats:{members,sent,regenerated,blocked,overrides,attempts,block_rate}`, `stages`, `reasons`, `trend`, `timeline`, `days` and ordinary success fields. No raw chat history. By default the timeline contains metadata only. Optional previews of ordinary sends, regenerations and edits are controlled by `CYBERSYN_LOG_PROMPT_PREVIEW`; **blocked, warned, redacted and overridden sends never log their text**.
+
+Totals are lifetime figures for active members. `sent` counts saved new answers plus successful regenerations; per-member `answered` counts only new answers. `attempts = sent + blocked`, and `block_rate` is the rounded percentage of those counted attempts that were blocked. Warning pauses, failed checks and provider errors do not count as sends or blocks. Approvals are counted separately; an approval counts in `sent` only if the exchange completes. The workspace trend includes former members and covers 30 UTC days including today, with zero-filled dates; the CSV uses the selected trend window. The timeline reads block and override decisions once from their canonical log without removing the audit copies.
 
 ## Shadow AI discovery and policy
 
@@ -234,11 +236,11 @@ Same write credentials as policy changes. Send exactly one operation:
 {"Parent_id":"1","content":"time,department,src_ip,destination,method,request_bytes,classification\n2026-11-18T14:00:00Z,Sales,192.0.2.14,assistant.example:8443,POST,6800,client_data"}
 ```
 
-- `{"Parent_id":"1","sample":true}` appends a synthetic 25-row sample anchored to the last seven days; `{"Parent_id":"1","clear":true}` clears discovery rows in that workspace only, not policies.
+- `{"Parent_id":"1","sample":true}` refreshes the synthetic 25-row sample anchored to the last seven days, replacing only sample rows marked by this version in that workspace. File, paste and older unmarked imports remain in place; `{"Parent_id":"1","clear":true}` clears discovery rows in that workspace only, not policies.
 - CSV alias groups: `timestamp/time/date`, `team/department/group`, `user/actor/src_ip/client_ip`, `url/domain/host/destination` (required), `method`, `bytes_sent/bytes/request_bytes`, `data_category/data_signal/classification`. Other columns are discarded. Data signals: `client_data`, `source_code`, `contracts`, `hr_data`, `financial`, `credentials`, `large_upload`, `general`.
 - Plain text supports `[timestamp] actor METHOD host [request-bytes]`, native Squid, absolute-URL combined proxy logs, and DNS dnsmasq/BIND or `[timestamp] actor query host` lines. Use UTC/ISO-8601 for synthetic timestamps (optional; missing timestamps use import time). Squid and combined proxy positional reply sizes are not upload evidence; use a `request_bytes=N` or `bytes_sent=N` extension. Absent a recognized tag, an upload method and at least 4,096 request bytes infer `large_upload`; otherwise `general`.
 - Bounds: 2,000 physical lines and 192 KiB of UTF-8 text per import. Malformed or binary content returns `400` without partially persisting an import. Only allowlisted metadata is stored; scheme, credentials, paths, queries, fragments and prompt columns are dropped. The parser never resolves or contacts destinations.
-- Returns `lines_scanned` (nonblank data records, excluding the CSV header), `ai_events_added`, `non_ai_ignored`, `events_cleared`, and a refreshed unfiltered seven-day `summary`. Imports append; repeated imports are not deduplicated.
+- Returns `lines_scanned` (nonblank data records, excluding the CSV header), `ai_events_added`, `non_ai_ignored`, `events_cleared`, `sample_events_replaced`, and a refreshed unfiltered seven-day `summary`. File and paste imports append; repeated file and paste imports are not deduplicated.
 
 ## Known gaps
 

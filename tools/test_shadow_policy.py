@@ -307,6 +307,30 @@ class GatewayFeatures(unittest.TestCase):
         self.assertEqual(self.read_shadow(days=0)["events"], [])
         self.assertEqual(self.workspace_rows("AI_TOOL_POLICY")[0]["status"], "approved")
 
+    def test_repeated_sample_refresh_only_replaces_marked_rows_in_its_workspace(self):
+        first = self.write_shadow("SHADOW_AI_IMPORT", sample=True)
+        self.assertEqual((first["ai_events_added"], first["sample_events_replaced"]), (22, 0))
+        second = self.write_shadow("SHADOW_AI_IMPORT", sample=True)
+        self.assertEqual((second["summary"]["total_events"], second["sample_events_replaced"]), (22, 22))
+
+        other, token = self.make_owner(dict(OWNER, username="other_sample_owner"), token=self.admin)
+        self.assertEqual(self.post("SHADOW_AI_IMPORT", Parent_id=other, admin_token=token, sample=True).status_code, 200)
+        other_before = self.post("SHADOW_AI", Parent_id=other, token=token, days=0).json["events"]
+        self.assertEqual(len(other_before), 22)
+
+        # Even real imports resembling a demo event are never reclassified or removed.
+        content = "team,actor,destination,method,bytes_sent,data_signal\nSales,192.0.2.10,chat.deepseek.com,POST,4200,client_data"
+        for _ in range(2):
+            self.assertEqual(self.write_shadow("SHADOW_AI_IMPORT", content=content)["ai_events_added"], 1)
+        imported = [r for r in self.workspace_rows("DISCOVERY_EVENTS") if not r["is_sample"]]
+        self.assertEqual(len(imported), 2)
+        refreshed = self.write_shadow("SHADOW_AI_IMPORT", sample=True)
+        self.assertEqual((refreshed["summary"]["total_events"], refreshed["sample_events_replaced"]), (24, 22))
+        self.assertEqual([r for r in self.workspace_rows("DISCOVERY_EVENTS") if not r["is_sample"]], imported)
+        self.assertEqual(self.post("SHADOW_AI", Parent_id=other, token=token, days=0).json["events"], other_before)
+        self.assertEqual(self.write_shadow("SHADOW_AI_IMPORT", clear=True)["events_cleared"], 24)
+        self.assertEqual(self.write_shadow("SHADOW_AI_IMPORT", sample=True)["sample_events_replaced"], 0)
+
     def test_custom_tool_scope_label_boundaries_and_effective_port(self):
         self.write_shadow("SHADOW_AI_POLICY", method="add", domain="fixture-assistant.example:443")
         other, token = self.make_owner(dict(OWNER, username="demo_other_owner"), token=self.admin)
@@ -554,6 +578,72 @@ class GatewayFeatures(unittest.TestCase):
                 regen = self.send("CHAT_REGENERATE", **draft)
                 self.assertEqual(regen.json["action"], "redact")
                 self.assertEqual(complete.call_args.args[2], saved)
+
+    def test_stats_exclude_blocks_from_sends_and_keep_distinct_decisions(self):
+        def stats():
+            return self.post("TEAM", token=self.admin).json
+
+        first_day = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        stopped = dict(stage="check1", main_cause="API_KEY", line=1, snippet=FIXTURE_SECRET)
+        with patch.object(chat_api, "complete", return_value="Fixture answer") as complete:
+            sent = self.send(prompt="Ordinary fixture").json
+            exchange = {key: sent[key] for key in ("chat_id", "message_id")}
+            with patch.object(chat_api, "screen", return_value=stopped):
+                self.assertTrue(self.send(prompt=FIXTURE_SECRET).json["blocked"])
+            data = stats()
+            self.assertEqual(tuple(data["stats"][key] for key in ("sent", "blocked", "attempts", "block_rate")), (1, 1, 2, 50))
+            self.assertEqual([(r["stage"], r["detail"]) for r in data["timeline"] if r["kind"] == "blocked"],
+                             [("check1", "API_KEY")])
+            self.assertEqual(complete.call_count, 1)
+            self.assertEqual(self.send("CHAT_REGENERATE", **exchange).json["reply_message"], "Fixture answer")
+        data = stats()
+        member = data["members"][0]
+        self.assertEqual(tuple(member[key] for key in ("answered", "regenerated", "sent", "attempts", "block_rate")), (1, 1, 2, 3, 33))
+        self.assertEqual(data["stats"]["regenerated"], 1)
+
+        # Legacy versions wrote the canonical rows and their copies independently.
+        # Both real blocks happened at the same instant with the same cause.
+        past = first_day - timedelta(days=20)
+        for _ in range(2):
+            with patch.object(block_log, "_now", return_value=past.isoformat()):
+                block_log.record_block(DB_FILE, self.pid, self.eid, "check1", "API_KEY")
+            with patch.object(block_log, "_now", return_value=(past + timedelta(seconds=1)).isoformat()):
+                block_log.record_activity(DB_FILE, self.pid, self.eid, "blocked")
+        self.send("CHATS_DELETE", chat_id=exchange["chat_id"])
+        data = stats()
+        self.assertEqual((data["days"], len(data["trend"]), len(data["members"][0]["trend"])), (30, 30, 30))
+        self.assertEqual([d["date"] for d in data["trend"]], [(first_day - timedelta(days=i)).date().isoformat() for i in range(29, -1, -1)])
+        self.assertEqual(data["trend"][9], {"date": past.date().isoformat(), "blocked": 2, "overrides": 0})
+        for timeline in (data["timeline"], data["members"][0]["timeline"]):
+            self.assertEqual(sum(r["kind"] == "blocked" for r in timeline), 3)
+        self.assertEqual(data["stats"]["sent"], 2)
+        self.assertEqual(sum(r["kind"] == "blocked" for r in self.workspace_rows("ACTIVITY_LOG")), 3)
+
+    def test_all_scanner_failures_reach_chat_and_regenerate_without_private_diagnostics(self):
+        draft = self.history_seed()
+        self.configure(action_check1="block", action_check2="block", action_check3="block")
+
+        def broken(stage, prompt, stop=None, **policy):
+            if stage == "check1":
+                raise ModuleNotFoundError(FIXTURE_SECRET)
+            if stage == "check2":
+                raise OSError(FIXTURE_SECRET)
+            return {"blocked": FIXTURE_SECRET}
+
+        with patch.object(chat_api, "complete") as complete, \
+                patch.object(scanning.registry, "available", return_value=True), \
+                patch.object(scanning.registry, "run", side_effect=broken):
+            for route, args in (("CHAT", {}), ("CHAT_REGENERATE", draft)):
+                answer = self.send(route, **args, prompt=FIXTURE_SECRET)
+                self.assertEqual(answer.status_code, 503)
+                self.assertEqual(answer.json["error_code"], "screening_failed")
+                self.assertFalse(answer.json["blocked"])
+                for stage_reason in ("check1: missing dependencies", "check2: scanner could not load its model files",
+                                     "check3: scanner returned an invalid result"):
+                    self.assertIn(stage_reason, answer.json["error_message"])
+                self.assertNotIn(FIXTURE_SECRET, repr(answer.json))
+            complete.assert_not_called()
+        self.assertEqual(len(self.workspace_rows("CHATS")), 1)
 
     def test_fail_closed_on_invalid_error_or_timeout_for_both_routes(self):
         draft = self.history_seed()

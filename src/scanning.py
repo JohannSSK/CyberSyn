@@ -10,11 +10,9 @@ Two rules hold everything else up:
 *Fail closed.* A check that produces no verdict refuses the prompt. A scanner
 that will not start must never look like a scanner that found nothing.
 
-*Bounded.* The three checks run together against one deadline, shared between
-them, so a slow model cannot make the request outlast the browser's patience.
-Whatever is still running when the deadline passes is abandoned: the request
-answers, the work is dropped. A reply that arrives too late to be shown has
-no value, and a hung check must not hang the conversation with it.
+*Bounded.* The enabled checks share a size-aware deadline. Long pastes get
+more time, up to a configured ceiling. Late verdicts are discarded and any
+work still running is asked to stop cooperatively.
 
 Either way the caller gets an answer: a verdict, or a refusal saying which
 check could not be run.
@@ -34,11 +32,33 @@ from errors import ChatError
 from policy import ACTIONS, ACTION_FIELDS, rule_actions
 from redaction import RedactionError, offsets, redact
 
-# The whole screening stage shares this budget. It has to fit inside the
-# browser's own timeout along with the model call that follows, otherwise a
-# prompt can be refused by the clock while the server is still working.
-#     python3 src/app.py   CYBERSYN_SCREEN_BUDGET=45
 SCREEN_BUDGET = float(os.environ.get("CYBERSYN_SCREEN_BUDGET", 45))
+MAX_SCREEN_BUDGET = float(os.environ.get("CYBERSYN_MAX_SCREEN_BUDGET", 180))
+if not 0 < SCREEN_BUDGET <= MAX_SCREEN_BUDGET < float("inf"):
+    raise ValueError("Set finite, positive screening budgets with the maximum at least the base.")
+
+
+def screening_budget(prompt):
+    """Keep the short-prompt budget; allow more work for longer pastes."""
+    lines = sum(1 for line in prompt.splitlines() if line.strip())
+    extra = max(0, (lines - 12) * 2, (len(prompt) - 2000) / 250)
+    return min(MAX_SCREEN_BUDGET, SCREEN_BUDGET + extra)
+
+
+class _ScannerFailure(ChatError):
+    """A runner failure with a reason authored here, never copied from a scanner."""
+
+    def __init__(self, stage, reason):
+        super().__init__(f"{stage}: {reason}", 503)
+        self.reason = reason
+
+
+_DEPENDENCIES = "missing dependencies — ask your administrator to check the scanner installation"
+_SETUP = "ask your administrator to check the gateway setup"
+
+
+def _timeout_reason(seconds):
+    return f"did not finish within {seconds:.4g}s — try a smaller paste"
 
 
 def build_block_info(stage, result):
@@ -55,11 +75,15 @@ def build_block_info(stage, result):
     }
 
 
+def _missing_dependencies(text):
+    return any(kind + ":" in (text or "") for kind in ("ModuleNotFoundError", "ImportError"))
+
+
 def _why(text):
-    """Explain an import failure without copying arbitrary scanner output."""
-    if "ModuleNotFoundError:" in (text or ""):
-        return "ModuleNotFoundError: install the scanner dependencies"
-    return "scanner exited without a usable verdict"
+    """Explain a subprocess failure without copying arbitrary scanner output."""
+    if _missing_dependencies(text):
+        return _DEPENDENCIES
+    return f"scanner exited without a usable verdict — {_SETUP}"
 
 
 def find_result_json(text):
@@ -95,9 +119,12 @@ _fallback_slot = threading.BoundedSemaphore(1)
 def _run_subprocess(stage, prompt, timeout=CHECK_TIMEOUT, **policy):
     deadline = time.monotonic() + timeout
     if not _fallback_slot.acquire(timeout=timeout):
-        raise ChatError(f"{stage}: fallback scanner busy.")
+        raise _ScannerFailure(stage, "fallback scanner busy — try again")
     try:
-        return _spawn(stage, prompt, max(0.001, deadline - time.monotonic()), policy)
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise _ScannerFailure(stage, _timeout_reason(timeout))
+        return _spawn(stage, prompt, remaining, policy)
     finally:
         _fallback_slot.release()
 
@@ -112,10 +139,12 @@ def _spawn(stage, prompt, timeout, policy):
     check and turned any scanner that failed to load its model into one that
     waved everything through.
     """
-    key = dict(CHECKS)[stage]
-    script = ROOT_DIR / PATHS[key]
+    try:
+        script = ROOT_DIR / PATHS[dict(CHECKS)[stage]]
+    except KeyError:
+        raise _ScannerFailure(stage, f"configured scanner not found — {_SETUP}") from None
     if not script.is_file():
-        raise ChatError(f"Configured scanner for {stage} not found.")
+        raise _ScannerFailure(stage, f"configured scanner not found — {_SETUP}")
 
     try:
         args = [sys.executable, str(script)]
@@ -131,19 +160,18 @@ def _spawn(stage, prompt, timeout, policy):
             timeout=timeout, cwd=str(script.parent),
         )
     except subprocess.TimeoutExpired:
-        raise ChatError(f"{stage} did not finish within {timeout:.0f}s.")
+        raise _ScannerFailure(stage, _timeout_reason(timeout)) from None
     except OSError:
-        raise ChatError(f"{stage} could not be started.") from None
+        raise _ScannerFailure(stage, f"scanner could not be started — {_SETUP}") from None
+    except UnicodeError:
+        raise _ScannerFailure(stage, f"scanner exited without a usable verdict — {_SETUP}") from None
 
     result = find_result_json(proc.stdout or "")
     if result is None or proc.returncode:
         # Fail closed: no verdict means no permission to send. The reason is
         # carried through so the message says what to fix rather than just
         # that something broke.
-        raise ChatError(
-            f"{stage} could not be run: "
-            + _why(proc.stderr or proc.stdout or "")
-        )
+        raise _ScannerFailure(stage, _why(proc.stderr or proc.stdout))
     return result
 
 
@@ -153,20 +181,28 @@ def run_check(stage, prompt, timeout=CHECK_TIMEOUT, stop=None, **policy):
     Raises ChatError when the check cannot produce a verdict, so the caller
     can keep the fail-closed guarantee.
 
-    `stop` is set by screen() the moment any check refuses the prompt, so
-    the checks still running can abandon a long paste instead of pricing out
-    the rest of it. See scanners.run().
+    `stop` lets in-process scanners skip remaining detail after a decisive
+    block or after the deadline. See scanners.run().
     """
-    if not registry.available(stage) and SCANNER_FALLBACK:
-        return _run_subprocess(stage, prompt, timeout, **policy)
+    deadline = time.monotonic() + timeout
+    available = registry.available(stage)
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise _ScannerFailure(stage, _timeout_reason(timeout))
+    if not available:
+        if SCANNER_FALLBACK:
+            return _run_subprocess(stage, prompt, remaining, **policy)
+        reason = _DEPENDENCIES if _missing_dependencies(registry.disabled_reason(stage)) else (
+            f"scanner could not be loaded — {_SETUP}")
+        raise _ScannerFailure(stage, reason)
     try:
         return registry.run(stage, prompt, stop=stop, **policy)
-    except Exception as exc:
-        raise ChatError(f"{stage} failed: {type(exc).__name__}") from exc
-
-
-def _screening_deadline():
-    return time.monotonic() + SCREEN_BUDGET
+    except ImportError:
+        raise _ScannerFailure(stage, _DEPENDENCIES) from None
+    except OSError:
+        raise _ScannerFailure(stage, f"scanner could not load its model files — {_SETUP}") from None
+    except Exception:
+        raise _ScannerFailure(stage, f"scanner failed — {_SETUP}") from None
 
 
 CODE_CAUSE = "computer source code"
@@ -236,19 +272,26 @@ def screen(prompt, flags):
     actions = rule_actions(flags)
     legacy = not any(field in flags.keys() for field in ACTION_FIELDS.values())
     if any(action not in ACTIONS for action in actions.values()) or actions["check3"] == "redact":
-        raise ChatError("Not sent — invalid saved screening policy.", 503)
+        raise ChatError(f"Not sent — invalid saved screening policy. Please {_SETUP}.",
+                        503, error_code="screening_failed")
     enabled = [stage for stage, _ in CHECKS if actions[stage] != "allow" or
                (stage == "check2" and actions["block_code"] != "allow")]
     if not enabled:
         return None
 
-    deadline = _screening_deadline()
-    results = {}
-    failures = {}
-    refused = threading.Event()
+    budget = screening_budget(prompt)
+    deadline = time.monotonic() + budget
+    outcomes = {}
+    blocked = threading.Event()
+
+    def stopped():
+        return blocked.is_set() or time.monotonic() >= deadline
 
     def work(stage):
-        remaining = max(0.001, deadline - time.monotonic())
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return
+        hits = failure = None
         try:
             policy = {}
             stage_actions = {actions[stage]}
@@ -257,31 +300,48 @@ def screen(prompt, flags):
                 stage_actions.add(actions["block_code"])
             if stage_actions & {"warn", "redact"}:
                 policy["full_detail"] = True
-            result = run_check(stage, prompt, remaining, stop=refused.is_set, **policy)
+            result = run_check(stage, prompt, remaining, stop=stopped, **policy)
             hits = _hits(stage, prompt, result, actions, legacy=legacy)
-            results[stage] = hits
-            if "block" in hits:
-                refused.set()
-        except Exception as exc:
-            # An exception string may contain arbitrary scanner output. Only
-            # report the stage and error type, never the original exception.
-            failures.setdefault(stage, type(exc).__name__)
-            refused.set()
+        except _ScannerFailure as exc:
+            failure = exc.reason
+        except Exception:
+            # Don't echo prompt snippets, scanner output or arbitrary exceptions.
+            failure = f"scanner returned an invalid result — {_SETUP}"
+        finished = time.monotonic()
+        outcomes[stage] = (finished, hits, failure)
+        # A successful block can cut short extra detail. A check failure does
+        # not cancel its peers: let them report any failures of their own.
+        if finished < deadline and hits and "block" in hits:
+            blocked.set()
 
-    threads = [(stage, threading.Thread(target=work, args=(stage,), daemon=True, name=f"cybersyn-{stage}"))
-               for stage in enabled]
-    for _, thread in threads:
-        thread.start()
-    for stage, thread in threads:
+    threads = []
+    for stage in enabled:
+        thread = threading.Thread(target=work, args=(stage,), daemon=True, name=f"cybersyn-{stage}")
+        try:
+            thread.start()
+        except RuntimeError:
+            outcomes[stage] = (time.monotonic(), None, "scanner worker could not be started — try again")
+        else:
+            threads.append(thread)
+    for thread in threads:
         thread.join(max(0.0, deadline - time.monotonic()))
-        if thread.is_alive():
-            refused.set()
-            failures[stage] = f"did not finish within {SCREEN_BUDGET:.0f}s"
+
+    results, failures = {}, {}
+    for stage in enabled:
+        outcome = outcomes.get(stage)
+        # A scanner can return a partial result on cancellation. Accept that
+        # only after a block, never if it stopped because the clock ran out.
+        if outcome is None or outcome[0] >= deadline:
+            failures[stage] = _timeout_reason(budget)
+        elif outcome[2]:
+            failures[stage] = outcome[2]
+        else:
+            results[stage] = outcome[1]
 
     if failures:
-        detail = "; ".join(f"{stage}: {failures[stage]}" for stage in enabled if stage in failures)
-        raise ChatError("Not sent — " + ("a check could not run" if len(failures) == 1
-                                        else "checks could not run") + f" ({detail}).", 503)
+        detail = "; ".join(f"{stage}: {reason}" for stage, reason in failures.items())
+        prefix = "a check could not run" if len(failures) == 1 else "checks could not run"
+        raise ChatError(f"Not sent — {prefix} ({detail}).", 503, error_code="screening_failed")
 
     # Scanner order, not completion order, determines the primary finding.
     ordered = [results[stage] for stage in enabled]

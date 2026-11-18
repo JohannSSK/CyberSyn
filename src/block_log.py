@@ -4,8 +4,8 @@ Two tables:
 
 BLOCK_LOG  — every time the gate stopped or overrode a prompt. This is the
              compliance record, and it is never pruned by the app.
-ACTIVITY_LOG — everything else a member does that an analyst would want a
-             timestamp for: signing in, sending a message, changing policy.
+ACTIVITY_LOG — member and workspace activity, including metadata-only copies
+               of block/override decisions for audit consumers.
 
 Both are append-only. Deleting a chat does not touch either, so the team
 numbers stay honest.
@@ -75,17 +75,19 @@ def _now():
     return datetime.now(timezone.utc).isoformat()
 
 
-def record_block(db_file, parent_id, employee_id, stage, reason):
-    con = _connect(db_file)
-    con.execute(BLOCK_SQL)
-    con.execute(
-        "INSERT INTO BLOCK_LOG (Parent_id, Employee_id, stage, reason, created_at) "
-        "VALUES (?, ?, ?, ?, ?)",
-        (parent_id, employee_id, str(stage or "unknown")[:40],
-         str(reason or "Unspecified")[:200], _now()),
-    )
-    con.commit()
-    con.close()
+def record_block(db_file, parent_id, employee_id, stage, reason, *, activity_detail=None):
+    """Write the canonical decision and its optional audit copy atomically."""
+    with closing(_connect(db_file)) as con, con:
+        con.execute(BLOCK_SQL)
+        con.execute(
+            "INSERT INTO BLOCK_LOG (Parent_id, Employee_id, stage, reason, created_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (parent_id, employee_id, str(stage or "unknown")[:40],
+             str(reason or "Unspecified")[:200], _now()),
+        )
+        if activity_detail is not None:
+            kind = "override" if stage == "override" else "blocked"
+            record_activity(db_file, parent_id, employee_id, kind, activity_detail, con=con)
 
 
 def record_activity(db_file, parent_id, employee_id, kind, detail=None, *, con=None):
@@ -144,61 +146,45 @@ def activity_rows(db_file, parent_id, employee_id=None, limit=200):
     return rows
 
 
-def timeline(db_file, parent_id, employee_id=None, days=14, limit=300):
-    """Blocks and activity merged into one reverse-chronological stream.
+def regeneration_counts(db_file, parent_id):
+    """Successful regenerations are logged after the replacement is saved."""
+    with closing(_connect(db_file)) as con:
+        con.execute(ACTIVITY_SQL)
+        return dict(con.execute(
+            "SELECT Employee_id, COUNT(*) FROM ACTIVITY_LOG "
+            "WHERE Parent_id = ? AND kind = 'regenerated' GROUP BY Employee_id", (parent_id,),
+        ).fetchall())
 
-    This is what the statistics page renders as "every step, with a
-    timestamp".
+
+def timeline(db_file, parent_id, employee_id=None, limit=300):
+    """Merge canonical decisions and other activity without changing either log.
+
+    Decision writers always record BLOCK_LOG first, even on legacy databases.
+    ACTIVITY_LOG decision rows are audit copies, not additional attempts. Don't
+    deduplicate by timestamp or reason: two canonical rows are two decisions.
     """
-    con = _connect(db_file)
-    con.execute(BLOCK_SQL)
-    con.execute(ACTIVITY_SQL)
-
-    if employee_id is None:
-        block_sql = (
-            "SELECT Employee_id, stage, reason, created_at, 'block' AS source "
-            "FROM BLOCK_LOG WHERE Parent_id = ?"
-        )
-        act_sql = (
-            "SELECT Employee_id, kind, detail, created_at, 'activity' AS source "
-            "FROM ACTIVITY_LOG WHERE Parent_id = ?"
-        )
-        params = (parent_id,)
-    else:
-        block_sql = (
-            "SELECT Employee_id, stage, reason, created_at, 'block' AS source "
-            "FROM BLOCK_LOG WHERE Parent_id = ? AND Employee_id = ?"
-        )
-        act_sql = (
-            "SELECT Employee_id, kind, detail, created_at, 'activity' AS source "
-            "FROM ACTIVITY_LOG WHERE Parent_id = ? AND Employee_id = ?"
-        )
-        params = (parent_id, employee_id)
-
-    rows = []
-    for r in con.execute(block_sql, params).fetchall():
-        rows.append({
-            "employee_id": r["Employee_id"],
-            "at": r["created_at"],
-            "kind": "override" if r["stage"] == "override" else "blocked",
-            "stage": r["stage"],
-            "detail": r["reason"],
-        })
-    for r in con.execute(act_sql, params).fetchall():
-        rows.append({
-            "employee_id": r["Employee_id"],
-            "at": r["created_at"],
-            "kind": r["kind"],
-            "stage": None,
-            "detail": r["detail"],
-        })
-    con.close()
-
-    rows.sort(key=lambda r: r["at"] or "", reverse=True)
-    return rows[:limit]
+    scope = "Parent_id = ?"
+    params = (parent_id,)
+    if employee_id is not None:
+        scope += " AND Employee_id = ?"
+        params += (employee_id,)
+    with closing(_connect(db_file)) as con:
+        con.execute(BLOCK_SQL)
+        con.execute(ACTIVITY_SQL)
+        rows = con.execute(f"""
+            SELECT Employee_id AS employee_id, created_at AS at,
+                   CASE WHEN stage = 'override' THEN 'override' ELSE 'blocked' END AS kind,
+                   stage, reason AS detail, id
+            FROM BLOCK_LOG WHERE {scope}
+            UNION ALL
+            SELECT Employee_id, created_at, kind, NULL, detail, id
+            FROM ACTIVITY_LOG WHERE {scope} AND kind NOT IN ('blocked', 'override')
+            ORDER BY at DESC, id DESC LIMIT ?
+        """, params + params + (limit,)).fetchall()
+    return [{key: row[key] for key in ("employee_id", "at", "kind", "stage", "detail")} for row in rows]
 
 
-def daily_counts(db_file, parent_id, employee_id=None, days=14):
+def daily_counts(db_file, parent_id, employee_id=None, days=30):
     """Blocks and overrides per day, oldest first, for the trend chart."""
     con = _connect(db_file)
     con.execute(BLOCK_SQL)
@@ -216,7 +202,7 @@ def daily_counts(db_file, parent_id, employee_id=None, days=14):
     con.close()
 
     from collections import OrderedDict
-    from datetime import date, timedelta
+    from datetime import timedelta
 
     today = datetime.now(timezone.utc).date()
     buckets = OrderedDict()

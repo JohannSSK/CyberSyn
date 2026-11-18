@@ -18,9 +18,9 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}">
     {% block styles %}{% endblock %}
 </head>
-<body data-routes='{{ api_routes | tojson }}' data-screen-budget="{{ screen_budget | default(45, true) }}"
+<body data-routes='{{ api_routes | tojson }}' data-screen-budget="{{ screen_budget | default(180, true) }}"
       data-ai-timeout="{{ ai_timeout | default(60, true) }}"
-      data-request-timeout="{{ request_timeout | default(135, true) }}">
+      data-request-timeout="{{ request_timeout | default(270, true) }}">
     <div id="toast-container" class="toast-container" role="status" aria-live="polite"></div>
 
     {% block body %}{% endblock %}

@@ -9,8 +9,11 @@ Everything here is lazy and cached. A scanner that never runs never pays for
 a model, and the first prompt pays once rather than three times over.
 """
 
+import argparse
 import os
+import sys
 import threading
+from pathlib import Path
 
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
@@ -68,32 +71,59 @@ def get_taggers():
     return get_spacy(_EN), get_spacy(_EL)
 
 
-def get_zero_shot(local_only=False):
-    """The one zero-shot classifier shared by the context and injection checks.
+def _configured_cache():
+    # Standalone scanner/installer invocations start with MLscripts, not src,
+    # on sys.path. Read the same path registry as the app in both cases.
+    src = str(Path(__file__).resolve().parents[1])
+    if src not in sys.path:
+        sys.path.insert(0, src)
+    from config import MODEL_CACHE
 
-    Prefer the copy baked into the container image; fall back to a download
-    when running from a plain checkout where setup.sh did the fetching.
+    return str(MODEL_CACHE)
 
-    `local_only` never reaches the network. Warm-up uses it: loading weights
-    holds the cache lock, and every prompt queues behind that lock, so a
-    start-up download would stall the first minute of conversation behind a
-    transfer nobody asked for yet.
-    """
+
+def _load_zero_shot(*, download=False):
+    from huggingface_hub import snapshot_download
+    from transformers import logging, pipeline
+
+    logging.set_verbosity_error()
+    cache = _configured_cache()
+
+    def load_local(cache_dir):
+        snapshot = snapshot_download(ZERO_SHOT_MODEL, cache_dir=cache_dir, local_files_only=True)
+        # Pass a path, not a model ID: loading an incomplete snapshot must
+        # fail locally rather than have Transformers fetch its missing files.
+        return pipeline("zero-shot-classification", model=snapshot, device=-1,
+                        model_kwargs={"local_files_only": True})
+
+    try:
+        return load_local(cache)
+    except (OSError, ValueError):
+        # Transformers can wrap absent weights as ValueError once it has
+        # tried each compatible model class in a partial snapshot.
+        if download:
+            print(f"Downloading {ZERO_SHOT_MODEL} to {cache}", flush=True)
+            snapshot_download(ZERO_SHOT_MODEL, cache_dir=cache, allow_patterns=[
+                "*.json", "merges.txt", "*.safetensors", "pytorch_model*.bin",
+            ])
+            return load_local(cache)
+        if not os.environ.get("CYBERSYN_MODEL_CACHE"):
+            # Existing native installs may still have the model in HF's
+            # original cache. Use it if present, never download into it.
+            try:
+                return load_local(None)
+            except (OSError, ValueError):
+                pass
+        raise OSError(f"Local DistilBART model unavailable in {cache}; "
+                      "run ./setup.sh or rebuild the image.") from None
+
+
+def get_zero_shot():
+    """Load the shared classifier once, from disk only."""
     global _zero_shot
     with _lock:
         if _zero_shot is None:
-            from transformers import logging, pipeline
-
-            from huggingface_hub import snapshot_download
-
-            logging.set_verbosity_error()
-            try:
-                model = snapshot_download(ZERO_SHOT_MODEL, local_files_only=True)
-            except OSError:
-                if local_only:
-                    raise
-                model = ZERO_SHOT_MODEL
-            _zero_shot = pipeline("zero-shot-classification", model=model, device=-1)
+            _zero_shot = _load_zero_shot()
         return _zero_shot
 
 
@@ -155,7 +185,7 @@ def warm(names=("spacy", "zero-shot")):
     reported as skipped rather than fetched.
     """
     done, skipped = [], []
-    loaders = {"spacy": get_taggers, "zero-shot": lambda: get_zero_shot(local_only=True)}
+    loaders = {"spacy": get_taggers, "zero-shot": get_zero_shot}
     for name in names:
         try:
             loaders[name]()
@@ -166,8 +196,8 @@ def warm(names=("spacy", "zero-shot")):
     return {"loaded": done, "skipped": skipped}
 
 
-def verify():
-    """Used by both installers: importability alone cannot verify model weights."""
+def verify(*, download=False):
+    """Check the actual runtime loaders with short CPU forward passes."""
     import torch
 
     if torch.version.cuda is not None:
@@ -176,11 +206,14 @@ def verify():
         if "ner" not in get_spacy(name).pipe_names:
             raise RuntimeError(f"{name}: missing NER pipeline")
         run_ner(name, "A short model check.")
-    result = get_zero_shot()("A friendly greeting.", candidate_labels=["greeting", "question"])
+    classifier = _load_zero_shot(download=True) if download else get_zero_shot()
+    result = classifier("A friendly greeting.", candidate_labels=["greeting", "question"])
     if len(result["scores"]) != 2:
         raise RuntimeError("DistilBART did not return classification scores.")
     print(f"Verified CPU inference: {_EN}, {_EL}, {ZERO_SHOT_MODEL}")
 
 
 if __name__ == "__main__":
-    verify()
+    parser = argparse.ArgumentParser(description="Verify local scanner models.")
+    parser.add_argument("--download", action="store_true", help="prepare missing weights for setup")
+    verify(download=parser.parse_args().download)

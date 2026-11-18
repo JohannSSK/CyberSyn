@@ -202,6 +202,8 @@
         "This Shadow AI change requires administrator approval.": "Αυτή η αλλαγή στο Shadow AI απαιτεί έγκριση διαχειριστή.",
         "AI tool policy saved.": "Η πολιτική του εργαλείου ΤΝ αποθηκεύτηκε.",
         "Discovery logs cleared.": "Οι καταγραφές εντοπισμού διαγράφηκαν.",
+        "Sample week loaded.": "Η εβδομάδα δείγματος φορτώθηκε.",
+        "Sample week refreshed.": "Η εβδομάδα δείγματος ανανεώθηκε.",
         "Clear imported discovery logs?": "Να διαγραφούν οι εισαγόμενες καταγραφές;",
         "This removes discovery events for this workspace, not the AI tool policy.": "Διαγράφονται τα συμβάντα του χώρου εργασίας, όχι η πολιτική εργαλείων ΤΝ.",
         "Could not read that log file.": "Δεν ήταν δυνατή η ανάγνωση του αρχείου καταγραφής.",
@@ -477,8 +479,8 @@
         "Type a message…": "Γράψτε ένα μήνυμα…",
         "Shift + Enter for a new line": "Shift + Enter για νέα γραμμή",
         "Chat actions": "Ενέργειες συνομιλίας",
-        "Checked on this computer before anything reaches the AI.":
-            "Ελέγχεται σε αυτόν τον υπολογιστή πριν φτάσει οτιδήποτε στην ΤΝ.",
+        "Enabled checks run on this computer before the prompt goes to the AI.": "Οι ενεργοί έλεγχοι γίνονται σε αυτόν τον υπολογιστή πριν σταλεί το μήνυμα στην ΤΝ.",
+        "Local safety checks are off. Prompts are not screened.": "Οι τοπικοί έλεγχοι ασφαλείας είναι απενεργοποιημένοι. Τα μηνύματα δεν ελέγχονται.",
         "No AI is wired up for this workspace yet — ask your administrator to add a provider in":
             "Δεν έχει συνδεθεί ακόμη πάροχος ΤΝ σε αυτόν τον χώρο εργασίας — ζητήστε από τον διαχειριστή σας να προσθέσει έναν στις",
         "Dismiss notice": "Απόκρυψη ειδοποίησης",
@@ -633,18 +635,20 @@
         "Held back locally": "Έμειναν τοπικά",
 
         // ---- Statistics & Team pages ----
-        "Volume, stopped messages and approvals across this workspace.":
-            "Όγκος μηνυμάτων, αποκλεισμοί και εγκρίσεις σε όλο τον χώρο εργασίας.",
+        "Totals cover active members. Trends and the activity log include former members.":
+            "Τα σύνολα αφορούν τα ενεργά μέλη. Οι τάσεις και το ιστορικό περιλαμβάνουν και πρώην μέλη.",
         "Trend window": "Χρονικό παράθυρο",
         "7 days": "7 ημέρες",
         "14 days": "14 ημέρες",
         "30 days": "30 ημέρες",
         "Members": "Μέλη",
         "Active seats": "Ενεργές θέσεις",
-        "Messages sent": "Μηνύματα",
+        "Messages sent": "Μηνύματα που στάλθηκαν",
+        "New answers and regenerations": "Νέες απαντήσεις και αναδημιουργίες",
+        "Regenerated": "Αναδημιουργήθηκαν",
         "Overrides": "Εγκρίσεις",
         "Block rate": "Ποσοστό αποκλεισμού",
-        "Share of messages": "Μερίδιο μηνυμάτων",
+        "Blocked ÷ (sent + blocked)": "Αποκλεισμένα ÷ (σταλμένα + αποκλεισμένα)",
         "Keys configured": "Ρυθμισμένα κλειδιά",
         "Stored encrypted": "Κρυπτογραφημένα",
         "Blocked and approved, per day": "Κρατημένα και εγκεκριμένα, ανά ημέρα",
@@ -848,6 +852,23 @@
             "Δεν φορτώθηκαν τα μοντέλα. Ελέγξτε το κλειδί και δοκιμάστε ξανά.",
         "Could not load statistics. Select Refresh to try again.":
             "Δεν φορτώθηκαν τα στατιστικά. Επιλέξτε Ανανέωση για νέα δοκιμή.",
+        "Title must be non-empty, valid UTF-8 text.": "Ο τίτλος πρέπει να περιέχει έγκυρο κείμενο UTF-8.",
+        "Not sent — invalid saved screening policy. Please ask your administrator to check the gateway setup.":
+            "Δεν στάλθηκε — η αποθηκευμένη πολιτική ελέγχων δεν είναι έγκυρη. Ζητήστε από τον διαχειριστή να ελέγξει τη ρύθμιση της πύλης.",
+        "missing dependencies": "λείπουν εξαρτήσεις",
+        "ask your administrator to check the scanner installation": "ζητήστε από τον διαχειριστή να ελέγξει την εγκατάσταση των ελέγχων",
+        "ask your administrator to check the gateway setup": "ζητήστε από τον διαχειριστή να ελέγξει τη ρύθμιση της πύλης",
+        "try a smaller paste": "δοκιμάστε μικρότερο κείμενο",
+        "try again": "δοκιμάστε ξανά",
+        "configured scanner not found": "δεν βρέθηκε ο ρυθμισμένος έλεγχος",
+        "scanner could not be started": "ο έλεγχος δεν μπόρεσε να ξεκινήσει",
+        "scanner worker could not be started": "η διεργασία ελέγχου δεν μπόρεσε να ξεκινήσει",
+        "scanner could not be loaded": "ο έλεγχος δεν μπόρεσε να φορτωθεί",
+        "scanner could not load its model files": "ο έλεγχος δεν μπόρεσε να φορτώσει τα αρχεία του μοντέλου",
+        "scanner failed": "ο έλεγχος απέτυχε",
+        "scanner returned an invalid result": "ο έλεγχος επέστρεψε μη έγκυρο αποτέλεσμα",
+        "scanner exited without a usable verdict": "ο έλεγχος τερματίστηκε χωρίς έγκυρο αποτέλεσμα",
+        "fallback scanner busy": "ο εφεδρικός έλεγχος είναι απασχολημένος",
         "No API_KEY provided. Ask your administrator to add a provider key in Settings.":
             "Δεν έχει δηλωθεί API_KEY. Ζητήστε από τον διαχειριστή σας να προσθέσει κλειδί παρόχου στις Ρυθμίσεις.",
         "Invalid password. Check it and try again.":
@@ -932,6 +953,8 @@
             "Όλοι οι έλεγχοι είναι απενεργοποιημένοι. Τα μηνύματα αυτού του λογαριασμού θα στέλνονται απευθείας στον πάροχο ΤΝ μέχρι να ενεργοποιηθεί τουλάχιστον ένας έλεγχος.",
         "Write a message below. Your enabled checks run here before the prompt reaches the AI.":
             "Γράψτε ένα μήνυμα παρακάτω. Οι ενεργοί τοπικοί έλεγχοι εκτελούνται εδώ πριν φτάσει στον πάροχο ΤΝ.",
+        "Refresh the list to check this connection.": "Ανανεώστε τη λίστα για να ελέγξετε αυτή τη σύνδεση.",
+        "The current model was kept because it is not in this list.": "Το τρέχον μοντέλο διατηρήθηκε επειδή δεν υπάρχει στη λίστα.",
         "Paste a key first to load the models it can reach.":
             "Επικολλήστε πρώτα ένα κλειδί για να φορτώσουν τα διαθέσιμα μοντέλα.",
         "Sessions": "Συνεδρίες",
@@ -1053,11 +1076,19 @@
         [/^The server could not finish that request \((.+)\)\. Try again\.$/, function (m) {
             return "Ο διακομιστής δεν ολοκλήρωσε το αίτημα (" + (EL[m[1]] || m[1]) + "). Δοκιμάστε ξανά.";
         }],
-        [/^Not sent — (a check|checks) could not run \((.+)\)\. Try a smaller paste, or ask your administrator to approve this once\.$/, function (m) {
-            var prefix = m[1] === "a check"
-                ? "Δεν στάλθηκε — ένας έλεγχος απέτυχε ("
-                : "Δεν στάλθηκε — οι έλεγχοι απέτυχαν (";
-            return prefix + m[2] + "). Δοκιμάστε μικρότερο κείμενο ή ζητήστε μεμονωμένη έγκριση.";
+        [/^Not sent — (a check|checks) could not run \((.+)\)\.$/, function (m) {
+            var prefix = m[1] === "a check" ? "ένας έλεγχος απέτυχε" : "οι έλεγχοι απέτυχαν";
+            var details = m[2].split("; ").map(function (item) {
+                var colon = item.indexOf(": ");
+                if (colon === -1) return item;
+                var stage = item.slice(0, colon);
+                var text = item.slice(colon + 2).split(" — ").map(function (part) {
+                    var timeout = part.match(/^did not finish within ([\d.e+-]+)s$/);
+                    return timeout ? "δεν ολοκληρώθηκε σε " + timeout[1] + " δευτ." : (EL[part] || part);
+                });
+                return (EL[stage] || stage) + ": " + text.join(" — ");
+            });
+            return "Δεν στάλθηκε — " + prefix + " (" + details.join(" · ") + ").";
         }],
         [/^AI API Error: (.+)\. Check the model and key in Settings, or try again\.$/, function (m) {
             return "Σφάλμα παρόχου ΤΝ: " + m[1] + ". Ελέγξτε μοντέλο και κλειδί στις Ρυθμίσεις ή δοκιμάστε ξανά.";

@@ -585,13 +585,12 @@ html[lang="el"] .bubble { line-height: 1.74; }
     padding: 4px;
 }
 
-/* Message actions: hidden until hover/focus on pointer screens so the stream
-   stays quiet, always reachable on touch devices and via keyboard Tab. */
+/* Reserve the action row so hover never moves other messages or the action
+   targets. Narrow and touch layouts keep the actions visible. */
 .msg-actions {
     display: flex;
     gap: 14px;
-    height: 0;
-    overflow: hidden;
+    min-height: 44px;
     opacity: 0;
     pointer-events: none;
     transition: opacity var(--fast) var(--ease);
@@ -628,19 +627,15 @@ html[lang="el"] .bubble { line-height: 1.74; }
 .msg-actions:focus-within,
 .msg-actions:has(.is-loading),
 .msg.is-editing .msg-actions-user {
-    height: 44px;
     opacity: 1;
     pointer-events: auto;
 }
 
-@media (hover: none) {
-    .msg-actions { height: 44px; opacity: 1; pointer-events: auto; }
+@media (max-width: 760px), (any-pointer: coarse), (hover: none) {
+    .msg-actions { opacity: 1; pointer-events: auto; }
 }
 
-.msg.is-editing .msg-actions-ai {
-    opacity: 0;
-    pointer-events: none;
-}
+.msg.is-editing .msg-actions-ai { visibility: hidden; }
 
 .bubble-textarea {
     display: block;
@@ -976,6 +971,16 @@ mark {
     color: var(--text-muted);
 }
 
+.composer-error {
+    margin: 0 0 10px;
+    padding: 8px 12px;
+    border: 1px solid var(--danger-line);
+    border-radius: var(--r-md);
+    font-size: var(--text-sm);
+    line-height: 1.5;
+    color: var(--text);
+}
+
 /* One instrument: the box holds the words and the shortcut chip; the send
    control sits outside it as a ghost circle. */
 .composer-row {
@@ -1117,17 +1122,17 @@ mark {
     .stream-inner { padding: 0 16px; }
     .composer { padding: 10px 16px 14px; }
     .turn { column-gap: 8px; }
-    .turn-body { max-width: 82%; }
+    .turn-body:not(.turn-body-wide) { max-width: 82%; }
     .stream-date { margin: 4px 0; }
+}
+
+/* The shortcut chip is the first thing to go when the box narrows. */
+@media (max-width: 640px), (hover: none) {
+    .composer-chip { display: none; }
 }
 
 /* Below 480px the status text hides behind the 6px dot; full status stays in
    aria-label so Greek labels never clip the topbar. */
-/* The shortcut chip is the first thing to go when the box narrows. */
-@media (max-width: 640px) {
-    .composer-chip { display: none; }
-}
-
 @media (max-width: 480px) {
     .topbar-status-text { display: none; }
 }

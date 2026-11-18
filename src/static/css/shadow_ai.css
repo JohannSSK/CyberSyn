@@ -3,8 +3,8 @@
 .shadow-page .stack { min-width: 0; }
 .shadow-filters { display: flex; flex-wrap: wrap; gap: 12px; }
 .shadow-filters .field { flex: 1 1 11rem; min-width: 0; }
-.shadow-table-wrap { overflow-x: auto; }
-.shadow-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+.shadow-table-wrap { max-width: 100%; overflow-x: auto; }
+.shadow-table { width: 100%; min-width: 40rem; border-collapse: collapse; font-size: var(--text-sm); }
 .shadow-table :is(th, td) { text-align: start; vertical-align: top; padding: .65rem .5rem; border-bottom: 1px solid var(--border); }
 .shadow-table th { color: var(--text-dim); font-weight: 600; }
 .shadow-table td { overflow-wrap: anywhere; }

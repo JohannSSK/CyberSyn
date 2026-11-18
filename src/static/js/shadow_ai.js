@@ -229,8 +229,14 @@
         }).then(function (data) {
             if (!data) return;
             var result = $("#shadow-import-result");
-            result.textContent = content.clear ? "Discovery logs cleared." : "Scanned " + Dom.plural(data.lines_scanned, "line") +
+            var counts = "Scanned " + Dom.plural(data.lines_scanned, "line") +
                 " · " + Dom.plural(data.ai_events_added, "AI event") + " · " + data.non_ai_ignored + " non-AI ignored";
+            result.replaceChildren();
+            if (content.sample) {
+                result.appendChild(Dom.el("span", "", data.sample_events_replaced ? "Sample week refreshed." : "Sample week loaded."));
+                result.append(" ");
+            }
+            result.append(content.clear ? "Discovery logs cleared." : counts);
             result.classList.remove("hidden");
             if ("content" in content) {
                 $("#shadow-content").value = "";

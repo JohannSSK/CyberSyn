@@ -27,8 +27,11 @@ def find_constants_file():
 CONSTANTS_FILE = find_constants_file()
 ROOT_DIR = CONSTANTS_FILE.parent.parent
 
-with open(CONSTANTS_FILE, "r", encoding="utf-8") as fh:
-    CONSTANTS = json.load(fh)
+try:
+    with CONSTANTS_FILE.open(encoding="utf-8") as fh:
+        CONSTANTS = json.load(fh)
+except (OSError, ValueError) as exc:
+    raise SystemExit(f"CyberSyn: cannot read {CONSTANTS_FILE}: {exc}") from None
 
 PATHS = CONSTANTS["PATHS"]
 ROUTES = CONSTANTS["ROUTES"]
@@ -49,6 +52,9 @@ TEMPLATES_DIR = repo_path("TEMPLATES_DIR")
 ML_DIR = repo_path("ML_DIR")
 ASSETS_DIR = repo_path("ASSETS_DIR")
 BACKEND_DIR = repo_path("BACKEND_DIR")
+# An explicit path for Hugging Face's hub cache keeps the installed model
+# independent of HOME, XDG_CACHE_HOME and HF_* from the installing shell.
+MODEL_CACHE = ROOT_DIR / Path(os.environ.get("CYBERSYN_MODEL_CACHE") or PATHS["MODEL_CACHE"]).expanduser()
 
 
 def _env_flag(name, default=False):
@@ -58,20 +64,24 @@ def _env_flag(name, default=False):
     return value.strip().lower() in ("1", "true", "yes", "on")
 
 
-# LiteLLM fetches its own model price catalogue from GitHub on import and
-# again before each call, retrying three times with backoff. This app never
-# asks for pricing, so that is pure latency in front of every prompt — worst
-# when the network is slow or blocked, which is exactly when a prompt can
-# least afford it. Its bundled catalogue is as good as the remote one here.
-# Set CYBERSYN_LITELLM_NETWORK=1 to let LiteLLM reach the network.
+# LiteLLM can fetch a remote price catalogue on import. Serving local pages
+# and preparing the provider client do not need that fetch. This flag only
+# controls the catalogue; actual model discovery and completions still call
+# the configured provider.
 if not _env_flag("CYBERSYN_LITELLM_NETWORK"):
-    os.environ.setdefault("LITELLM_OFFLINE_MODE", "true")
+    os.environ["LITELLM_LOCAL_MODEL_COST_MAP"] = "True"
 
 
 # A container must be able to bind 0.0.0.0 and pick its own database path
 # without editing a tracked file, so the environment always wins.
 HOST = os.environ.get("CYBERSYN_HOST") or CONSTANTS.get("HOST", "127.0.0.1")
-PORT = int(os.environ.get("CYBERSYN_PORT") or CONSTANTS.get("PORT", 5000))
+try:
+    PORT = int(os.environ.get("CYBERSYN_PORT") or CONSTANTS.get("PORT", 5000))
+    if not 0 <= PORT <= 65535:
+        raise ValueError
+except (TypeError, ValueError):
+    raise SystemExit("CyberSyn: set CYBERSYN_PORT (or PORT in includes/constants.json) "
+                     "to an integer from 0 to 65535.") from None
 DEBUG = _env_flag("CYBERSYN_DEBUG")
 LOG_PROMPT_PREVIEW = _env_flag("CYBERSYN_LOG_PROMPT_PREVIEW", False)
 MAX_PROMPT_CHARS = int(os.environ.get("CYBERSYN_MAX_PROMPT_CHARS", 16000))
