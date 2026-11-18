@@ -260,8 +260,7 @@
         "Local safety checks": "Τοπικοί έλεγχοι ασφάλειας",
         "Checking locally before sending…": "Τοπικός έλεγχος πριν την αποστολή…",
         "Checking the message": "Έλεγχος μηνύματος",
-        "All checks run — waiting for the AI reply…":
-            "Οι έλεγχοι ολοκληρώθηκαν — αναμονή απάντησης από την ΤΝ…",
+        "All checks passed.": "Όλοι οι έλεγχοι ολοκληρώθηκαν.",
         "Waiting for the AI reply…": "Αναμονή απάντησης από την ΤΝ…",
         "Sending once with administrator approval…":
             "Μεμονωμένη αποστολή με έγκριση διαχειριστή…",
