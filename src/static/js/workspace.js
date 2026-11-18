@@ -502,9 +502,10 @@
                     Loading.toast("Clipboard access was blocked — select the text to copy it.", "error");
                 });
         }));
-        actions.appendChild(iconButton("edit", "Edit this message", function () {
-            beginEdit(wrap, message);
-        }));
+        var editBtn = iconButton("edit", "Edit this message", function () {
+            beginEdit(wrap, message, editBtn);
+        });
+        actions.appendChild(editBtn);
         if (hasAnswer) {
             actions.appendChild(iconButton("regenerate", "Generate a different answer", function () {
                 regenerate(message, actions);
@@ -594,7 +595,7 @@
        Per-message actions
        ------------------------------------------------------------------ */
 
-    function beginEdit(wrap, message) {
+    function beginEdit(wrap, message, trigger) {
         if (wrap.querySelector(".msg-edit")) return;
         wrap.classList.add("is-editing");
         var editor = Dom.el("div", "msg-edit");
@@ -614,9 +615,19 @@
         var cancel = editor.querySelector(".msg-edit-cancel");
         var save = editor.querySelector(".msg-edit-save");
 
-        Dom.on(cancel, "click", function () {
+        function closeEditor() {
             wrap.classList.remove("is-editing");
             editor.remove();
+            if (trigger && trigger.isConnected) trigger.focus();
+        }
+
+        Dom.on(cancel, "click", closeEditor);
+        Dom.on(editor, "keydown", function (event) {
+            if (event.key === "Escape") {
+                event.preventDefault();
+                event.stopPropagation();
+                closeEditor();
+            }
         });
 
         Dom.on(save, "click", function () {
@@ -627,8 +638,7 @@
                 return;
             }
             if (next === message.prompt) {
-                wrap.classList.remove("is-editing");
-                editor.remove();
+                closeEditor();
                 return;
             }
             Loading.withButton(save, function () {
@@ -649,6 +659,7 @@
 
         wrap.appendChild(editor);
         textarea.focus();
+        textarea.setSelectionRange(textarea.value.length, textarea.value.length);
     }
 
     function removeMessage(message, button) {
@@ -870,13 +881,15 @@
             }
 
             Dom.on(approve, "click", submit);
-            Dom.on(input, "keydown", function (e) {
+            Dom.on(form, "keydown", function (e) {
                 if (e.key === "Escape") {
                     e.preventDefault();
+                    e.stopPropagation();
                     panel.replaceChild(ctaRow, form);
                     ask.focus();
-                    return;
                 }
+            });
+            Dom.on(input, "keydown", function (e) {
                 if (e.key === "Enter") { e.preventDefault(); submit(); }
             });
         });

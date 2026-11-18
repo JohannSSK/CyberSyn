@@ -666,7 +666,11 @@
 
         global.Dom.on(document, "keydown", function (event) {
             if (event.key !== "Escape") return;
-            if (narrow() && sidebarShown()) showSidebar(false);
+            if (narrow() && sidebarShown()) {
+                showSidebar(false);
+                var toggle = global.Dom.$("[data-action='toggle-sidebar']");
+                if (toggle && typeof toggle.focus === "function") toggle.focus();
+            }
         });
 
         global.Dom.on(global, "resize", function () {
