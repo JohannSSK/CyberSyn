@@ -137,9 +137,9 @@
 
 :root {
     /* ------------------------------------------------------------------
-       Palette. Warm near-black charcoal across the whole app, paired with
-       one disciplined sage accent and desaturated earth-tone statuses.
-       Every colour used in any stylesheet is named here.
+       Palette. Warm near-black charcoal across the entire app, with zero
+       characteristic brand hue: emphasis comes from luminance, type and
+       elevation. Only semantic status tokens carry colour.
        ------------------------------------------------------------------ */
 
     /* Surfaces, darkest to lightest */
@@ -155,64 +155,58 @@
     --border-strong: #46443f;
     --ink:           #1c1917;
 
-    /* Text — --text-muted clears 4.5:1 across all five surface steps */
+    /* Text & neutral chart steps — --text-muted clears 4.5:1 on every surface */
     --text:          #ecebe7;
     --text-strong:   #fafaf9;
     --text-dim:      #b3aea6;
     --text-muted:    #a8a298;
     --neutral-bar:   #b0aba2;
+    --chart-muted:   #827d75;
 
-    /* Brand accent: dry Mediterranean sage. Spent only on primary CTAs,
-       the active navigation rail, the shield mark, focus rings, links,
-       badge-accent, one hero number per page, and the all-checks-on pill. */
-    --sage:          #95ac8e;
-    --sage-deep:     #7f9678;
-    --sage-soft:     rgba(149, 172, 142, 0.14);
-    --sage-line:     rgba(149, 172, 142, 0.30);
+    /* Warm-neutral emphasis — contrast, never a brand colour */
+    --accent:        #d9d5cd;
+    --accent-deep:   #b0aba2;
+    --accent-soft:   rgba(236, 235, 231, 0.07);
+    --accent-line:   rgba(236, 235, 231, 0.16);
 
-    --accent:        var(--sage);
-    --accent-deep:   var(--sage-deep);
-    --accent-soft:   var(--sage-soft);
-    --accent-line:   var(--sage-line);
-
-    /* Status: desaturated earth tones, kept verbatim. */
+    /* Status: muted semantic earth tones — reserved strictly for meaning
+       (all-active/improved, caution/override, blocked/refused). */
     --success:       #97ab91;
     --success-soft:  rgba(151, 171, 145, 0.13);
     --success-line:  rgba(151, 171, 145, 0.36);
     --warn:          #bfa273;
-    --warn-deep:     #ac9169;
     --warn-soft:     rgba(191, 162, 115, 0.13);
     --warn-line:     rgba(191, 162, 115, 0.36);
     --danger:        #bd8a80;
-    --danger-deep:   #ab7c73;
     --danger-soft:   rgba(189, 138, 128, 0.13);
     --danger-line:   rgba(189, 138, 128, 0.36);
 
-    /* Functional tints (flat warm charcoal — no cool greys, no blur) */
+    /* Functional tints — flat warm grey and charcoal, never frosted */
     --scrim:             rgba(20, 18, 16, 0.76);
     --code-inline-bg:    rgba(24, 22, 20, 0.55);
     --spinner-track:     rgba(236, 235, 231, 0.28);
     --spinner-track-ink: rgba(28, 25, 23, 0.26);
-    --mark-bg:           rgba(191, 162, 115, 0.30);
+    --selection-bg:      rgba(236, 235, 231, 0.18);
+    --mark-bg:           rgba(236, 235, 231, 0.18);
 
-    /* Deterministic per-member avatar tones (8 warm, desaturated pairs;
-       every foreground/background pair holds >= 7.7:1 contrast). */
-    --avatar-sage-bg:       #384236;
-    --avatar-sage-fg:       #d7e2d4;
-    --avatar-clay-bg:       #47372d;
-    --avatar-clay-fg:       #e8d6ca;
-    --avatar-sand-bg:       #463f31;
-    --avatar-sand-fg:       #e6decb;
-    --avatar-moss-bg:       #353f35;
-    --avatar-moss-fg:       #d4dfd3;
-    --avatar-terracotta-bg: #493530;
-    --avatar-terracotta-fg: #e9d3cd;
-    --avatar-umber-bg:      #413831;
-    --avatar-umber-fg:      #e2d8cf;
-    --avatar-olive-bg:      #3e402f;
-    --avatar-olive-fg:      #dfe1ce;
-    --avatar-rust-bg:       #48362e;
-    --avatar-rust-fg:       #e8d4cb;
+    /* Deterministic per-member avatar tones — 8 strictly warm-neutral pairs
+       (stone to rust, R >= G >= B on every swatch, >= 8.1:1 contrast). */
+    --avatar-stone-bg:  #383532;
+    --avatar-stone-fg:  #e2dfda;
+    --avatar-taupe-bg:  #3e3934;
+    --avatar-taupe-fg:  #e5dfd8;
+    --avatar-sand-bg:   #443d32;
+    --avatar-sand-fg:   #e7e0d2;
+    --avatar-walnut-bg: #40372f;
+    --avatar-walnut-fg: #e4dbd2;
+    --avatar-umber-bg:  #433830;
+    --avatar-umber-fg:  #e6dbd1;
+    --avatar-clay-bg:   #47372d;
+    --avatar-clay-fg:   #e8d8cd;
+    --avatar-sienna-bg: #48362e;
+    --avatar-sienna-fg: #e8d6cc;
+    --avatar-rust-bg:   #493530;
+    --avatar-rust-fg:   #e9d5cf;
 
     /* Print sheet tokens (used only inside @media print) */
     --print-bg:    #ffffff;
@@ -313,22 +307,28 @@ button:disabled, input:disabled, select:disabled, textarea:disabled {
 }
 
 a {
-    color: var(--accent);
-    text-decoration: none;
-    transition: color var(--fast) var(--ease);
+    color: var(--text);
+    text-decoration: underline;
+    text-decoration-color: var(--accent-line);
+    text-underline-offset: 3px;
+    transition: color var(--fast) var(--ease),
+                text-decoration-color var(--fast) var(--ease);
 }
 
 a:hover,
-a:focus-visible { text-decoration: underline; }
+a:focus-visible {
+    color: var(--text-strong);
+    text-decoration-color: var(--accent);
+}
 
 ul, ol { list-style: none; }
 
 ::selection {
-    background: var(--accent-soft);
+    background: var(--selection-bg);
     color: var(--text-strong);
 }
 
-/* One focus recipe across every interactive control in the application. */
+/* One warm-grey focus ring across every interactive control in the app. */
 :focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
@@ -476,7 +476,7 @@ h4 { font-size: var(--text-md); }
 @keyframes scale-in  { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: none; } }
 @keyframes spin      { to { transform: rotate(360deg); } }
 @keyframes pill-ring {
-    0%   { box-shadow: 0 0 0 0 var(--accent-line); }
+    0%   { box-shadow: 0 0 0 0 var(--success-line); }
     100% { box-shadow: 0 0 0 6px transparent; }
 }
 
