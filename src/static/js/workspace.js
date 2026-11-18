@@ -496,41 +496,63 @@
        ------------------------------------------------------------------ */
 
     function beginEdit(wrap, message, trigger) {
-        if (wrap.querySelector(".msg-edit")) return;
+        if (wrap.classList.contains("is-editing")) return;
+        var bubble = wrap.querySelector(".bubble-user");
+        if (!bubble) return;
+
         wrap.classList.add("is-editing");
-        var editor = Dom.el("div", "msg-edit");
-        editor.innerHTML =
-            '<textarea class="msg-edit-input" aria-label="' +
+        bubble.classList.add("is-editing");
+        bubble.innerHTML =
+            '<textarea class="bubble-textarea" rows="1" aria-label="' +
             Dom.esc(t("Edit this message")) + '"></textarea>' +
-            '<div class="msg-edit-actions">' +
-            '  <button type="button" class="btn btn-sm btn-ghost msg-edit-cancel">' +
+            '<div class="bubble-edit-actions">' +
+            '  <kbd class="kbd bubble-edit-hint" aria-hidden="true">⌘↵</kbd>' +
+            '  <button type="button" class="btn btn-sm btn-ghost bubble-edit-cancel">' +
             Dom.esc(t("Cancel")) + "</button>" +
-            '  <button type="button" class="btn btn-sm btn-primary msg-edit-save">' +
+            '  <button type="button" class="btn btn-sm btn-primary bubble-edit-save">' +
             Dom.esc(t("Save")) + "</button>" +
             "</div>";
 
-        var textarea = editor.querySelector("textarea");
-        textarea.value = message.prompt;
+        var textarea = bubble.querySelector(".bubble-textarea");
+        textarea.value = message.prompt || "";
 
-        var cancel = editor.querySelector(".msg-edit-cancel");
-        var save = editor.querySelector(".msg-edit-save");
+        var cancel = bubble.querySelector(".bubble-edit-cancel");
+        var save = bubble.querySelector(".bubble-edit-save");
 
-        function closeEditor() {
-            wrap.classList.remove("is-editing");
-            editor.remove();
-            if (trigger && trigger.isConnected) trigger.focus();
+        function sizeEditor() {
+            textarea.style.height = "auto";
+            if (textarea.scrollHeight > 0) {
+                var cap = Math.max(120, Math.round((window.innerHeight || 800) * 0.5));
+                textarea.style.height = Math.min(textarea.scrollHeight, cap) + "px";
+            }
         }
 
-        Dom.on(cancel, "click", closeEditor);
-        Dom.on(editor, "keydown", function (event) {
+        function onBubbleKeydown(event) {
             if (event.key === "Escape") {
                 event.preventDefault();
                 event.stopPropagation();
                 closeEditor();
+            } else if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+                event.preventDefault();
+                event.stopPropagation();
+                submitEdit();
             }
-        });
+        }
 
-        Dom.on(save, "click", function () {
+        function closeEditor() {
+            bubble.removeEventListener("keydown", onBubbleKeydown);
+            wrap.classList.remove("is-editing");
+            bubble.classList.remove("is-editing");
+            bubble.innerHTML = "";
+            var p = Dom.el("p");
+            p.textContent = message.prompt || "";
+            bubble.appendChild(p);
+            Dom.highlightText(p, state.query);
+            if (trigger && trigger.isConnected) trigger.focus();
+        }
+
+        function submitEdit() {
+            if (save.disabled) return;
             var next = textarea.value.trim();
             if (!next) {
                 Loading.toast("That message was empty — type a line first.", "warn");
@@ -548,6 +570,7 @@
                     text: next
                 });
             }).then(function (data) {
+                bubble.removeEventListener("keydown", onBubbleKeydown);
                 state.messages = data.messages || [];
                 renderMessages();
                 if (message.id !== undefined && message.id !== null) {
@@ -566,14 +589,14 @@
             }).catch(function (err) {
                 Loading.toast(err.message, "error");
             });
-        });
-
-        var anchor = wrap.querySelector(".msg-actions-user") || wrap.querySelector(".bubble-user");
-        if (anchor) {
-            wrap.insertBefore(editor, anchor.nextSibling);
-        } else {
-            wrap.appendChild(editor);
         }
+
+        Dom.on(textarea, "input", sizeEditor);
+        Dom.on(cancel, "click", closeEditor);
+        Dom.on(save, "click", submitEdit);
+        bubble.addEventListener("keydown", onBubbleKeydown);
+
+        sizeEditor();
         textarea.focus();
         textarea.setSelectionRange(textarea.value.length, textarea.value.length);
     }
@@ -1053,7 +1076,9 @@
         updateChecksBadge();
         renderChatList();
         if (pending && pending.relocalise) pending.relocalise();
-        if (!state.busy && !nodes.stream.querySelector(".bubble-blocked")) {
+        if (!state.busy &&
+            !nodes.stream.querySelector(".bubble-blocked") &&
+            !nodes.stream.querySelector(".is-editing")) {
             renderMessages();
         }
     });

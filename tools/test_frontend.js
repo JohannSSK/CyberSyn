@@ -506,6 +506,164 @@ function finish() {
     check("a hostile snippet is shown as text",
         card.querySelector("code").textContent === evil);
 
-    console.log(`\n${pass} passed, ${fail} failed`);
-    process.exit(fail ? 1 : 0);
+    runEditInPlace();
+}
+
+/* --------------------------------------------------------------------------
+   In-place message editing (Final UI Batch v6)
+   -------------------------------------------------------------------------- */
+
+function runEditInPlace() {
+    console.log("\nEdit in-place");
+
+    // Final UI Batch v6: assert in-place bubble editing with zero sibling editor box.
+    const dom = new JSDOM(
+        `<!doctype html><html><body>
+           <div id="toast-container"></div>
+           <div id="chat-list"></div>
+           <div id="chat-stream"><div id="chat-messages"></div></div>
+           <button id="btn-rename-chat" type="button"><span id="active-chat-title">New chat</span></button>
+           <form id="form-send"><textarea id="prompt-input"></textarea><button id="btn-send" type="submit"></button></form>
+           <button id="btn-new-chat" type="button"></button>
+           <button id="btn-delete-chat" type="button"></button>
+           <div class="search-box">
+             <input id="chat-search">
+             <span id="search-count" class="hidden"></span>
+             <button id="search-clear" class="hidden" type="button"></button>
+           </div>
+           <div id="checks-status"><span id="checks-summary"></span></div>
+           <div id="missing-key-note" class="hidden"></div>
+           <button id="btn-dismiss-key-note" type="button"></button>
+         </body></html>`,
+        { url: BASE + "/workspace", runScripts: "outside-only", pretendToBeVisual: true }
+    );
+    const win = dom.window;
+    const doc = win.document;
+    win.requestAnimationFrame = (fn) => setTimeout(fn, 0);
+    win.HTMLElement.prototype.scrollTo = () => {};
+    win.HTMLElement.prototype.scrollIntoView = () => {};
+
+    for (const file of ["core/dom.js", "core/stages.js", "core/icons.js", "core/markdown.js"]) {
+        win.eval(read(file));
+    }
+
+    const posted = [];
+    const toasts = [];
+    let messages = [
+        { id: 101, prompt: "Original question", answer: "Original answer", created_at: "2026-11-18T10:00:00Z", edited: false }
+    ];
+
+    win.Api = {
+        Session: {
+            getAdmin: () => ({ username: "boss", parentId: 2 }),
+            getAdminToken: () => null,
+            setAdmin: () => {},
+            getMember: () => ({ parentId: 2, employeeId: 5, username: "mia" }),
+            getMemberToken: () => "member-token",
+            clearAll: () => {},
+            ready: () => true,
+        },
+        post: (p, body) => {
+            posted.push({ path: p, body });
+            if (p === "/api/admin/employee/settings") {
+                return Promise.resolve({ check1: true, check2: true, check3: true, API_KEY_MASK: "sk-***" });
+            }
+            if (p === "/api/admin/employee/chats") {
+                return Promise.resolve({ chats: [{ id: 1, title: "Thread 1", updated_at: "2026-11-18T10:00:00Z" }] });
+            }
+            if (p === "/api/admin/employee/chats/open") {
+                return Promise.resolve({ chat: { id: 1, title: "Thread 1", messages } });
+            }
+            if (p === "/api/admin/employee/chats/message/edit") {
+                messages = [{ id: 101, prompt: body.text, answer: "Original answer", created_at: "2026-11-18T10:00:00Z", edited: true }];
+                return Promise.resolve({ messages });
+            }
+            return Promise.resolve({});
+        },
+    };
+    win.Loading = {
+        toast: (msg, kind) => { toasts.push({ msg, kind }); },
+        withButton: (btn, task) => {
+            if (btn) btn.disabled = true;
+            return Promise.resolve().then(task).finally(() => {
+                if (btn) btn.disabled = false;
+            });
+        },
+    };
+    win.Shell = {
+        guard: () => true,
+        confirm: () => Promise.resolve(false),
+        prompt: () => Promise.resolve(null),
+    };
+
+    win.eval(read("workspace.js"));
+
+    setTimeout(() => {
+        const msg = doc.querySelector(".msg");
+        const pencil = msg && msg.querySelector(".msg-actions-user .icon-btn");
+        check("workspace message rendered with pencil action", !!pencil);
+
+        pencil.dispatchEvent(new win.MouseEvent("click", { bubbles: true }));
+
+        const bubble = msg.querySelector(".bubble-user");
+        const textarea = bubble && bubble.querySelector(".bubble-textarea");
+        check("no sibling editor container is created outside .bubble-user",
+            msg.querySelectorAll("textarea").length === 1 && bubble && bubble.contains(textarea));
+        check("clicking pencil places .bubble-textarea inside .bubble-user", !!textarea);
+        check("the original paragraph is replaced while editing",
+            bubble && bubble.querySelector("p") === null);
+        check("the editing bubble receives .is-editing",
+            bubble && bubble.classList.contains("is-editing"));
+        check("textarea value starts with the message text and caret at end",
+            textarea && textarea.value === "Original question" &&
+            textarea.selectionStart === textarea.value.length);
+        check("Cancel and Save buttons live inside the editing bubble",
+            !!(bubble && bubble.querySelector(".bubble-edit-actions .bubble-edit-cancel") &&
+               bubble.querySelector(".bubble-edit-actions .bubble-edit-save")));
+
+        // Blur does not save or close.
+        textarea.value = "Draft while blurred";
+        textarea.dispatchEvent(new win.Event("blur", { bubbles: true }));
+        check("blur does not save or exit edit mode",
+            !!bubble.querySelector(".bubble-textarea") &&
+            !posted.some((p) => p.path === "/api/admin/employee/chats/message/edit"));
+
+        // Escape restores paragraph and returns focus to pencil.
+        textarea.dispatchEvent(new win.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+        check("Escape restores the bubble paragraph",
+            bubble.querySelector("p") && bubble.querySelector("p").textContent === "Original question" &&
+            !bubble.classList.contains("is-editing"));
+        check("Escape returns focus to the pencil button",
+            doc.activeElement === pencil);
+
+        // Re-open, try empty save -> warn toast, keep editing.
+        pencil.dispatchEvent(new win.MouseEvent("click", { bubbles: true }));
+        const ta2 = bubble.querySelector(".bubble-textarea");
+        ta2.value = "   ";
+        bubble.querySelector(".bubble-edit-save").dispatchEvent(
+            new win.MouseEvent("click", { bubbles: true }));
+        check("empty trimmed save keeps editor open and warns",
+            !!bubble.querySelector(".bubble-textarea") &&
+            toasts.some((item) => item.kind === "warn"));
+
+        // Cmd/Ctrl+Enter saves in place to the edit endpoint.
+        ta2.value = "Updated in place";
+        ta2.dispatchEvent(new win.KeyboardEvent("keydown", {
+            key: "Enter", ctrlKey: true, bubbles: true
+        }));
+        setTimeout(() => {
+            const editPost = posted.find((p) => p.path === "/api/admin/employee/chats/message/edit");
+            check("Ctrl/Cmd+Enter submits to the edit endpoint",
+                !!(editPost && editPost.body.text === "Updated in place" && editPost.body.message_id === 101));
+            const updatedP = doc.querySelector(".bubble-user p");
+            check("the saved text renders inside .bubble-user without a separate box",
+                updatedP && updatedP.textContent === "Updated in place" &&
+                doc.querySelector(".bubble-textarea") === null);
+            check("focus returns to the pencil button after save",
+                doc.activeElement === doc.querySelector(".msg-actions-user .icon-btn"));
+
+            console.log(`\n${pass} passed, ${fail} failed`);
+            process.exit(fail ? 1 : 0);
+        }, 25);
+    }, 25);
 }
