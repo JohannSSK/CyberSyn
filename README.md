@@ -1,6 +1,6 @@
 # CyberSyn — AI Security Gateway
 
-CyberSyn is a self-hosted AI gateway that screens every prompt using local Machine Learning models ( before it reaches an AI model, enforcing per-member allow, warn, redact or block policies while giving administrators visibility into shadow AI usage.
+CyberSyn is a self-hosted AI gateway that screens every prompt using local Machine Learning models ( before it reaches an AI model), enforcing per-member allow, warn, redact or block policies while giving administrators visibility into shadow AI usage.
 
 ### Why MLs? 
 Traditional regex is too "dumb" to understand context, and cloud-based AI security is a privacy paradox. CyberSyn uses local ML to read and redact sensitive data with human-like context, ensuring that Shadow AI is mitigated without a single byte of corporate data ever leaving the company's infrastructure. It's not perfect. It can never be. But it's the closest we can get without local LLMs that would skyrocket hardware requirements.
