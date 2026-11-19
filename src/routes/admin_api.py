@@ -6,7 +6,7 @@ from flask import Blueprint
 
 import admin_session
 from auth import ADMIN_COOKIE, PAGE_COOKIE, admin_from_token, session_response
-from config import DB_FILE, NULL, ROUTES, _env_flag
+from config import DB_FILE, NULL, ROUTES
 from db import get_db
 from errors import ApiError
 from members import list_members
@@ -59,12 +59,6 @@ def _sign_in(approval):
     return dict(body, admin_token=token)
 
 
-def signup_allowed(db, data):
-    if not db.execute("SELECT 1 FROM ADMINS LIMIT 1").fetchone() or _env_flag("CYBERSYN_ALLOW_OPEN_SIGNUP"):
-        return True
-    return admin_from_token(DB_FILE, data.get("admin_token", data.get("token")), consume=True, con=db) is not None
-
-
 @admin_api.post(ROUTES["ADMIN"])
 @limited(fail_admin)
 def admin_manage():
@@ -79,11 +73,8 @@ def admin_manage():
         return fail_admin("'method' must be 'add' or 'remove'.", 400)
     db = get_db()
     with db:
-        db.execute("BEGIN IMMEDIATE")  # serialize the bootstrap check with the insert
+        db.execute("BEGIN IMMEDIATE")  # serialize the create check with the insert
         if method == "add":
-            if not signup_allowed(db, data):
-                return fail_admin("An administrator already exists on this gateway. Sign in as an administrator "
-                                  "to add another.", 403)
             problem = admin_password_problem(password)
             if problem:
                 return fail_admin(problem, 400)
