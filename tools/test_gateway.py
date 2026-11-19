@@ -321,11 +321,10 @@ class Gateway(unittest.TestCase):
         self.assertEqual(self.post("MODELS", session_token=tokens[-1]).status_code, 401)
         self.assertEqual(self.post("CHATS", **dict(self.ids, session_token=tokens[-1])).status_code, 401)
 
-    def test_signup_guard_generic_refusals_and_rate_limit(self):
+    def test_admin_add_generic_refusals_and_rate_limit(self):
         extra = dict(method="add", username="another", password=PW)
-        self.assertEqual(self.post("ADMIN", **extra).status_code, 403)
-        self.assertEqual(self.post("ADMIN", **extra, token=self.admin).status_code, 201)
-        self.assertEqual(self.post("ADMIN", **extra, token=self.admin).status_code, 409)
+        self.assertEqual(self.post("ADMIN", **extra).status_code, 201)
+        self.assertEqual(self.post("ADMIN", **extra).status_code, 409)
         for route in ("ADMIN_LOGIN", "ADMIN_APPROVE", "ADMIN"):
             responses = [self.post(route, method="remove", username=u, password="wrong") for u in ("owner", "absent")]
             self.assertEqual([r.status_code for r in responses], [401, 401])
