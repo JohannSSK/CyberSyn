@@ -324,9 +324,7 @@ class Gateway(unittest.TestCase):
     def test_signup_guard_generic_refusals_and_rate_limit(self):
         extra = dict(method="add", username="another", password=PW)
         self.assertEqual(self.post("ADMIN", **extra).status_code, 403)
-        with patch.dict(os.environ, CYBERSYN_ADMIN_SIGNUP_TOKEN="registration-secret"):
-            self.assertEqual(self.post("ADMIN", **extra, signup_token="incorrect").status_code, 403)
-            self.assertEqual(self.post("ADMIN", **extra, signup_token="registration-secret").status_code, 201)
+        self.assertEqual(self.post("ADMIN", **extra, token=self.admin).status_code, 201)
         self.assertEqual(self.post("ADMIN", **extra, token=self.admin).status_code, 409)
         for route in ("ADMIN_LOGIN", "ADMIN_APPROVE", "ADMIN"):
             responses = [self.post(route, method="remove", username=u, password="wrong") for u in ("owner", "absent")]

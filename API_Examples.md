@@ -32,7 +32,7 @@ Both an unknown username and an incorrect password return `401`:
 {"error":false,"Parent_id":"1","username":"owner","session_token":"<admin>","error_message":"NULL"}
 ```
 
-Bootstrap is open **only while there are zero administrators**. For another account supply `signup_token` matching `CYBERSYN_ADMIN_SIGNUP_TOKEN`, a current admin session/one-time approval, or explicitly enable open signup. The first-run check and insert are atomic. New passwords for *both roles* must contain at least eight characters, a letter and a digit (maximum 256). Usernames are limited to 64 characters. Leading and trailing password spaces are significant. Existing accounts need not change passwords to sign in.
+Bootstrap is open **only while there are zero administrators**. For another account, sign in as an administrator (a current session or one-time approval) or explicitly enable open signup. The first-run check and insert are atomic. New passwords for *both roles* must contain at least eight characters, a letter and a digit (maximum 256). Usernames are limited to 64 characters. Leading and trailing password spaces are significant. Existing accounts need not change passwords to sign in.
 
 **Remove:** `{"method":"remove","username":"owner","password":"<exact password>"}` → `{"error":false,"Parent_id":"1","error_message":"NULL"}`. Unknown users and wrong passwords receive the same `401`. Account rows, all workspace sessions, chats, settings, Shadow AI policy and imported discovery events are deleted together. Statistics and audit events are retained.
 
