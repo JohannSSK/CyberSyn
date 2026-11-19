@@ -473,11 +473,6 @@
     pointer-events: none;
 }
 
-.auth-btn-danger .btn-spinner::after {
-    border-color: var(--spinner-track);
-    border-top-color: var(--text);
-}
-
 .auth-hint {
     display: block;
     margin-top: 3px;

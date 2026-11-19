@@ -143,22 +143,24 @@
 
 /* --------------------------------------------------------------------------
    Button loading state
-   Every action button shows its own spinner while its request is in flight,
-   and locks so a double-click cannot fire the same action twice.
+   Non-login action buttons lock without animation while a request runs.
+   Login buttons keep their spinner while signing in.
    -------------------------------------------------------------------------- */
 
 .btn.is-loading,
 .auth-btn-primary.is-loading,
 .auth-btn-danger.is-loading {
-    color: transparent !important;
     pointer-events: none;
     position: relative;
 }
 
-.btn.is-loading .icon,
-.btn.is-loading > *:not(.btn-spinner),
-.auth-btn-primary.is-loading > *:not(.btn-spinner),
-.auth-btn-danger.is-loading > *:not(.btn-spinner) { opacity: 0; }
+#btn-employee-login.is-loading,
+#btn-admin-login.is-loading {
+    color: transparent !important;
+}
+
+#btn-employee-login.is-loading > *:not(.btn-spinner),
+#btn-admin-login.is-loading > *:not(.btn-spinner) { opacity: 0; }
 
 .btn-spinner {
     position: absolute;
@@ -168,7 +170,8 @@
     justify-content: center;
 }
 
-.is-loading .btn-spinner { display: flex; }
+#btn-employee-login.is-loading .btn-spinner,
+#btn-admin-login.is-loading .btn-spinner { display: flex; }
 
 .btn-spinner::after {
     content: "";
@@ -177,13 +180,13 @@
     border: 2px solid var(--spinner-track);
     border-top-color: var(--text);
     border-radius: var(--r-pill);
-    animation: spin var(--spin-period) linear infinite;
 }
 
-.btn-primary.is-loading .btn-spinner::after,
-.auth-btn-primary.is-loading .btn-spinner::after {
+#btn-employee-login.is-loading .btn-spinner::after,
+#btn-admin-login.is-loading .btn-spinner::after {
     border-color: var(--spinner-track-ink);
     border-top-color: var(--ink);
+    animation: spin var(--spin-period) linear infinite;
 }
 
 /* --------------------------------------------------------------------------
@@ -566,12 +569,10 @@ a:hover .shortcut,
 
 .icon-btn.is-loading {
     pointer-events: none;
-    background: var(--surface-2);
 }
-.icon-btn.is-loading .icon { opacity: 0; }
 
 /* --------------------------------------------------------------------------
-   Toasts — flat --surface ground + hairline border; zero shadow
+   Toasts — flat --surface ground + hairline border; zero shadow, no animation
    -------------------------------------------------------------------------- */
 
 .toast-container {
@@ -601,13 +602,7 @@ a:hover .shortcut,
     color: var(--text);
     /* Non-interactive so a toast over the topbar never intercepts a click. */
     pointer-events: none;
-    animation: toast-in var(--med) var(--ease-enter) both; /* opacity only */
 }
-
-.toast.out { animation: toast-out var(--fast) var(--ease-exit) both; /* opacity only */ }
-
-@keyframes toast-in  { from { opacity: 0; } to { opacity: 1; } }
-@keyframes toast-out { from { opacity: 1; } to { opacity: 0; } }
 
 .toast .icon { width: var(--icon-sm); height: var(--icon-sm); flex: none; margin-top: 2px; }
 .toast-success { border-color: var(--success-line); } .toast-success .icon { color: var(--success); }
