@@ -4,15 +4,15 @@ import re
 from collections import Counter
 from dataclasses import dataclass, field
 
-TAGS = frozenset(("GREEK_AFM", "GREEK_AMKA", "GREEK_ID", "IBAN", "EMAIL", "GREEK_PHONE",
-                  "CARD", "API_KEY", "PERSON", "COMPANY", "CONFIDENTIAL", "CODE"))
+TAGS = frozenset(("GREEK_AFM", "GREEK_AMKA", "GREEK_ID", "PASSPORT", "IBAN", "EMAIL", "GREEK_PHONE",
+                  "INTL_PHONE", "CARD", "API_KEY", "IPV4", "PERSON", "COMPANY", "CONFIDENTIAL", "CODE"))
 TAG_ALIASES = {"GREEK_ID_CARD": "GREEK_ID", "ID_CARD": "GREEK_ID", "GREEK_IBAN": "IBAN",
                "computer source code": "CODE", "credentials or banking data": "API_KEY"}
 # Prefer a specific identifier to a whole confidential sentence or code line
 # when they overlap; ties keep the first verdict in configured scanner order.
 SEVERITY = {"API_KEY": 4, "CARD": 4, "IBAN": 4, "GREEK_AFM": 4, "GREEK_AMKA": 4,
-            "GREEK_ID": 4, "EMAIL": 3, "GREEK_PHONE": 3, "PERSON": 3, "COMPANY": 3,
-            "CONFIDENTIAL": 2, "CODE": 1}
+            "GREEK_ID": 4, "PASSPORT": 4, "EMAIL": 3, "GREEK_PHONE": 3, "INTL_PHONE": 3,
+            "IPV4": 3, "PERSON": 3, "COMPANY": 3, "CONFIDENTIAL": 2, "CODE": 1}
 TOKEN = re.compile(r"\[[A-Z_]+_[0-9]+\]")
 
 

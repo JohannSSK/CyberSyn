@@ -10,6 +10,7 @@
     var loadVersion = 0;
     var shownInventory = "";
     var mutating = false;
+    var latestData = null;
     var options = { member: false, onUnauthorised: false };
     var statusLabels = { approved: "Approved", restricted: "Restricted", unapproved: "Unapproved" };
     var riskLabels = { low: "Low risk", medium: "Medium risk", high: "High risk", critical: "Critical risk" };
@@ -173,6 +174,7 @@
     }
 
     function render(data) {
+        latestData = data;
         Dom.$$("[data-summary]").forEach(function (tile) {
             tile.textContent = Dom.formatNumber(data.summary[tile.dataset.summary] || 0);
         });
@@ -248,6 +250,103 @@
         });
     }
 
+    function csvCell(value) {
+        var text = value == null ? "" : String(value);
+        if (/^[\s\u0000-\u001f]*[=+\-@]/.test(text)) {
+            text = "'" + text;
+        }
+        return '"' + text.replace(/"/g, '""') + '"';
+    }
+
+    function triggerDownload(filename, content, mime) {
+        var blob = new Blob([content], { type: mime });
+        var url = URL.createObjectURL(blob);
+        var link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    }
+
+    function exportShadowCsv() {
+        if (!latestData) {
+            Loading.toast("Load Shadow AI data before exporting.", "warn");
+            return;
+        }
+        var nowIso = new Date().toISOString();
+        var lines = [];
+        function push(cells) { lines.push(cells.map(csvCell).join(",")); }
+
+        push(["CyberSyn Shadow AI report", nowIso]);
+        push(["Window (days)", $("#shadow-days").value, "Status", $("#shadow-status").value || "all",
+              "Team", $("#shadow-team").value || "all", "Data signal", $("#shadow-signal").value || "all"]);
+        lines.push("");
+
+        var summary = latestData.summary || {};
+        push(["Metric", "Value"]);
+        push(["Tools discovered", summary.tools_discovered || 0]);
+        push(["Unapproved tools active", summary.unapproved_tools_active || 0]);
+        push(["Unapproved events", summary.unapproved_events || 0]);
+        push(["Sensitive events to unapproved AI", summary.sensitive_data_to_unapproved || 0]);
+        push(["Total events", summary.total_events || 0]);
+        lines.push("");
+
+        push(["Team breakdown"]);
+        push(["Team", "Total events", "Unapproved events", "Sensitive to unapproved", "Client data to unapproved", "Unapproved tools"]);
+        (latestData.by_team || []).forEach(function (item) {
+            push([item.team, item.total_events, item.unapproved_events, item.sensitive_to_unapproved,
+                  item.client_data_to_unapproved, (item.unapproved_tools || []).join("; ")]);
+        });
+        lines.push("");
+
+        push(["AI tool risk inventory"]);
+        push(["Tool", "Key", "Vendor", "Category", "Status", "Risk tier", "Risk score", "Hosting", "Training policy", "Domains", "Note"]);
+        (latestData.inventory || []).forEach(function (tool) {
+            push([tool.name, tool.tool_key, tool.vendor, tool.category, tool.status, tool.risk_tier,
+                  tool.risk_score, tool.hosting_region, tool.training_policy, (tool.domains || []).join(" "), tool.note || ""]);
+        });
+        lines.push("");
+
+        push(["Discovered events (UTC)"]);
+        push(["Observed UTC", "Team", "Actor", "Host", "Tool", "Status", "Risk score", "Method", "Bytes sent", "Data signal"]);
+        (latestData.events || []).forEach(function (ev) {
+            push([ev.observed_at, ev.team, ev.actor, ev.host, ev.tool_name, ev.status,
+                  ev.risk_score, ev.method, ev.bytes_sent, ev.data_signal]);
+        });
+
+        triggerDownload("cybersyn-shadow-ai-" + nowIso.slice(0, 10) + ".csv",
+            "\uFEFF" + lines.join("\r\n") + "\r\n", "text/csv;charset=utf-8");
+        Loading.toast("CSV downloaded.", "success");
+    }
+
+    function exportShadowJson() {
+        if (!latestData) {
+            Loading.toast("Load Shadow AI data before exporting.", "warn");
+            return;
+        }
+        var nowIso = new Date().toISOString();
+        var report = {
+            generated_at_utc: nowIso,
+            filters: {
+                days: Number($("#shadow-days").value),
+                status: $("#shadow-status").value || null,
+                team: $("#shadow-team").value || null,
+                data_signal: $("#shadow-signal").value || null
+            },
+            summary: latestData.summary || {},
+            by_team: latestData.by_team || [],
+            inventory: latestData.inventory || [],
+            events: latestData.events || []
+        };
+        triggerDownload("cybersyn-shadow-ai-" + nowIso.slice(0, 10) + ".json",
+            JSON.stringify(report, null, 2) + "\n", "application/json;charset=utf-8");
+        Loading.toast("JSON downloaded.", "success");
+    }
+
+    if ($("#shadow-export-csv")) Dom.on($("#shadow-export-csv"), "click", exportShadowCsv);
+    if ($("#shadow-export-json")) Dom.on($("#shadow-export-json"), "click", exportShadowJson);
     Dom.on($("#shadow-filters"), "change", load);
     Dom.on($("#shadow-file"), "change", function (event) {
         var input = event.currentTarget;

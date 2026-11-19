@@ -85,6 +85,23 @@
             tiles.appendChild(tile);
         });
         row.appendChild(tiles);
+
+        var actions = Dom.el("div", "row wrap");
+        var editBtn = Dom.el("button", "btn btn-sm", t("Configure seat"));
+        editBtn.type = "button";
+        Dom.on(editBtn, "click", function () {
+            var seatSelect = $("#team-seat");
+            var card = $("#team-policy-card");
+            if (seatSelect) {
+                seatSelect.value = String(member.id);
+                loadSeatSettings();
+            }
+            if (card && typeof card.scrollIntoView === "function") {
+                card.scrollIntoView({ behavior: "smooth", block: "start" });
+            }
+        });
+        actions.appendChild(editBtn);
+        row.appendChild(actions);
         return row;
     }
 
@@ -124,7 +141,102 @@
         } else {
             members.forEach(function (member) { list.appendChild(memberRow(member)); });
         }
+        syncSeatOptions(members);
         updatePrintFooter();
+    }
+
+    function syncSeatOptions(members) {
+        var select = $("#team-seat");
+        if (!select) return;
+        var current = select.value || "0";
+        select.replaceChildren();
+        var def = Dom.el("option", "", t("Workspace default (new members)"));
+        def.value = "0";
+        select.appendChild(def);
+        members.forEach(function (m) {
+            var opt = Dom.el("option", "", m.username);
+            opt.value = String(m.id);
+            opt.setAttribute("data-no-i18n", "");
+            select.appendChild(opt);
+        });
+        var stillExists = Array.prototype.some.call(select.options, function (o) { return o.value === current; });
+        select.value = stillExists ? current : "0";
+    }
+
+    function loadProviders() {
+        var select = $("#team-provider");
+        if (!select) return Promise.resolve();
+        return Api.post("PROVIDERS", { Parent_id: access.parentId }, { member: false, onUnauthorised: false }).then(function (data) {
+            var current = select.value || "auto";
+            select.innerHTML = (data.providers || []).map(function (item) {
+                var label = item.key === "auto" ? t("Detect automatically") : item.label;
+                return '<option value="' + Dom.esc(item.key) + '">' + Dom.esc(label) + "</option>";
+            }).join("");
+            select.value = current;
+        }).catch(function () { });
+    }
+
+    function applySeatSettings(data) {
+        if (!data) return;
+        var eid = Number($("#team-seat").value || "0");
+        $("#team-check1").value = data.action_check1 || "block";
+        $("#team-check2").value = data.action_check2 || "block";
+        $("#team-check3").value = data.action_check3 || "block";
+        $("#team-block-code").value = data.action_block_code || "allow";
+        $("#team-restore-redactions").checked = !!data.restore_redactions;
+        $("#team-context").value = String(Number(data.CONTEXT_MESSAGES) || 0);
+        $("#team-provider").value = data.PROVIDER || "auto";
+        $("#team-base").value = data.API_BASE || "";
+        $("#team-model").value = data.MODEL_NAME || "gpt-4o-mini";
+        $("#team-api-key").value = "";
+        var hasKey = !!data.API_KEY_MASK;
+        $("#team-key-state").textContent = hasKey
+            ? t("Saved key: ") + data.API_KEY_MASK
+            : t("No key saved yet.");
+        $("#team-clear-key").classList.toggle("hidden", !hasKey);
+        var defaultWrap = $("#team-also-default-wrap");
+        if (defaultWrap) defaultWrap.classList.toggle("hidden", eid === 0);
+        if (eid === 0) $("#team-also-default").checked = false;
+        $("#team-policy-state").textContent = "";
+    }
+
+    function loadSeatSettings() {
+        if (!access || !$("#team-seat")) return Promise.resolve();
+        var eid = Number($("#team-seat").value || "0");
+        return Api.post("SETTINGS", {
+            Parent_id: access.parentId,
+            Employee_id: eid
+        }, { member: false, onUnauthorised: false }).then(applySeatSettings).catch(function (err) {
+            if (err && err.status === 401) window.Shell.adminPageError(err);
+            else Loading.toast((err && err.message) || "Could not load seat settings.", "error");
+        });
+    }
+
+    function writeSeatSettings(button, payloadBuilder) {
+        if (!access) return;
+        var eid = Number($("#team-seat").value || "0");
+        var credential = access.primary ? Promise.resolve(null) : window.Shell.withAdmin({
+            title: "Seat & workspace policy",
+            what: "Changing seat or workspace policy requires fresh administrator approval.",
+            fresh: true,
+            confirmLabel: "Approve"
+        });
+        return credential.then(function (token) {
+            var body = Object.assign({ Parent_id: access.parentId, Employee_id: eid }, payloadBuilder());
+            if (token) body.admin_token = token;
+            return Loading.withButton(button, function () {
+                return Api.post("SETTINGS", body, { member: false, onUnauthorised: false });
+            });
+        }).then(function (saved) {
+            applySeatSettings(saved);
+            $("#team-policy-state").textContent = t("Saved.");
+            Loading.toast("Seat settings saved.", "success");
+            return load();
+        }).catch(function (err) {
+            if (!err || err.cancelled) return;
+            if (access.primary && err.status === 401) window.Shell.adminPageError(err);
+            else Loading.toast(err.message, "error");
+        });
     }
 
     function load(button) {
@@ -141,6 +253,47 @@
     }
 
     Dom.on($("#btn-refresh"), "click", function () { load($("#btn-refresh")); });
+    if ($("#team-seat")) Dom.on($("#team-seat"), "change", loadSeatSettings);
+    if ($("#team-save-policy")) {
+        Dom.on($("#team-save-policy"), "click", function () {
+            writeSeatSettings($("#team-save-policy"), function () {
+                var eid = Number($("#team-seat").value || "0");
+                var body = {
+                    action_check1: $("#team-check1").value,
+                    action_check2: $("#team-check2").value,
+                    action_check3: $("#team-check3").value,
+                    action_block_code: $("#team-block-code").value,
+                    restore_redactions: $("#team-restore-redactions").checked,
+                    CONTEXT_MESSAGES: Number($("#team-context").value) || 0,
+                    PROVIDER: $("#team-provider").value || "auto",
+                    API_BASE: $("#team-base").value.trim(),
+                    MODEL_NAME: $("#team-model").value.trim() || "gpt-4o-mini"
+                };
+                var key = $("#team-api-key").value.trim();
+                if (key) body.API_KEY = key;
+                if (eid > 0) body.also_default = $("#team-also-default").checked;
+                return body;
+            });
+        });
+    }
+    if ($("#team-clear-key")) {
+        Dom.on($("#team-clear-key"), "click", function () {
+            window.Shell.confirm({
+                title: "Remove saved API key?",
+                body: "This seat will lose provider access until another key is saved.",
+                confirmLabel: "Remove saved key",
+                danger: true
+            }).then(function (accepted) {
+                if (!accepted) return;
+                writeSeatSettings($("#team-clear-key"), function () {
+                    var eid = Number($("#team-seat").value || "0");
+                    var body = { CLEAR_API_KEY: true };
+                    if (eid > 0) body.also_default = $("#team-also-default").checked;
+                    return body;
+                });
+            });
+        });
+    }
 
     /* "R" refreshes the roster; the hint is painted only while the button is
        hovered, and the key is inert while someone is typing in a field. */
@@ -163,6 +316,6 @@
 
     window.Shell.enterAdminPage("/team").then(function (context) {
         access = context;
-        return load();
+        return loadProviders().then(load).then(loadSeatSettings);
     }).catch(window.Shell.adminPageError);
 })();

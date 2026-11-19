@@ -3,10 +3,34 @@ import re
 import sys
 
 try:
-    from identifiers import CARD, GREEK_ID, IBAN, credential_matches, iban_score, id_score, is_valid_luhn
+    from identifiers import (
+        CARD,
+        GREEK_ID,
+        IBAN,
+        IPV4,
+        PASSPORT,
+        credential_matches,
+        iban_score,
+        id_score,
+        ipv4_score,
+        is_valid_luhn,
+        passport_score,
+    )
     from text_chunks import embedded, lines
 except ImportError:
-    from .identifiers import CARD, GREEK_ID, IBAN, credential_matches, iban_score, id_score, is_valid_luhn
+    from .identifiers import (
+        CARD,
+        GREEK_ID,
+        IBAN,
+        IPV4,
+        PASSPORT,
+        credential_matches,
+        iban_score,
+        id_score,
+        ipv4_score,
+        is_valid_luhn,
+        passport_score,
+    )
     from .text_chunks import embedded, lines
 
 LABELS = [
@@ -52,7 +76,12 @@ CODE_SYNTAX = re.compile(
     r"^\s*(def\s+\w+|class\s+\w+|import\s+\w+|from\s+\w+\s+import|return\s+|"
     r"if\s+.*:|elif\s+.*:|else:|for\s+.*:|while\s+.*:|try:|except\b|"
     r"(const|let|var|function)\s+\w+|#include\s*<|public\s+static\s+void|"
-    r"\w+\s*=\s*[\[\{\(]|print\(.*\)|console\.log\()"
+    r"\w+\s*=\s*[\[\{\(]|print\(.*\)|console\.log\(|"
+    r"(?:export\s+(?:default\s+)?)?(?:interface|type)\s+\w+\s*[={<]|"
+    r"func\s+(?:\([^)]+\)\s*)?\w+\s*\(|package\s+[a-z_]\w*\s*$|"
+    r"(?:pub\s+)?(?:fn|struct|impl|enum)\s+\w+|#!\s*/(?:usr/)?bin/(?:env\s+)?(?:ba|z|fi)?sh\b|"
+    r"(?i:SELECT\s+.+\s+FROM\b|INSERT\s+INTO\b|UPDATE\s+\w+\s+SET\b|DELETE\s+FROM\b|"
+    r"CREATE\s+(?:OR\s+REPLACE\s+)?(?:TABLE|VIEW|INDEX|FUNCTION)\b|ALTER\s+TABLE\b))"
 )
 
 try:
@@ -97,7 +126,12 @@ def analyze(raw_text, stop=None, block_code=False, context_enabled=True, full_de
     # Inspect the full span first: an identifier and its context can cross a
     # line break. A code hit never suppresses a confidential hit on that line.
     if context_enabled:
-        for pattern, score, tag in ((GREEK_ID, id_score, "GREEK_ID"), (IBAN, iban_score, "IBAN")):
+        for pattern, score, tag in (
+            (PASSPORT, passport_score, "PASSPORT"),
+            (GREEK_ID, id_score, "GREEK_ID"),
+            (IBAN, iban_score, "IBAN"),
+            (IPV4, ipv4_score, "IPV4"),
+        ):
             for m in re.finditer(pattern, raw_text):
                 confidence = score(raw_text, m)
                 if confidence >= 0.8:
@@ -107,6 +141,27 @@ def analyze(raw_text, stop=None, block_code=False, context_enabled=True, full_de
         for m in CARD.finditer(raw_text):
             if is_valid_luhn(m[0]):
                 identifier(m, 0.96, "CARD")
+
+    # Inspect multi-line comments/docstrings as unified spans so split
+    # confidential phrases are not lost across line breaks.
+    multiline_spans = []
+    if context_enabled:
+        for fragment in embedded(raw_text):
+            if "\n" not in fragment["text"]:
+                continue
+            multiline_spans.append((fragment["start_offset"], fragment["end_offset"]))
+            merged = re.sub(r"\s+", " ", fragment["clean"]).strip()
+            if len(merged) <= 3:
+                continue
+            if LEGAL_PATTERNS.search(merged):
+                hit(fragment, "legal contract or NDA", 0.92)
+            elif FINANCE_PATTERNS.search(merged):
+                hit(fragment, "internal company financial data", 0.92)
+            elif HR_CUSTOMER_PATTERNS.search(merged):
+                hit(fragment, "confidential HR, payroll, or customer records", 0.92)
+            else:
+                unknown_chunks.append({**fragment, "classify_text": merged})
+
     secret_lines = {m["line"] for m in matches}
     for part in lines(raw_text):
         text = part["text"]
@@ -115,6 +170,8 @@ def analyze(raw_text, stop=None, block_code=False, context_enabled=True, full_de
         is_code = bool(CODE_SYNTAX.search(text))
         if is_code:
             hit(part, CODE_LABEL, 0.90)
+        if any(s <= part["start_offset"] and part["end_offset"] <= e for s, e in multiline_spans):
+            continue
         if not context_enabled and is_code:
             continue
         if not full_detail and not block_code and part["line"] in secret_lines:
@@ -156,7 +213,7 @@ def analyze(raw_text, stop=None, block_code=False, context_enabled=True, full_de
         # duplicates of lines that were examined.
         distinct = {}
         for chunk in unknown_chunks:
-            distinct.setdefault(chunk["text"], []).append(chunk)
+            distinct.setdefault(chunk.get("classify_text", chunk["text"]), []).append(chunk)
         keys = list(distinct)
 
         # Stop early only once the verdict is settled *and* the leftover is

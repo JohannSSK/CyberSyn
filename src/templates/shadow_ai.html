@@ -16,6 +16,14 @@
             {% include "partials/page_bar.html" %}
             <header class="page-head">
                 <h1>Shadow AI</h1>
+                <div class="page-head-actions no-print">
+                    <button type="button" class="btn btn-sm" id="shadow-export-csv">
+                        <span data-icon="download"></span><span>Download CSV</span>
+                    </button>
+                    <button type="button" class="btn btn-sm" id="shadow-export-json">
+                        <span data-icon="download"></span><span>Download JSON</span>
+                    </button>
+                </div>
             </header>
 
             <div class="page-body page-body-wide shadow-page">

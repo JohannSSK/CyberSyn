@@ -13,7 +13,7 @@ from flask import Blueprint
 from auth import admin_from_token, member_from_token
 from config import DB_FILE, ROUTES
 from members import get_settings
-from providers import ProviderError, best_error, choices, detect, validate_base_url
+from providers import ProviderError, best_error, choices, detect, get as get_provider, validate_base_url
 from secret_store import decrypt_secret
 from web import get_json_dict
 
@@ -38,23 +38,26 @@ def list_models():
     saved = None if key else get_settings(pid, member["Employee_id"] if member else 0)
     requested = str(data.get("provider", saved["PROVIDER"] if saved else "auto") or "auto").strip().lower()
     base = str(data.get("API_BASE", saved["API_BASE"] if saved else "") or "").strip()
+    target_provider = get_provider(requested) if requested not in ("", "auto") else None
+    needs_key = target_provider.needs_key if target_provider else True
     try:
         if base:
             base = validate_base_url(base)
         if saved:
             key = decrypt_secret(saved["API_KEY"]).strip()
-            if not key:
+            if not key and needs_key:
                 return {"models": [], "message": "Paste an API key first."}, 400
             old_base = validate_base_url(saved["API_BASE"]) if saved["API_BASE"] else ""
             old_provider = saved["PROVIDER"] or "auto"
-            if base != old_base and base.startswith("http://"):
-                return {"models": [], "message": "Save this HTTP base with administrator approval first."}, 403
-            if base != old_base or requested != old_provider or data.get("admin_token"):
-                approved = admin_from_token(DB_FILE, data.get("admin_token", data.get("session_token")),
-                                            parent_id=pid, consume=True)
-                if not approved:
-                    status = 401 if data.get("admin_token") else 403
-                    return {"models": [], "message": "Using the saved key at another destination needs administrator approval."}, status
+            if key:
+                if base != old_base and base.startswith("http://"):
+                    return {"models": [], "message": "Save this HTTP base with administrator approval first."}, 403
+                if base != old_base or requested != old_provider or data.get("admin_token"):
+                    approved = admin_from_token(DB_FILE, data.get("admin_token", data.get("session_token")),
+                                                parent_id=pid, consume=True)
+                    if not approved:
+                        status = 401 if data.get("admin_token") else 403
+                        return {"models": [], "message": "Using the saved key at another destination needs administrator approval."}, status
         provider, models, errors = detect(key, requested, base)
     except ProviderError as exc:
         return {"models": [], "provider": exc.provider, "status": exc.status, "message": str(exc)}, 400

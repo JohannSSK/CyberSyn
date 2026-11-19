@@ -94,3 +94,70 @@ def is_valid_luhn(raw):
         n = int(char) * (2 if i % 2 else 1)
         total += n - 9 if n > 9 else n
     return total % 10 == 0
+
+
+IPV4 = re.compile(
+    r"(?<![\d.])(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)"
+    r"(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}(?![\d.])"
+)
+_IPV4_VERSION_PREFIX = re.compile(r"(?:\bv(?:ersion)?|release|build|sdk|rev)\s*$", re.I)
+_IPV4_CONTEXT = re.compile(
+    r"\b(?:ip(?:v4)?|server|host|ssh|vpn|firewall|subnet|gateway|endpoint|db|"
+    r"prod(?:uction)?|staging|node|cluster|address)\b",
+    re.I,
+)
+
+
+def ipv4_score(text, match):
+    raw = match[0]
+    octets = [int(part) for part in raw.split(".")]
+    before = text[max(0, match.start() - 24):match.start()]
+    if _IPV4_VERSION_PREFIX.search(before):
+        return 0
+    if raw in ("0.0.0.0", "127.0.0.1") or raw.startswith("255."):
+        return 0
+    is_private = (
+        octets[0] == 10
+        or (octets[0] == 172 and 16 <= octets[1] <= 31)
+        or (octets[0] == 192 and octets[1] == 168)
+        or (octets[0] == 100 and 64 <= octets[1] <= 127)
+    )
+    window = text[max(0, match.start() - 80):match.end() + 80]
+    has_ctx = bool(_IPV4_CONTEXT.search(window) or "@" in before[-12:] or text[match.end():match.end() + 1] == ":")
+    if is_private or has_ctx:
+        return 0.92
+    if all(o <= 20 for o in octets):
+        return 0.50
+    return 0.85
+
+
+PASSPORT = re.compile(
+    r"\b(?:P<[A-Z]{3}[A-Z0-9<]{10,}|[A-ZΑ-Ω]{1,2}[ -]?\d{6,8}|[A-Z]\d[A-Z0-9]{7}|\d{9})\b"
+)
+_PASSPORT_CONTEXT = re.compile(
+    r"\b(?:passport(?:\s+(?:no|num|number|#))?|διαβατ[ηή]ρ[ιί]\w*|"
+    r"travel\s+document|ταξιδιωτικ\w*\s+[εέ]γγραφ\w*|mrz)\b",
+    re.I,
+)
+
+
+def passport_score(text, match):
+    raw = match[0]
+    if raw.startswith("P<"):
+        return 0.96
+    window = text[max(0, match.start() - 80):match.end() + 80]
+    if _PASSPORT_CONTEXT.search(window):
+        return 0.95
+    return 0
+
+
+INTL_PHONE = re.compile(
+    r"(?<!\w)(?:\+|00)(?!30\b)[1-9]\d{0,2}[\s.-]?(?:\(\d{1,4}\)[\s.-]*)?(?:\d[\s.-]*){6,12}\d\b(?![\s.-]*\d)"
+)
+
+
+def is_valid_intl_phone(raw):
+    digits = re.sub(r"\D", "", raw)
+    if raw.startswith("00"):
+        digits = digits[2:]
+    return 8 <= len(digits) <= 15

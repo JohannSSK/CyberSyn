@@ -49,21 +49,27 @@ Design principles:
 
 - Four independent rules backed by [three scanners](#the-three-scanners): personal/Greek identifiers,
   confidential company context, prompt injection and source code.
-- Greek-aware detection: **AFM** (with checksum validation), **AMKA**, Greek phone numbers, Greek and Latin
-  company suffixes, plus person names in both English and Greek via dual spaCy NER models.
+- Greek-aware & international detection: **AFM** (with checksum validation), **AMKA**, **passport numbers**
+  (context-scored Greek & international formats), **IPv4 addresses** (private/contextual), Greek and international
+  phone numbers, Greek and Latin company suffixes, plus person names (initials, hyphenated names, and inflected
+  Greek surnames) via regex + dual spaCy NER models.
 - Credential and secret detection: DB connection strings, private keys, IBANs, `sk-`/`AKIA` keys, inline
   `password=`/`token=` assignments.
 - Prompt-injection detection that reads code comments too — multi-line comment blocks are merged so an
-  attack split across lines is still caught.
+  attack split across lines is still caught, alongside zero-width character, homoglyph, and base64 obfuscation checks.
 - Per-member **Allow, Warn, Redact & send or Block** policies, with optional local reply restoration.
   Code alone is allowed by default. Workspace defaults seed new members; they do not rewrite existing policies.
 
 **Governance & visibility**
 
 - Shadow AI (`/shadow-ai`): inspect tool risks and GDPR considerations, set statuses or add custom domains,
-  and see which teams' synthetic log records indicate sensitive data going to unapproved AI tools.
+  see which teams' synthetic log records indicate sensitive data going to unapproved AI tools, and export CSV/JSON compliance reports.
+- OpenAI-compatible proxy (`/v1/chat/completions`, `/v1/models`): external tools, IDE assistants and in-house AI apps
+  can point their OpenAI base URL at CyberSyn using a seat token and inherit Shadow AI policy, DLP/PII screening,
+  redaction, and audit logging.
 - Independent **Team member** and **Administrator** sign-in tabs, with direct links to the administrator dashboards.
-- Administrator statistics (`/stats`): prompts answered and blocked per member, reasons, trends and a timestamped activity log.
+- Administrator Team (`/team`) & Statistics (`/stats`): configure workspace defaults and per-member seats directly
+  from `/team`, inspect per-member totals, reasons, trends and a timestamped activity log, and export CSV/JSON reports.
 - Block log persisted in SQLite and attributed to a member and a stage.
 - Admin-approved override: a blocked prompt can be released by entering the administrator password; the
   exception is attributed in the audit trail.
@@ -125,9 +131,9 @@ flowchart TB
 
 | # | Script | Detects | Technique | Triggers when |
 |---|---|---|---|---|
-| 1 | `src/MLscripts/greek_pii.py` | AFM checksum, AMKA date, Greek ID format/context, IBAN mod-97, phones, emails, modern provider/access keys, companies and names (EN + EL) | Regex with checksum & context scoring, plus spaCy `en_core_web_sm` / `el_core_news_sm` NER | A PII match scores ≥ 0.80 |
-| 2 | `src/MLscripts/context.py` | Credentials/banking, legal contracts & NDAs, internal financials, HR/payroll/customer dumps, source code | IBAN mod-97, Luhn, strict confidential indicators; `valhalla/distilbart-mnli-12-1` zero-shot classification (threshold 0.55) on lines the regexes did not already explain | Confidential hit or recognized source code, governed by separate rules |
-| 3 | `src/MLscripts/injection.py` | Prompt injection and instruction override, including attacks hidden in code comments | Attack-phrase regexes + zero-shot classification (threshold 0.60); examines adjacent lines, `#`/`//`/`--`, block/HTML comments, strings and docstrings | `PROMPT_INJECTION` detected |
+| 1 | `src/MLscripts/greek_pii.py` | AFM checksum, AMKA date, Greek ID & passport context/format, IPv4 (private/contextual), IBAN mod-97, Greek & international phones, emails, modern provider/access keys, companies and names (EN + EL) | Regex with checksum & context scoring, plus spaCy `en_core_web_sm` / `el_core_news_sm` NER | A PII match scores ≥ 0.80 |
+| 2 | `src/MLscripts/context.py` | Credentials/banking, passports, IPv4s, legal contracts & NDAs, internal financials, HR/payroll/customer dumps, source code | IBAN mod-97, Luhn, strict confidential indicators, multi-line block comment merging; `valhalla/distilbart-mnli-12-1` zero-shot classification (threshold 0.55) on lines the regexes did not already explain | Confidential hit or recognized source code, governed by separate rules |
+| 3 | `src/MLscripts/injection.py` | Prompt injection and instruction override, including obfuscated payloads and attacks hidden in code comments | Attack-phrase regexes (with zero-width, homoglyph and base64 normalization) + zero-shot classification (threshold 0.60); examines adjacent lines, `#`/`//`/`--`, block/HTML comments, strings and docstrings | `PROMPT_INJECTION` detected |
 
 The staged design is deliberate: cheap, precise regexes fire first and the neural classifier only sees
 lines the rules could not explain. That keeps latency and false positives down, and the zero-shot model

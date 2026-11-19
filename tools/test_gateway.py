@@ -613,6 +613,61 @@ class Gateway(unittest.TestCase):
                 ai_client.complete("secret-value", "model", "hello")
             self.assertNotIn("secret-value", str(error.exception))
 
+    def test_message_edit_and_history_respect_active_block_policy(self):
+        self.edit(admin_token=self.admin, API_KEY="fixture", CONTEXT_MESSAGES=4,
+                  check1=False, check2=False, check3=False)
+        with patch.object(chat_api, "complete", return_value="ok"):
+            first = self.post("CHAT", **self.ids, prompt="Benign start").json
+        self.edit(admin_token=self.admin, check1=True)
+        blocked_edit = self.post("MESSAGE_EDIT", **self.ids, chat_id=first["chat_id"],
+                                 message_id=first["message_id"], text="My API key is sk-proj-" + "x" * 22)
+        self.assertEqual(blocked_edit.status_code, 403, blocked_edit.json)
+
+        # Simulate a legacy unscreened entry stored before policy tightened.
+        chat_store.edit_message(DB_FILE, self.pid, self.eid, first["chat_id"], first["message_id"],
+                                "Leaked key sk-proj-" + "y" * 22)
+        with patch.object(chat_api, "complete", return_value="should not send") as complete:
+            follow = self.post("CHAT", **self.ids, chat_id=first["chat_id"], prompt="Continue")
+            self.assertTrue(follow.json.get("blocked"), follow.json)
+            complete.assert_not_called()
+
+    def test_openai_compatible_proxy_routes(self):
+        import ai_client
+        self.edit(admin_token=self.admin, API_KEY="fixture", MODEL_NAME="gpt-4o-mini",
+                  action_check1="redact", action_check2="block", action_check3="block", restore_redactions=True)
+        headers = {"Authorization": f"Bearer {self.ids['session_token']}"}
+        self.assertEqual(self.api.get("/v1/models").status_code, 401)
+        models = self.api.get("/v1/models", headers=headers)
+        self.assertEqual(models.status_code, 200)
+        self.assertEqual(models.json["data"][0]["id"], "gpt-4o-mini")
+
+        # Unapproved vendor model blocked by Shadow AI policy.
+        blocked_tool = self.api.post("/v1/chat/completions", headers=headers, json={
+            "model": "deepseek-chat",
+            "messages": [{"role": "user", "content": "Hello"}],
+        })
+        self.assertEqual(blocked_tool.status_code, 403, blocked_tool.json)
+        self.assertEqual(blocked_tool.json["cybersyn"]["main_cause"], "UNAPPROVED_AI_TOOL")
+
+        # Multi-message PII redaction + restoration.
+        with patch.object(ai_client, "complete_messages", side_effect=lambda *a, **kw:
+                          f"Reply to {a[2][0]['content']} and {a[2][1]['content']}") as comp:
+            res = self.api.post("/v1/chat/completions", headers=headers, json={
+                "model": "gpt-4o-mini",
+                "messages": [
+                    {"role": "user", "content": "Email alice@example.com"},
+                    {"role": "user", "content": "Email bob@example.com"},
+                ],
+            })
+        self.assertEqual(res.status_code, 200, res.json)
+        sent_msgs = comp.call_args.args[2]
+        self.assertNotIn("alice@example.com", sent_msgs[0]["content"])
+        self.assertNotIn("bob@example.com", sent_msgs[1]["content"])
+        self.assertNotEqual(sent_msgs[0]["content"], sent_msgs[1]["content"])
+        reply_text = res.json["choices"][0]["message"]["content"]
+        self.assertIn("alice@example.com", reply_text)
+        self.assertIn("bob@example.com", reply_text)
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

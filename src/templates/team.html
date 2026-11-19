@@ -53,6 +53,102 @@
                     <div id="team-list" class="stack"></div>
                 </section>
 
+                <section class="card stack no-print" id="team-policy-card" aria-labelledby="team-policy-title">
+                    <h2 class="card-title" id="team-policy-title"><span data-icon="settings"></span><span>Seat &amp; workspace policy</span></h2>
+                    <p class="small muted">Configure safety checks, conversation context, or AI provider settings for workspace defaults (new members) or an individual seat.</p>
+
+                    <div class="shadow-filters">
+                        <label class="field"><span>Target seat</span>
+                            <select class="select" id="team-seat">
+                                <option value="0">Workspace default (new members)</option>
+                            </select>
+                        </label>
+                        <label class="field"><span>Previous messages sent</span>
+                            <select class="select" id="team-context">
+                                <option value="0">This message only</option>
+                                <option value="2">Last 2 messages — one exchange</option>
+                                <option value="4">Last 4 messages — two exchanges</option>
+                                <option value="6">Last 6 messages — three exchanges</option>
+                                <option value="10">Last 10 messages — five exchanges</option>
+                            </select>
+                        </label>
+                    </div>
+
+                    <div class="shadow-filters">
+                        <label class="field"><span>Personal &amp; Greek IDs</span>
+                            <select class="select" id="team-check1">
+                                <option value="allow">Allow</option>
+                                <option value="warn">Warn</option>
+                                <option value="redact">Redact &amp; send</option>
+                                <option value="block">Block</option>
+                            </select>
+                        </label>
+                        <label class="field"><span>Confidential context</span>
+                            <select class="select" id="team-check2">
+                                <option value="allow">Allow</option>
+                                <option value="warn">Warn</option>
+                                <option value="redact">Redact &amp; send</option>
+                                <option value="block">Block</option>
+                            </select>
+                        </label>
+                        <label class="field"><span>Prompt injection</span>
+                            <select class="select" id="team-check3">
+                                <option value="allow">Allow</option>
+                                <option value="warn">Warn</option>
+                                <option value="block">Block</option>
+                            </select>
+                        </label>
+                        <label class="field"><span>Proprietary source code</span>
+                            <select class="select" id="team-block-code">
+                                <option value="allow">Allow</option>
+                                <option value="warn">Warn</option>
+                                <option value="redact">Redact &amp; send</option>
+                                <option value="block">Block</option>
+                            </select>
+                        </label>
+                    </div>
+
+                    <div class="shadow-filters">
+                        <label class="field"><span>Provider</span>
+                            <select class="select" id="team-provider">
+                                <option value="auto">Detect automatically</option>
+                            </select>
+                        </label>
+                        <label class="field"><span>Base URL (optional)</span>
+                            <input type="text" class="input mono" id="team-base"
+                                   placeholder="https://gateway.example/v1" autocomplete="off" spellcheck="false">
+                        </label>
+                        <label class="field"><span>Model</span>
+                            <input type="text" class="input mono" id="team-model"
+                                   placeholder="gpt-4o-mini" autocomplete="off" spellcheck="false">
+                        </label>
+                    </div>
+
+                    <div class="field">
+                        <label for="team-api-key">API key (leave blank to keep existing)</label>
+                        <div class="row wrap">
+                            <input type="password" class="input mono grow" id="team-api-key"
+                                   placeholder="Paste a new API key…" autocomplete="off" spellcheck="false">
+                            <button type="button" class="btn btn-sm btn-danger hidden" id="team-clear-key">Remove saved key</button>
+                        </div>
+                        <span class="hint mono" id="team-key-state">No key saved yet.</span>
+                    </div>
+
+                    <label class="check-option">
+                        <input type="checkbox" id="team-restore-redactions">
+                        <span>Restore redacted values locally in replies</span>
+                    </label>
+                    <label class="check-option hidden" id="team-also-default-wrap">
+                        <input type="checkbox" id="team-also-default">
+                        <span>Also save these settings as the workspace default for new team members</span>
+                    </label>
+
+                    <div class="row wrap">
+                        <button type="button" class="btn btn-primary" id="team-save-policy">Save seat settings</button>
+                        <span class="tiny muted" id="team-policy-state" role="status" aria-live="polite"></span>
+                    </div>
+                </section>
+
                 <footer class="print-footer" id="print-footer" aria-hidden="true"></footer>
             </div>
         </main>

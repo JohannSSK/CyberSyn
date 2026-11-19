@@ -35,7 +35,9 @@ def limited(fail, methods=None):
                 return fn()
             ip = request.remote_addr
             if _env_flag("CYBERSYN_TRUST_PROXY"):
-                ip = request.headers.get("X-Forwarded-For", ip or "").split(",")[0].strip()
+                forwarded = (request.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
+                if forwarded:
+                    ip = forwarded
             name = str(data.get("username") or data.get("Employee_id") or "").strip().lower()[:64]
             keys = [(ip,), (ip, name)]
             global _sweep

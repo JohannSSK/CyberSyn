@@ -37,6 +37,8 @@ def fake_fetch_json(url, headers, provider, timeout=None):
     captured["url"] = url
     captured["headers"] = headers
     captured["provider"] = provider.key
+    if provider.key == "ollama":
+        return {"models": [{"name": "llama3.2:latest"}]}
     if "openai.com" not in url:
         raise providers.ProviderError(provider.key, "the provider returned HTTP 401",
                                       status=401)
@@ -123,6 +125,13 @@ r2 = con.post(ROUTES["EMPLOYEE_LOGIN"], json={"Parent_id": parent_id,
 tk = r2.get_json()["session_token"]
 r = con.post(ROUTES["MODELS"], json={"session_token": tk})
 check("no key anywhere -> 400", r.status_code == 400, r.get_json())
+
+captured.clear()
+r_ollama = con.post(ROUTES["MODELS"], json={"session_token": tk, "provider": "ollama"})
+ollama_body = r_ollama.get_json()
+check("ollama lists models without an API key",
+      r_ollama.status_code == 200 and ollama_body.get("models") == ["ollama/llama3.2:latest"],
+      ollama_body)
 
 # Anonymous callers are still refused.
 r = con.post(ROUTES["MODELS"], json={})

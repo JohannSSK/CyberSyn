@@ -1056,17 +1056,42 @@
         "Ollama (local)": "Ollama (τοπικό)",
         "Custom OpenAI-compatible": "Προσαρμοσμένο συμβατό με OpenAI",
         "Write a message below. Your enabled local checks run here before the prompt reaches the AI.":
-            "Γράψτε ένα μήνυμα παρακάτω. Οι ενεργοί τοπικοί έλεγχοι εκτελούνται εδώ πριν φτάσει στον πάροχο ΤΝ."
+            "Γράψτε ένα μήνυμα παρακάτω. Οι ενεργοί τοπικοί έλεγχοι εκτελούνται εδώ πριν φτάσει στον πάροχο ΤΝ.",
+        "Or type a model ID (e.g. llama3.2, gpt-4o-mini)…":
+            "Ή πληκτρολογήστε αναγνωριστικό μοντέλου (π.χ. llama3.2, gpt-4o-mini)…",
+        "Custom model ID": "Προσαρμοσμένο αναγνωριστικό μοντέλου",
+        "Download JSON": "Λήψη JSON",
+        "JSON downloaded.": "Το αρχείο JSON λήφθηκε.",
+        "Load Shadow AI data before exporting.": "Φορτώστε τα δεδομένα Shadow AI πριν από την εξαγωγή.",
+        "Seat & workspace policy": "Πολιτική θέσης & χώρου εργασίας",
+        "Configure safety checks, conversation context, or AI provider settings for workspace defaults (new members) or an individual seat.":
+            "Ρυθμίστε ελέγχους ασφαλείας, ιστορικό συνομιλίας ή πάροχο ΤΝ για τις προεπιλογές χώρου εργασίας (νέα μέλη) ή για μεμονωμένη θέση.",
+        "Target seat": "Θέση προορισμού",
+        "Workspace default (new members)": "Προεπιλογή χώρου εργασίας (νέα μέλη)",
+        "Previous messages sent": "Προηγούμενα μηνύματα που αποστέλλονται",
+        "Base URL (optional)": "Διεύθυνση βάσης URL (προαιρετικά)",
+        "API key (leave blank to keep existing)": "Κλειδί API (αφήστε κενό για διατήρηση του υπάρχοντος)",
+        "Paste a new API key…": "Επικολλήστε νέο κλειδί API…",
+        "Also save these settings as the workspace default for new team members":
+            "Αποθήκευση των ρυθμίσεων και ως προεπιλογής για νέα μέλη του χώρου εργασίας",
+        "Save seat settings": "Αποθήκευση ρυθμίσεων θέσης",
+        "Configure seat": "Ρύθμιση θέσης",
+        "Seat settings saved.": "Οι ρυθμίσεις θέσης αποθηκεύτηκαν.",
+        "Changing seat or workspace policy requires fresh administrator approval.":
+            "Η αλλαγή πολιτικής θέσης ή χώρου εργασίας απαιτεί νέα έγκριση διαχειριστή.",
+        "Remove saved API key?": "Να αφαιρεθεί το αποθηκευμένο κλειδί API;",
+        "This seat will lose provider access until another key is saved.":
+            "Αυτή η θέση θα χάσει την πρόσβαση στον πάροχο μέχρι να αποθηκευτεί άλλο κλειδί."
     };
 
     /* ----------------------------------------------------------------------
        Patterns for strings with numbers or names filled in at runtime.
        ---------------------------------------------------------------------- */
     var PATTERNS = [
-        [/^Redacted (\d+) items?$/, function (m) {
+        [/^Redacted ([\d,.]+) items?$/, function (m) {
             return "Απόκρυψη " + m[1] + (m[1] === "1" ? " στοιχείου" : " στοιχείων");
         }],
-        [/^Scanned (\d+) lines? · (\d+) AI events? · (\d+) non-AI ignored$/, function (m) {
+        [/^Scanned ([\d,.]+) lines? · ([\d,.]+) AI events? · ([\d,.]+) non-AI ignored$/, function (m) {
             return "Γραμμές που ελέγχθηκαν: " + m[1] + " · Συμβάντα ΤΝ: " + m[2] + " · Άλλα που αγνοήθηκαν: " + m[3];
         }],
         [/^Checks: (\d+) of ([34]) on$/, function (m) {
