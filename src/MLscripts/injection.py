@@ -4,12 +4,13 @@ import re
 import sys
 
 LABELS = [
-    "meta-instruction telling an AI to stop its task or reveal its instructions",
+    "prompt injection command telling an AI assistant to ignore rules or reveal hidden instructions",
     "normal software code comment explaining how a function works",
     "normal request to review code or answer a question",
+    "ordinary document text, user interface label, timestamp, or factual statement",
 ]
 INJECTION_LABEL = LABELS[0]
-THRESHOLD = 0.60
+THRESHOLD = 0.75
 
 # Score given to a line the regex caught outright. It sits above anything the
 # classifier can reach, so one such hit settles the verdict on its own.
