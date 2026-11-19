@@ -6,12 +6,12 @@ Runs every scanner over a labelled corpus and reports precision, recall, F1 and
 latency per check, so the blocking thresholds are defended by measurements
 instead of intuition.
 
-By default, scanners run in-process (reusing loaded models) and in parallel
-across worker processes. Use --subprocess to exercise the cold-start stdin
-fallback protocol instead.
+By default, scanners run in-process (loading each model once and using all
+CPU cores per batched forward pass). Use --subprocess to exercise the
+cold-start stdin fallback protocol instead.
 
 Usage:
-    python tools/evaluate.py            # all checks (in-process, parallel)
+    python tools/evaluate.py            # all checks (in-process, single model load)
     python tools/evaluate.py check1     # a single check
     python tools/evaluate.py --workers 2
     python tools/evaluate.py --subprocess
@@ -314,7 +314,7 @@ _WORKER_MODULES = {}
 
 
 def _default_workers():
-    return min(4, max(1, os.cpu_count() or 1))
+    return 1
 
 
 def _init_worker(threads):
@@ -453,7 +453,7 @@ def main(argv):
     mode.add_argument("--subprocess", action="store_true",
                       help="Run each case in a fresh stdin subprocess")
     parser.add_argument("--workers", type=int, default=None,
-                        help="Parallel worker processes (default: up to 4 across CPU cores)")
+                        help="Parallel worker processes (default: 1 for in-process single model load)")
     parser.add_argument("--json", action="store_true", help="Machine-readable JSON output")
     ns = parser.parse_args(argv[1:])
 

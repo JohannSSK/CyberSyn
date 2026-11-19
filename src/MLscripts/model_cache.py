@@ -82,6 +82,30 @@ def _configured_cache():
     return str(MODEL_CACHE)
 
 
+def _quantize_cpu_model(clf):
+    """Apply dynamic int8 quantization to DistilBART Linear layers on CPU."""
+    if os.environ.get("CYBERSYN_QUANTIZE", "1") == "0":
+        return clf
+    try:
+        import torch
+    except ImportError:
+        return clf
+    nn_module = getattr(getattr(torch, "nn", None), "Module", None)
+    model = getattr(clf, "model", None)
+    if nn_module is None or not isinstance(model, nn_module):
+        return clf
+    try:
+        supported = [e for e in getattr(torch.backends.quantized, "supported_engines", ()) if e != "none"]
+        if not supported:
+            return clf
+        if torch.backends.quantized.engine == "none":
+            torch.backends.quantized.engine = "fbgemm" if "fbgemm" in supported else supported[0]
+        clf.model = torch.ao.quantization.quantize_dynamic(model, {torch.nn.Linear}, dtype=torch.qint8)
+    except Exception:
+        pass
+    return clf
+
+
 def _load_zero_shot(*, download=False, allow_legacy_cache=True):
     from huggingface_hub import snapshot_download
     from transformers import logging, pipeline
@@ -93,8 +117,9 @@ def _load_zero_shot(*, download=False, allow_legacy_cache=True):
         snapshot = snapshot_download(ZERO_SHOT_MODEL, cache_dir=cache_dir, local_files_only=True)
         # Pass a path, not a model ID: loading an incomplete snapshot must
         # fail locally rather than have Transformers fetch its missing files.
-        return pipeline("zero-shot-classification", model=snapshot, device=-1,
-                        model_kwargs={"local_files_only": True})
+        clf = pipeline("zero-shot-classification", model=snapshot, device=-1,
+                       model_kwargs={"local_files_only": True})
+        return _quantize_cpu_model(clf)
 
     try:
         return load_local(cache)
@@ -134,8 +159,9 @@ def classify(texts, labels, **kwargs):
     call concurrently from several request threads.
     """
     clf = get_zero_shot()
+    batch_size = kwargs.pop("batch_size", max(8, CLASSIFY_BATCH))
     with _lock:
-        return clf(texts, candidate_labels=labels, **kwargs)
+        return clf(texts, candidate_labels=labels, batch_size=batch_size, **kwargs)
 
 
 # The classifier is fed in batches so a scan can be abandoned part way
@@ -162,6 +188,7 @@ def classify_batched(texts, labels, stop=None, **kwargs):
     if stop():
         return []
     clf = get_zero_shot()
+    batch_size = kwargs.pop("batch_size", max(8, CLASSIFY_BATCH))
     out = []
     for start in range(0, len(texts), CLASSIFY_BATCH):
         if stop():
@@ -170,7 +197,7 @@ def classify_batched(texts, labels, stop=None, **kwargs):
         with _lock:
             if stop():
                 break
-            got = clf(batch, candidate_labels=labels, **kwargs)
+            got = clf(batch, candidate_labels=labels, batch_size=batch_size, **kwargs)
         out.extend(got if isinstance(got, list) else [got])
     return out
 
