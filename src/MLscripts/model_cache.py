@@ -237,6 +237,13 @@ def verify(*, download=False):
     result = classifier("A friendly greeting.", candidate_labels=["greeting", "question"])
     if len(result["scores"]) != 2:
         raise RuntimeError("DistilBART did not return classification scores.")
+    if hasattr(torch, "nn"):
+        try:
+            import ocr  # noqa: F401
+            from PIL import Image  # noqa: F401
+        except ImportError:
+            print("Warning: photo OCR dependencies (Pillow/RapidOCR) are missing — run ./setup.sh to enable photo uploads.",
+                  file=sys.stderr)
     print(f"Verified CPU inference: {_EN}, {_EL}, {ZERO_SHOT_MODEL}")
 
 

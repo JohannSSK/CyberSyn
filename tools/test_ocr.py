@@ -26,6 +26,34 @@ class OcrTests(unittest.TestCase):
         with self.assertRaises(ocr.OcrTooLargeError):
             ocr._decode_png_bytes(b"x" * (ocr.MAX_PHOTO_BYTES + 1))
 
+    def test_corrupt_png_raises_invalid_image_error(self):
+        try:
+            import PIL  # noqa: F401
+        except ImportError:
+            self.skipTest("Pillow not installed")
+        bad_png = (
+            b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x02\x00\x00\x00\x02"
+            b"\x08\x02\x00\x00\x00\xfd\xd4\x9as\x00\x00\x00\x0eIDATx\x9cc\xfc\xff"
+            b"\xff?\x03\x10\x00\x00\x1f\xf8\x03\xfd\x85w\xd5/\x00\x00\x00\x00IEND\xaeB`\x82"
+        )
+        with self.assertRaises(ocr.OcrInvalidImageError):
+            ocr._decode_png_bytes(bad_png)
+
+    def test_composite_alpha_chooses_dark_bg_for_light_text(self):
+        try:
+            from PIL import Image, ImageDraw
+        except ImportError:
+            self.skipTest("Pillow not installed")
+        img = Image.new("RGBA", (200, 60), (0, 0, 0, 0))
+        ImageDraw.Draw(img).text((20, 20), "Light text", fill=(255, 255, 255, 255))
+        flat = ocr._composite_alpha(img, Image)
+        self.assertEqual(flat.getpixel((0, 0)), (16, 19, 24))
+
+        img_dark = Image.new("RGBA", (200, 60), (0, 0, 0, 0))
+        ImageDraw.Draw(img_dark).text((20, 20), "Dark text", fill=(0, 0, 0, 255))
+        flat_dark = ocr._composite_alpha(img_dark, Image)
+        self.assertEqual(flat_dark.getpixel((0, 0)), (255, 255, 255))
+
     def test_no_text_error_exact_message(self):
         for noisy in ("", "   ", "&", "...", "O"):
             with mock.patch.object(ocr, "_decode_png_bytes", return_value=b"png"), \

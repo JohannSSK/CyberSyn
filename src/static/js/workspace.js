@@ -1421,6 +1421,7 @@
                     throw emptyErr;
                 }
                 photoMeta.ocrText = parsed;
+                if (photo.dataUrl) photoMeta.dataUrl = photo.dataUrl;
                 var finalPrompt = text ? (text + "\n\n" + parsed) : parsed;
                 nodes.input.value = "";
                 autoGrow();

@@ -6,10 +6,13 @@ in memory without writing temporary image files to disk.
 """
 
 import io
+import logging
 import os
 import shutil
+import struct
 import subprocess
 import threading
+import zlib
 
 MAX_PHOTO_BYTES = int(os.environ.get("CYBERSYN_MAX_PHOTO_BYTES", 10 * 1024 * 1024))
 MAX_IMAGE_PIXELS = 25_000_000
@@ -84,6 +87,30 @@ def _has_meaningful_text(text):
     return False
 
 
+def _composite_alpha(img, image_mod):
+    """Flatten transparency against white or dark slate based on foreground luma."""
+    rgba = img.convert("RGBA")
+    alpha = rgba.getchannel("A")
+    rgb_preview = rgba.convert("RGB")
+    total_luma = 0
+    opaque_count = 0
+    # Sample at most ~10k pixels so large transparent images stay fast.
+    w, h = rgba.size
+    step = max(1, (w * h) // 10_000)
+    alpha_pixels = getattr(alpha, "get_flattened_data", alpha.getdata)()
+    rgb_pixels = getattr(rgb_preview, "get_flattened_data", rgb_preview.getdata)()
+    for idx, (a, (r, g, b)) in enumerate(zip(alpha_pixels, rgb_pixels)):
+        if idx % step:
+            continue
+        if a > 128:
+            total_luma += 0.299 * r + 0.587 * g + 0.114 * b
+            opaque_count += 1
+    bg_color = (16, 19, 24) if (opaque_count and (total_luma / opaque_count) >= 140) else (255, 255, 255)
+    background = image_mod.new("RGB", rgba.size, bg_color)
+    background.paste(rgba, mask=alpha)
+    return background
+
+
 def _decode_png_bytes(raw_bytes):
     if not isinstance(raw_bytes, (bytes, bytearray)) or not raw_bytes:
         raise OcrInvalidImageError("Please upload a valid PNG, JPEG, WEBP, GIF, BMP, or TIFF photo.")
@@ -109,19 +136,30 @@ def _decode_png_bytes(raw_bytes):
         with Image.open(io.BytesIO(raw_bytes)) as img:
             img = ImageOps.exif_transpose(img)
             if img.mode in ("RGBA", "LA", "PA") or (img.mode == "P" and "transparency" in img.info):
-                rgba = img.convert("RGBA")
-                background = Image.new("RGB", rgba.size, (255, 255, 255))
-                background.paste(rgba, mask=rgba.split()[3])
-                rgb = background
+                rgb = _composite_alpha(img, Image)
             else:
                 rgb = img.convert("RGB")
+
+            w, h = rgb.size
+            if max(w, h) < 400 and (w * 2) * (h * 2) <= MAX_IMAGE_PIXELS:
+                resample = getattr(getattr(Image, "Resampling", Image), "LANCZOS", Image.BICUBIC)
+                rgb = rgb.resize((w * 2, h * 2), resample=resample)
 
             out = io.BytesIO()
             rgb.save(out, format="PNG")
             return out.getvalue()
     except OcrError:
         raise
-    except (UnidentifiedImageError, Image.DecompressionBombError, OSError, ValueError) as exc:
+    except (
+        UnidentifiedImageError,
+        Image.DecompressionBombError,
+        OSError,
+        ValueError,
+        SyntaxError,
+        EOFError,
+        struct.error,
+        zlib.error,
+    ) as exc:
         raise OcrInvalidImageError("Please upload a valid PNG, JPEG, WEBP, GIF, BMP, or TIFF photo.") from exc
     finally:
         Image.MAX_IMAGE_PIXELS = prev_limit
@@ -212,6 +250,7 @@ def _get_rapidocr():
     with _rapidocr_lock:
         if _rapidocr_engine is not None:
             return _rapidocr_engine
+        logging.getLogger("RapidOCR").setLevel(logging.ERROR)
         for mod_name in ("rapidocr", "rapidocr_onnxruntime"):
             try:
                 mod = __import__(mod_name, fromlist=["RapidOCR"])
