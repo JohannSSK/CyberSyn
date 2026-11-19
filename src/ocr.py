@@ -17,6 +17,8 @@ ALLOWED_FORMATS = {"PNG", "JPEG", "WEBP", "GIF", "BMP", "TIFF"}
 NO_TEXT_ERROR = "There's no text to parse in this prompt."
 
 _TESSERACT_TIMEOUT = int(os.environ.get("CYBERSYN_OCR_TIMEOUT", 25))
+_MIN_TESSERACT_CONF = float(os.environ.get("CYBERSYN_OCR_MIN_TESS_CONF", 45))
+_MIN_RAPIDOCR_SCORE = float(os.environ.get("CYBERSYN_OCR_MIN_SCORE", 0.55))
 _tesseract_lang_lock = threading.Lock()
 _tesseract_lang = None
 _rapidocr_lock = threading.Lock()
@@ -67,6 +69,19 @@ def _normalise_text(raw):
     while cleaned and not cleaned[-1]:
         cleaned.pop()
     return "\n".join(cleaned).strip()
+
+
+def _has_meaningful_text(text):
+    """Require at least two alphanumeric characters to filter logo/shape noise."""
+    if not text:
+        return False
+    alnum = 0
+    for ch in text:
+        if ch.isalnum():
+            alnum += 1
+            if alnum >= 2:
+                return True
+    return False
 
 
 def _decode_png_bytes(raw_bytes):
@@ -137,6 +152,41 @@ def _get_tesseract_lang(binary):
         return _tesseract_lang
 
 
+def _parse_tesseract_tsv(tsv_text):
+    lines_by_key = {}
+    order = []
+    rows = (tsv_text or "").splitlines()
+    if not rows:
+        return ""
+    for row in rows[1:]:
+        cols = row.split("\t")
+        if len(cols) < 12:
+            continue
+        word = cols[11].strip()
+        if not word:
+            continue
+        try:
+            conf = float(cols[10])
+        except ValueError:
+            continue
+        if conf < _MIN_TESSERACT_CONF:
+            continue
+        key = (cols[1], cols[2], cols[3], cols[4])
+        if key not in lines_by_key:
+            lines_by_key[key] = []
+            order.append(key)
+        lines_by_key[key].append(word)
+    rendered = []
+    prev_block = None
+    for key in order:
+        block_key = (key[0], key[1], key[2])
+        if prev_block is not None and block_key != prev_block:
+            rendered.append("")
+        rendered.append(" ".join(lines_by_key[key]))
+        prev_block = block_key
+    return _normalise_text("\n".join(rendered))
+
+
 def _tesseract_extract(png_bytes):
     binary = shutil.which("tesseract")
     if not binary:
@@ -144,7 +194,7 @@ def _tesseract_extract(png_bytes):
     lang = _get_tesseract_lang(binary)
     try:
         proc = subprocess.run(
-            [binary, "stdin", "stdout", "-l", lang, "--psm", "6"],
+            [binary, "stdin", "stdout", "-l", lang, "--psm", "6", "tsv"],
             input=png_bytes,
             capture_output=True,
             timeout=_TESSERACT_TIMEOUT,
@@ -154,7 +204,7 @@ def _tesseract_extract(png_bytes):
         return None
     if proc.returncode != 0:
         return None
-    return _normalise_text((proc.stdout or b"").decode("utf-8", errors="replace"))
+    return _parse_tesseract_tsv((proc.stdout or b"").decode("utf-8", errors="replace"))
 
 
 def _get_rapidocr():
@@ -187,8 +237,20 @@ def _rapidocr_extract(png_bytes):
     if result is None:
         return ""
     if hasattr(result, "txts"):
-        lines = result.txts or ()
-        return _normalise_text("\n".join(str(line) for line in lines if line))
+        raw_lines = result.txts or ()
+        scores = getattr(result, "scores", None)
+        kept = []
+        for idx, line in enumerate(raw_lines):
+            if not line:
+                continue
+            if scores is not None and idx < len(scores) and scores[idx] is not None:
+                try:
+                    if float(scores[idx]) < _MIN_RAPIDOCR_SCORE:
+                        continue
+                except (TypeError, ValueError):
+                    pass
+            kept.append(str(line))
+        return _normalise_text("\n".join(kept))
     # rapidocr_onnxruntime returns (items, elapse) where each item is (box, text, score)
     items = result[0] if isinstance(result, tuple) else result
     if not items:
@@ -196,6 +258,12 @@ def _rapidocr_extract(png_bytes):
     lines = []
     for item in items:
         if isinstance(item, (list, tuple)) and len(item) >= 2 and item[1]:
+            if len(item) >= 3 and item[2] is not None:
+                try:
+                    if float(item[2]) < _MIN_RAPIDOCR_SCORE:
+                        continue
+                except (TypeError, ValueError):
+                    pass
             lines.append(str(item[1]))
     return _normalise_text("\n".join(lines))
 
@@ -208,13 +276,13 @@ def extract_text(raw_bytes):
     text = _tesseract_extract(png_bytes)
     if text is not None:
         had_engine = True
-        if text:
+        if _has_meaningful_text(text):
             return text
 
     rapid = _rapidocr_extract(png_bytes)
     if rapid is not None:
         had_engine = True
-        if rapid:
+        if _has_meaningful_text(rapid):
             return rapid
 
     if not had_engine:
