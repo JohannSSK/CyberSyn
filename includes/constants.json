@@ -35,6 +35,7 @@
     "PROVIDERS": "/api/admin/employee/providers",
     "OVERRIDE_CHECK": "/api/admin/employee/override/check",
     "CHAT": "/api/admin/employee/chat",
+    "CHAT_PHOTO": "/api/admin/employee/chat/photo",
     "CHAT_REGENERATE": "/api/admin/employee/chat/regenerate",
     "CHATS": "/api/admin/employee/chats",
     "CHATS_OPEN": "/api/admin/employee/chats/open",

@@ -42,7 +42,8 @@
         download: '<path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M7 10l5 5 5-5M12 15V3"/>',
         spark: '<path d="M12 2l2.1 6.3L20.5 10l-6.4 1.7L12 18l-2.1-6.3L3.5 10l6.4-1.7L12 2z"/>',
         history: '<path d="M3 3v6h6"/><path d="M3.5 13a9 9 0 102.2-6.4L3 9"/>',
-        filter: '<path d="M22 3H2l8 9.5V19l4 2v-8.5L22 3z"/>'
+        filter: '<path d="M22 3H2l8 9.5V19l4 2v-8.5L22 3z"/>',
+        photo: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M21 15l-4.5-4.5L6 20"/>'
     };
 
     function svgMarkup(name, cls) {

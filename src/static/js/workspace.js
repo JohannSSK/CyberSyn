@@ -26,6 +26,7 @@
             : text;
     }
 
+    var MAX_PHOTO_BYTES = 10 * 1024 * 1024;
     var DRAFT_CHAT_KEY = "__draft__";
 
     var state = {
@@ -39,6 +40,7 @@
         settings: { check1: true, check2: true, check3: true },
         query: "",
         busy: false,
+        photo: null,
         // Per-chat session memory for D4 grace note and override receipts.
         blockedChats: {},
         gracedChats: {},
@@ -51,7 +53,15 @@
         stream: $("#chat-messages"),
         viewport: $("#chat-stream"),
         title: $("#active-chat-title"),
+        composerBox: $("#composer-box"),
         input: $("#prompt-input"),
+        addPhoto: $("#btn-add-photo"),
+        photoInput: $("#photo-input"),
+        photoAttachments: $("#photo-attachments"),
+        photoPreview: $("#photo-preview"),
+        photoChipIcon: $("#photo-chip-icon"),
+        photoName: $("#photo-name"),
+        removePhoto: $("#btn-remove-photo"),
         chatError: $("#chat-error"),
         trust: $(".composer-trust"),
         form: $("#form-send"),
@@ -135,6 +145,7 @@
 
     /* The paper plane trades places with a spinner while a request is open. */
     function setSendBusy(busy) {
+        if (nodes.addPhoto) nodes.addPhoto.disabled = !!busy;
         if (!nodes.send) return;
         nodes.send.disabled = !!busy;
         nodes.send.classList.toggle("is-loading", !!busy);
@@ -143,6 +154,81 @@
             spinner.setAttribute("aria-hidden", "true");
             nodes.send.appendChild(spinner);
         }
+    }
+
+    function clearPhoto() {
+        state.photo = null;
+        if (nodes.photoInput) nodes.photoInput.value = "";
+        if (nodes.photoAttachments) nodes.photoAttachments.hidden = true;
+        if (nodes.photoPreview) {
+            nodes.photoPreview.removeAttribute("src");
+            nodes.photoPreview.hidden = true;
+        }
+        if (nodes.photoChipIcon) nodes.photoChipIcon.hidden = false;
+        if (nodes.photoName) nodes.photoName.textContent = "";
+    }
+
+    function attachPhoto(file) {
+        if (!file) return;
+        if (file.type && file.type.indexOf("image/") !== 0) {
+            Loading.toast("Please upload a valid PNG, JPEG, WEBP, GIF, BMP, or TIFF photo.", "error");
+            return;
+        }
+        if (file.size > MAX_PHOTO_BYTES) {
+            Loading.toast("Photo exceeds the 10 MiB upload limit.", "error");
+            return;
+        }
+        clearChatError();
+        var name = file.name || "photo.png";
+        var item = { file: file, name: name, dataUrl: null };
+        state.photo = item;
+        if (nodes.photoName) nodes.photoName.textContent = name;
+        if (nodes.photoPreview) {
+            nodes.photoPreview.removeAttribute("src");
+            nodes.photoPreview.hidden = true;
+        }
+        if (nodes.photoChipIcon) nodes.photoChipIcon.hidden = false;
+        if (nodes.photoAttachments) nodes.photoAttachments.hidden = false;
+
+        if (typeof FileReader !== "undefined") {
+            var reader = new FileReader();
+            reader.onload = function () {
+                if (state.photo !== item || typeof reader.result !== "string") return;
+                item.dataUrl = reader.result;
+                if (nodes.photoPreview) {
+                    nodes.photoPreview.src = reader.result;
+                    nodes.photoPreview.hidden = false;
+                }
+                if (nodes.photoChipIcon) nodes.photoChipIcon.hidden = true;
+            };
+            reader.readAsDataURL(file);
+        }
+        if (nodes.input) nodes.input.focus();
+    }
+
+    function userBubble(promptText, photoMeta, highlightQuery) {
+        var mine = Dom.el("div", "bubble bubble-user");
+        if (photoMeta && photoMeta.name) {
+            var badge = Dom.el("div", "bubble-photo");
+            if (photoMeta.dataUrl) {
+                var thumb = document.createElement("img");
+                thumb.className = "bubble-photo-thumb";
+                thumb.src = photoMeta.dataUrl;
+                thumb.alt = "";
+                badge.appendChild(thumb);
+            } else {
+                badge.appendChild(Icons.el("photo", "icon"));
+            }
+            var fname = Dom.el("span", "bubble-photo-name", photoMeta.name);
+            fname.setAttribute("data-no-i18n", "");
+            badge.appendChild(fname);
+            mine.appendChild(badge);
+        }
+        var mineText = Dom.el("p");
+        mineText.textContent = promptText || "";
+        mine.appendChild(mineText);
+        if (highlightQuery) Dom.highlightText(mineText, highlightQuery);
+        return mine;
     }
 
     function autoGrow() {
@@ -166,7 +252,15 @@
 
     function showChatError(err) {
         var code = err.body && err.body.error_code;
-        if (!nodes.chatError || (code !== "screening_failed" && code !== "missing_api_key")) {
+        var inlineCodes = [
+            "screening_failed",
+            "missing_api_key",
+            "no_photo_text",
+            "invalid_photo",
+            "photo_too_large",
+            "ocr_unavailable"
+        ];
+        if (!nodes.chatError || inlineCodes.indexOf(code) === -1) {
             Loading.toast(err.message, "error");
             return;
         }
@@ -200,7 +294,7 @@
     var LONG_WAIT_MS = 8000;
     var pending = null;
 
-    function showPending(promptText, bypass) {
+    function showPending(promptText, bypass, photoMeta) {
         hidePending();
 
         var enabled = Dom.activeChecks(state.settings);
@@ -212,7 +306,7 @@
         userTurn.appendChild(memberAvatar());
         userTurn.appendChild(turnHead(t("You")));
         var userBody = Dom.el("div", "turn-body");
-        userBody.appendChild(Dom.el("div", "bubble bubble-user", promptText));
+        userBody.appendChild(userBubble(promptText, photoMeta));
         userTurn.appendChild(userBody);
         wrap.appendChild(userTurn);
 
@@ -474,11 +568,7 @@
             message.edited ? t("edited") : ""
         ));
 
-        var mine = Dom.el("div", "bubble bubble-user");
-        var mineText = Dom.el("p");
-        mineText.textContent = message.prompt || "";
-        mine.appendChild(mineText);
-        Dom.highlightText(mineText, state.query);
+        var mine = userBubble(message.prompt || "", message.photo, state.query);
 
         var userBody = Dom.el("div", "turn-body");
         userBody.appendChild(mine);
@@ -928,7 +1018,7 @@
        Blocked message card + "Why?" trace expander + one-off override (D3)
        ------------------------------------------------------------------ */
 
-    function renderBlocked(blockInfo, promptText, approveOverride) {
+    function renderBlocked(blockInfo, promptText, approveOverride, photoMeta) {
         // Clear any empty-state notice if this was the chat's first attempt.
         clearEmptyState();
 
@@ -938,7 +1028,7 @@
         userTurn.appendChild(memberAvatar());
         userTurn.appendChild(turnHead(t("You")));
         var userBody = Dom.el("div", "turn-body");
-        userBody.appendChild(Dom.el("div", "bubble bubble-user", promptText));
+        userBody.appendChild(userBubble(promptText, photoMeta));
         userTurn.appendChild(userBody);
         wrap.appendChild(userTurn);
 
@@ -1074,7 +1164,7 @@
                     var token = data.admin_token;
                     wrap.remove();
                     if (approveOverride) approveOverride(token);
-                    else send(promptText.trim(), true, token, promptText);
+                    else send(promptText.trim(), true, token, promptText, false, photoMeta);
                 }).catch(function (err) {
                     Loading.toast(
                         err.message || "That password did not match. Check it and try again.",
@@ -1126,7 +1216,7 @@
         return seconds * 1000;
     }
 
-    function send(text, bypass, adminToken, rawPrompt, confirmWarn) {
+    function send(text, bypass, adminToken, rawPrompt, confirmWarn, photoMeta) {
         if (state.busy) return;
         state.busy = true;
         setSendBusy(true);
@@ -1142,7 +1232,7 @@
         var paused = false;
         clearEmptyState();
 
-        var waiting = showPending(text, bypass);
+        var waiting = showPending(text, bypass, photoMeta);
 
         var payload = {
             prompt: text,
@@ -1164,7 +1254,7 @@
                     hidePending();
                     paused = true;
                     renderWarning(data.warn_info || {}, originalPrompt, function () {
-                        return send(text, false, null, originalPrompt, true);
+                        return send(text, false, null, originalPrompt, true, photoMeta);
                     });
                     return null;
                 }
@@ -1172,7 +1262,7 @@
                     waiting.resolve((data.block_info || {}).stage || "check1");
                     hidePending();
                     state.blockedChats[preSendKey] = true;
-                    renderBlocked(data.block_info || {}, originalPrompt);
+                    renderBlocked(data.block_info || {}, originalPrompt, null, photoMeta);
                     return null;
                 }
 
@@ -1200,6 +1290,7 @@
                         id: data.message_id,
                         prompt: data.redacted ? data.redacted_prompt : text,
                         answer: data.reply_message,
+                        photo: photoMeta || null,
                         redacted: !!data.redacted,
                         redaction_info: data.redaction_info,
                         created_at: new Date().toISOString(),
@@ -1245,11 +1336,57 @@
             });
     }
 
+    function parseAndSend(text, photo) {
+        if (state.busy) return;
+        state.busy = true;
+        setSendBusy(true);
+        clearChatError();
+
+        var formData = new FormData();
+        formData.append("photo", photo.file);
+        var viewVersion = state.viewVersion;
+
+        Api.postForm("CHAT_PHOTO", formData, { timeout: requestBudget() })
+            .then(function (data) {
+                if (viewVersion !== state.viewVersion) {
+                    state.busy = false;
+                    setSendBusy(false);
+                    return null;
+                }
+                var parsed = (data && data.text) ? String(data.text).trim() : "";
+                if (!parsed) {
+                    var emptyErr = new Error("There's no text to parse in this prompt.");
+                    emptyErr.body = { error_code: "no_photo_text" };
+                    throw emptyErr;
+                }
+                var finalPrompt = text ? (text + "\n\n" + parsed) : parsed;
+                var photoMeta = { name: photo.name, dataUrl: photo.dataUrl };
+                nodes.input.value = "";
+                autoGrow();
+                clearPhoto();
+                clearSearch();
+                state.busy = false;
+                return send(finalPrompt, false, null, finalPrompt, false, photoMeta);
+            })
+            .catch(function (err) {
+                state.busy = false;
+                setSendBusy(false);
+                if (viewVersion !== state.viewVersion) return;
+                showChatError(err);
+                if (nodes.input) nodes.input.focus();
+            });
+    }
+
     function onSend(event) {
         event.preventDefault();
         if (state.busy) return;
         var raw = nodes.input.value;
         var text = raw.trim();
+        var photo = state.photo;
+        if (photo) {
+            parseAndSend(text, photo);
+            return;
+        }
         if (!text) {
             Loading.toast("Type a message first.", "info");
             nodes.input.focus();
@@ -1275,6 +1412,7 @@
         var viewVersion = ++state.viewVersion;
         hidePending();
         clearChatError();
+        clearPhoto();
         return Api.post("CHATS_OPEN", { chat_id: chatId })
             .then(function (data) {
                 if (viewVersion !== state.viewVersion) return false;
@@ -1302,6 +1440,7 @@
         state.viewVersion++;
         hidePending();
         clearChatError();
+        clearPhoto();
         state.chatId = null;
         state.draftTitle = null;
         state.messages = [];
@@ -1450,6 +1589,63 @@
         if (e.isComposing || e.keyCode === 229) return;
         if (e.key === "Enter" && !e.shiftKey) onSend(e);
     });
+
+    if (nodes.addPhoto && nodes.photoInput) {
+        Dom.on(nodes.addPhoto, "click", function () {
+            if (!state.busy) nodes.photoInput.click();
+        });
+        Dom.on(nodes.photoInput, "change", function () {
+            var file = nodes.photoInput.files && nodes.photoInput.files[0];
+            if (file) attachPhoto(file);
+        });
+    }
+
+    if (nodes.removePhoto) {
+        Dom.on(nodes.removePhoto, "click", function () {
+            if (state.busy) return;
+            clearPhoto();
+            clearChatError();
+            if (nodes.input) nodes.input.focus();
+        });
+    }
+
+    Dom.on(nodes.input, "paste", function (event) {
+        if (state.busy || !event.clipboardData) return;
+        var items = event.clipboardData.items || [];
+        for (var i = 0; i < items.length; i++) {
+            if (items[i].type && items[i].type.indexOf("image/") === 0) {
+                var file = items[i].getAsFile();
+                if (file) {
+                    event.preventDefault();
+                    attachPhoto(file);
+                    return;
+                }
+            }
+        }
+    });
+
+    if (nodes.composerBox) {
+        Dom.on(nodes.composerBox, "dragover", function (event) {
+            if (state.busy) return;
+            if (event.dataTransfer && event.dataTransfer.types &&
+                Array.prototype.indexOf.call(event.dataTransfer.types, "Files") !== -1) {
+                event.preventDefault();
+                nodes.composerBox.classList.add("is-dragover");
+            }
+        });
+        Dom.on(nodes.composerBox, "dragleave", function () {
+            nodes.composerBox.classList.remove("is-dragover");
+        });
+        Dom.on(nodes.composerBox, "drop", function (event) {
+            nodes.composerBox.classList.remove("is-dragover");
+            if (state.busy || !event.dataTransfer) return;
+            var file = event.dataTransfer.files && event.dataTransfer.files[0];
+            if (file && (!file.type || file.type.indexOf("image/") === 0)) {
+                event.preventDefault();
+                attachPhoto(file);
+            }
+        });
+    }
 
     Dom.on(nodes.newChat, "click", newChat);
     Dom.on(nodes.deleteChat, "click", function () { deleteChat(nodes.deleteChat); });

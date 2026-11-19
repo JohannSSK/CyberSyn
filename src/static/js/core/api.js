@@ -180,13 +180,8 @@
         return text;
     }
 
-    function post(route, body, options) {
+    function sendRequest(route, fetchOpts, options) {
         var opts = options || {};
-        var payload = Object.assign({}, body || {});
-        if (opts.member !== false && Session.ready()) {
-            payload = Object.assign({}, Session.ids(), payload);
-        }
-
         var controller = null;
         var timer = null;
         if (opts.timeout) {
@@ -194,17 +189,11 @@
             timer = setTimeout(function () { controller.abort(); }, opts.timeout);
         }
 
-        return fetch(routes[route] || route, {
+        return fetch(routes[route] || route, Object.assign({
             method: "POST",
             credentials: "same-origin",
-            headers: {
-                "Content-Type": "application/json",
-                "X-CyberSyn-Request": "1",
-                "X-CyberSyn-Session": "cookie"
-            },
-            body: JSON.stringify(payload),
             signal: controller ? controller.signal : undefined
-        })
+        }, fetchOpts))
             .then(function (res) {
                 return res.json().catch(function () { return {}; }).then(function (data) {
                     return { ok: res.ok, status: res.status, data: data };
@@ -250,9 +239,41 @@
             .finally(function () { if (timer) clearTimeout(timer); });
     }
 
+    function post(route, body, options) {
+        var opts = options || {};
+        var payload = Object.assign({}, body || {});
+        if (opts.member !== false && Session.ready()) {
+            payload = Object.assign({}, Session.ids(), payload);
+        }
+        return sendRequest(route, {
+            headers: {
+                "Content-Type": "application/json",
+                "X-CyberSyn-Request": "1",
+                "X-CyberSyn-Session": "cookie"
+            },
+            body: JSON.stringify(payload)
+        }, opts);
+    }
+
+    function postForm(route, formData, options) {
+        var opts = options || {};
+        if (opts.member !== false && Session.ready()) {
+            var ids = Session.ids();
+            if (ids.Parent_id && !formData.has("Parent_id")) formData.append("Parent_id", ids.Parent_id);
+            if (ids.Employee_id && !formData.has("Employee_id")) formData.append("Employee_id", ids.Employee_id);
+        }
+        return sendRequest(route, {
+            headers: {
+                "X-CyberSyn-Request": "1",
+                "X-CyberSyn-Session": "cookie"
+            },
+            body: formData
+        }, opts);
+    }
+
     function get(path) {
         return fetch(path, { credentials: "same-origin" }).then(function (res) { return res.json(); });
     }
 
-    global.Api = { post: post, get: get, withRemedy: withRemedy, Session: Session };
+    global.Api = { post: post, postForm: postForm, get: get, withRemedy: withRemedy, Session: Session };
 })(window);

@@ -1,0 +1,79 @@
+#!/usr/bin/env python3
+"""Local OCR helper tests (no external dependencies required).
+
+    python3 tools/test_ocr.py
+"""
+import json
+import sys
+import unittest
+from pathlib import Path
+from unittest import mock
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+import ocr  # noqa: E402
+
+
+class OcrTests(unittest.TestCase):
+    def test_normalise_text_trims_and_collapses_blank_lines(self):
+        raw = "\r\n  Line one  \r\n\r\n\r\n  Line two \r\n\r\n"
+        self.assertEqual(ocr._normalise_text(raw), "Line one\n\nLine two")
+        self.assertEqual(ocr._normalise_text("   \n  \t "), "")
+
+    def test_empty_and_oversized_images_rejected(self):
+        with self.assertRaises(ocr.OcrInvalidImageError):
+            ocr._decode_png_bytes(b"")
+        with self.assertRaises(ocr.OcrTooLargeError):
+            ocr._decode_png_bytes(b"x" * (ocr.MAX_PHOTO_BYTES + 1))
+
+    def test_no_text_error_exact_message(self):
+        with mock.patch.object(ocr, "_decode_png_bytes", return_value=b"png"), \
+             mock.patch.object(ocr, "_tesseract_extract", return_value=""), \
+             mock.patch.object(ocr, "_rapidocr_extract", return_value=""):
+            with self.assertRaises(ocr.OcrNoTextError) as ctx:
+                ocr.extract_text(b"fake-image")
+        self.assertEqual(str(ctx.exception), "There's no text to parse in this prompt.")
+        self.assertEqual(ctx.exception.error_code, "no_photo_text")
+        self.assertEqual(ctx.exception.status, 400)
+
+    def test_unavailable_when_no_ocr_engine_present(self):
+        with mock.patch.object(ocr, "_decode_png_bytes", return_value=b"png"), \
+             mock.patch.object(ocr, "_tesseract_extract", return_value=None), \
+             mock.patch.object(ocr, "_rapidocr_extract", return_value=None):
+            with self.assertRaises(ocr.OcrUnavailableError) as ctx:
+                ocr.extract_text(b"fake-image")
+        self.assertEqual(ctx.exception.status, 503)
+
+    def test_uses_tesseract_then_rapidocr_fallback(self):
+        with mock.patch.object(ocr, "_decode_png_bytes", return_value=b"png"), \
+             mock.patch.object(ocr, "_tesseract_extract", return_value="Invoice #42"), \
+             mock.patch.object(ocr, "_rapidocr_extract", return_value="Ignored"):
+            self.assertEqual(ocr.extract_text(b"fake-image"), "Invoice #42")
+
+        with mock.patch.object(ocr, "_decode_png_bytes", return_value=b"png"), \
+             mock.patch.object(ocr, "_tesseract_extract", return_value=None), \
+             mock.patch.object(ocr, "_rapidocr_extract", return_value="From RapidOCR"):
+            self.assertEqual(ocr.extract_text(b"fake-image"), "From RapidOCR")
+
+    def test_rapidocr_extract_handles_v3_and_v1_outputs(self):
+        class FakeV3Result:
+            txts = ("Hello", "World")
+
+        with mock.patch.object(ocr, "_get_rapidocr", return_value=lambda _b: FakeV3Result()):
+            self.assertEqual(ocr._rapidocr_extract(b"png"), "Hello\nWorld")
+
+        v1_result = ([[None, "Line A", 0.99], [None, "Line B", 0.95]], [0.1])
+        with mock.patch.object(ocr, "_get_rapidocr", return_value=lambda _b: v1_result):
+            self.assertEqual(ocr._rapidocr_extract(b"png"), "Line A\nLine B")
+
+        with mock.patch.object(ocr, "_get_rapidocr", return_value=lambda _b: None):
+            self.assertEqual(ocr._rapidocr_extract(b"png"), "")
+
+    def test_chat_photo_route_registered_in_constants(self):
+        constants_path = Path(__file__).resolve().parents[1] / "includes" / "constants.json"
+        data = json.loads(constants_path.read_text(encoding="utf-8"))
+        self.assertEqual(data["ROUTES"]["CHAT_PHOTO"], "/api/admin/employee/chat/photo")
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)
