@@ -534,8 +534,11 @@ function testChatReskin() {
     check("the composer box keeps the 1px --border and the focus recipe",
         /\.composer-box \{[^}]*background: var\(--surface-2\);[^}]*border: 1px solid var\(--border\);/.test(wsCss) &&
         /\.composer-box:focus-within \{[^}]*outline: 2px solid var\(--accent\)/.test(wsCss));
-    check("no attachment affordance ships anywhere",
-        !/paperclip/i.test(wsHtml + wsCss) && !/data-icon="clip|data-icon="attach|type="file"/.test(wsHtml));
+    check("simple photo upload affordance ships without paperclips",
+        !/paperclip/i.test(wsHtml + wsCss) &&
+        /id="btn-add-photo"/.test(wsHtml) &&
+        /id="photo-input"[^>]*type="file"|type="file"[^>]*id="photo-input"/.test(wsHtml) &&
+        /id="photo-attachments"/.test(wsHtml));
     check("the old mono key strap is gone", !/Enter · Shift\+Enter/.test(wsHtml));
 }
 
@@ -707,6 +710,7 @@ async function finish() {
     await runEditInPlace();
     testDesignOverhaul();
     await testDemoTiles();
+    await testPhotoUpload();
     testChatReskin();
     await testChatInBrowser();
     await testChatMotion();
@@ -932,7 +936,7 @@ function screenFixture(page, answer, opts = {}) {
     win.HTMLElement.prototype.scrollIntoView = function () { this.dataset.scrolled = "1"; };
     win.fetch = (url, opts) => {
         const key = Object.keys(routes).find((k) => routes[k] === url);
-        const body = JSON.parse(opts.body);
+        const body = typeof opts.body === "string" ? JSON.parse(opts.body) : opts.body;
         posted.push({ key, body });
         return Promise.resolve(answer(key, body)).then((data) => {
             const status = (data && data.httpStatus) || 200;
@@ -1927,4 +1931,91 @@ async function testDemoTiles() {
     check("an existing conversation shows no demo tiles",
         history.win.document.querySelectorAll(".demo-tile").length === 0);
     history.win.close();
+}
+
+async function testPhotoUpload() {
+    console.log("\nPhoto upload");
+    let photoMode = "ok";
+    const p = screenFixture("workspace", (key, body) => {
+        if (key === "SETTINGS") return { check1: true, check2: true, check3: true, API_KEY_MASK: "sk-***" };
+        if (key === "CHATS") return { chats: [] };
+        if (key === "CHAT_PHOTO") {
+            if (photoMode === "empty") {
+                return {
+                    httpStatus: 400,
+                    error: true,
+                    error_code: "no_photo_text",
+                    error_message: "There's no text to parse in this prompt."
+                };
+            }
+            return { error: false, text: "Invoice total: 42 USD" };
+        }
+        if (key === "CHAT") {
+            return {
+                error: false,
+                chat_id: 9,
+                chat_title: "Photo chat",
+                message_id: "m-photo",
+                reply_message: "The total is 42 USD."
+            };
+        }
+        return {};
+    }, { realShell: true });
+
+    const { win, posted, $ } = p;
+    win.document.dispatchEvent(new win.Event("DOMContentLoaded", { bubbles: true }));
+    await tick();
+
+    check("#photo-chip-icon survives shell paintIcons", $("#photo-chip-icon") !== null);
+
+    // Attach a photo and simulate FileReader preview load.
+    const sampleFile = new win.File([new Uint8Array([137, 80, 78, 71])], "receipt.png", { type: "image/png" });
+    Object.defineProperty($("#photo-input"), "files", { value: [sampleFile], configurable: true });
+    $("#photo-input").dispatchEvent(new win.Event("change", { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    check("attaching a photo shows #photo-attachments and hides #photo-chip-icon once preview loads",
+        !$("#photo-attachments").hidden &&
+        !$("#photo-preview").hidden &&
+        $("#photo-chip-icon").hidden &&
+        $("#photo-name").textContent === "receipt.png");
+
+    // First test empty OCR refusal.
+    photoMode = "empty";
+    p.submit("#form-send");
+    await tick();
+    await tick();
+    check("empty photo OCR shows inline error without calling CHAT",
+        !$("#chat-error").hidden &&
+        $("#chat-error").textContent === "There's no text to parse in this prompt." &&
+        !posted.some((r) => r.key === "CHAT"));
+
+    // Now test successful OCR -> CHAT send.
+    photoMode = "ok";
+    p.submit("#form-send");
+    await tick();
+    await tick();
+    await tick();
+
+    const chatCall = posted.find((r) => r.key === "CHAT");
+    check("successful photo OCR forwards extracted text to CHAT",
+        chatCall && chatCall.body.prompt === "Invoice total: 42 USD");
+    check("composer photo chip clears after send",
+        $("#photo-attachments").hidden && $("#photo-name").textContent === "");
+    check("user bubble shows the uploaded photo and keeps OCR inside collapsible details",
+        $(".bubble-user .bubble-photo") !== null &&
+        $(".bubble-user .bubble-photo-img") !== null &&
+        $(".bubble-user .bubble-photo-parsed") !== null &&
+        !$(".bubble-user .bubble-photo-parsed").open &&
+        $(".bubble-user > p") === null);
+
+    // Canceling an edit preserves the uploaded photo in the user bubble.
+    $(".msg-actions-user button").dispatchEvent(new win.MouseEvent("click", { bubbles: true }));
+    await tick();
+    $(".bubble-textarea").dispatchEvent(new win.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    await tick();
+    check("canceling edit on a photo message preserves .bubble-photo",
+        $(".bubble-user .bubble-photo") !== null);
+
+    win.close();
 }

@@ -668,6 +668,50 @@ class Gateway(unittest.TestCase):
         self.assertIn("alice@example.com", reply_text)
         self.assertIn("bob@example.com", reply_text)
 
+    def test_chat_photo_ocr_route(self):
+        import io
+        import ocr
+        # Unauthenticated upload fails with 401.
+        anon = self.api.post(ROUTES["CHAT_PHOTO"], data={
+            "Parent_id": str(self.pid),
+            "Employee_id": str(self.eid),
+            "photo": (io.BytesIO(b"not-an-image"), "bad.png"),
+        }, content_type="multipart/form-data")
+        self.assertEqual(anon.status_code, 401)
+
+        # Missing/invalid image fails cleanly with 400.
+        bad = self.api.post(ROUTES["CHAT_PHOTO"], data={
+            "Parent_id": str(self.pid),
+            "Employee_id": str(self.eid),
+            "session_token": self.ids["session_token"],
+            "photo": (io.BytesIO(b"not-an-image"), "bad.png"),
+        }, content_type="multipart/form-data")
+        self.assertEqual(bad.status_code, 400)
+        self.assertEqual(bad.json.get("error_code"), "invalid_photo")
+
+        # Empty OCR returns exact "There's no text to parse in this prompt." message.
+        with patch.object(ocr, "extract_text", side_effect=ocr.OcrNoTextError(ocr.NO_TEXT_ERROR)):
+            no_text = self.api.post(ROUTES["CHAT_PHOTO"], data={
+                "Parent_id": str(self.pid),
+                "Employee_id": str(self.eid),
+                "session_token": self.ids["session_token"],
+                "photo": (io.BytesIO(b"\x89PNG\r\n\x1a\n"), "blank.png"),
+            }, content_type="multipart/form-data")
+        self.assertEqual(no_text.status_code, 400)
+        self.assertEqual(no_text.json.get("error_code"), "no_photo_text")
+        self.assertEqual(no_text.json.get("error_message"), "There's no text to parse in this prompt.")
+
+        # Successful OCR returns extracted text.
+        with patch.object(ocr, "extract_text", return_value="Hello from image"):
+            good = self.api.post(ROUTES["CHAT_PHOTO"], data={
+                "Parent_id": str(self.pid),
+                "Employee_id": str(self.eid),
+                "session_token": self.ids["session_token"],
+                "photo": (io.BytesIO(b"\x89PNG\r\n\x1a\n"), "note.png"),
+            }, content_type="multipart/form-data")
+        self.assertEqual(good.status_code, 200)
+        self.assertEqual(good.json.get("text"), "Hello from image")
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

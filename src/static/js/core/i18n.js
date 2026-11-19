@@ -855,6 +855,8 @@
         "Type a message first.": "Γράψτε πρώτα ένα μήνυμα.",
         "Add photo": "Προσθήκη φωτογραφίας",
         "Remove photo": "Αφαίρεση φωτογραφίας",
+        "Reading photo…": "Ανάγνωση φωτογραφίας…",
+        "Parsed text": "Αναγνωρισμένο κείμενο",
         "There's no text to parse in this prompt.": "Δεν υπάρχει κείμενο προς ανάλυση σε αυτό το μήνυμα.",
         "Attach a photo to parse.": "Επισυνάψτε μια φωτογραφία για ανάλυση.",
         "Please upload a valid PNG, JPEG, WEBP, GIF, BMP, or TIFF photo.":

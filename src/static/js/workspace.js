@@ -201,28 +201,79 @@
                 }
                 if (nodes.photoChipIcon) nodes.photoChipIcon.hidden = true;
             };
+            reader.onerror = function () {
+                if (state.photo !== item) return;
+                item.dataUrl = null;
+                if (nodes.photoPreview) {
+                    nodes.photoPreview.removeAttribute("src");
+                    nodes.photoPreview.hidden = true;
+                }
+                if (nodes.photoChipIcon) nodes.photoChipIcon.hidden = false;
+            };
             reader.readAsDataURL(file);
         }
         if (nodes.input) nodes.input.focus();
     }
 
+    function photoBadgeEl(name) {
+        var badge = Dom.el("div", "bubble-photo-badge");
+        badge.appendChild(Icons.el("photo", "icon"));
+        var fname = Dom.el("span", "bubble-photo-name", name);
+        fname.setAttribute("data-no-i18n", "");
+        badge.appendChild(fname);
+        return badge;
+    }
+
     function userBubble(promptText, photoMeta, highlightQuery) {
         var mine = Dom.el("div", "bubble bubble-user");
-        if (photoMeta && photoMeta.name) {
-            var badge = Dom.el("div", "bubble-photo");
+        if (photoMeta && (photoMeta.dataUrl || photoMeta.name)) {
+            var wrap = Dom.el("div", "bubble-photo");
+            var labelName = photoMeta.name || "photo";
             if (photoMeta.dataUrl) {
-                var thumb = document.createElement("img");
-                thumb.className = "bubble-photo-thumb";
-                thumb.src = photoMeta.dataUrl;
-                thumb.alt = "";
-                badge.appendChild(thumb);
+                var img = document.createElement("img");
+                img.className = "bubble-photo-img";
+                img.src = photoMeta.dataUrl;
+                img.alt = labelName;
+                Dom.on(img, "error", function () {
+                    if (img.parentNode) {
+                        wrap.replaceChildren(photoBadgeEl(labelName));
+                    }
+                });
+                wrap.appendChild(img);
+                if (photoMeta.name) {
+                    var caption = Dom.el("span", "bubble-photo-name", photoMeta.name);
+                    caption.setAttribute("data-no-i18n", "");
+                    wrap.appendChild(caption);
+                }
             } else {
-                badge.appendChild(Icons.el("photo", "icon"));
+                wrap.appendChild(photoBadgeEl(labelName));
             }
-            var fname = Dom.el("span", "bubble-photo-name", photoMeta.name);
-            fname.setAttribute("data-no-i18n", "");
-            badge.appendChild(fname);
-            mine.appendChild(badge);
+            mine.appendChild(wrap);
+
+            if (photoMeta.hasUserText && photoMeta.userText) {
+                var typed = Dom.el("p");
+                typed.textContent = photoMeta.userText;
+                mine.appendChild(typed);
+                if (highlightQuery) Dom.highlightText(typed, highlightQuery);
+            }
+
+            var parsedBody = photoMeta.hasUserText === false
+                ? (promptText || "")
+                : (photoMeta.ocrText || "");
+            if (parsedBody) {
+                var parsedDetails = Dom.el("details", "bubble-photo-parsed");
+                var parsedSummary = Dom.el("summary", "", t("Parsed text"));
+                var parsedPre = Dom.el("pre", "bubble-photo-parsed-body", parsedBody);
+                parsedPre.setAttribute("data-no-i18n", "");
+                parsedDetails.appendChild(parsedSummary);
+                parsedDetails.appendChild(parsedPre);
+                if (highlightQuery && parsedBody.toLowerCase().indexOf(highlightQuery.toLowerCase()) !== -1) {
+                    parsedDetails.open = true;
+                    Dom.highlightText(parsedPre, highlightQuery);
+                }
+                mine.appendChild(parsedDetails);
+            }
+            return mine;
         }
         var mineText = Dom.el("p");
         mineText.textContent = promptText || "";
@@ -294,11 +345,11 @@
     var LONG_WAIT_MS = 8000;
     var pending = null;
 
-    function showPending(promptText, bypass, photoMeta) {
+    function showPending(promptText, bypass, photoMeta, readingPhoto) {
         hidePending();
 
         var enabled = Dom.activeChecks(state.settings);
-        var checking = !bypass && enabled > 0;
+        var checking = !!readingPhoto || (!bypass && enabled > 0);
 
         var wrap = Dom.el("div", "msg");
 
@@ -327,11 +378,13 @@
         label.setAttribute("role", "status");
         label.setAttribute("aria-live", "polite");
 
-        var labelKey = bypass
-            ? "Sending once with administrator approval."
-            : (!enabled
-                ? "Waiting for the AI reply."
-                : "Checking…");
+        var labelKey = readingPhoto
+            ? "Reading photo…"
+            : (bypass
+                ? "Sending once with administrator approval."
+                : (!enabled
+                    ? "Waiting for the AI reply."
+                    : "Checking…"));
         var slowKey = "Still working — normal on a long paste.";
         var resolvedClean = false;
 
@@ -803,11 +856,8 @@
             bubble.removeEventListener("keydown", onBubbleKeydown);
             wrap.classList.remove("is-editing");
             bubble.classList.remove("is-editing");
-            bubble.innerHTML = "";
-            var p = Dom.el("p");
-            p.textContent = message.prompt || "";
-            bubble.appendChild(p);
-            Dom.highlightText(p, state.query);
+            var restored = userBubble(message.prompt || "", message.photo, state.query);
+            bubble.replaceChildren.apply(bubble, Array.prototype.slice.call(restored.childNodes));
             if (trigger && trigger.isConnected) trigger.focus();
         }
 
@@ -1341,6 +1391,16 @@
         state.busy = true;
         setSendBusy(true);
         clearChatError();
+        clearEmptyState();
+
+        var photoMeta = {
+            name: photo.name,
+            dataUrl: photo.dataUrl,
+            hasUserText: !!text,
+            userText: text,
+            ocrText: ""
+        };
+        showPending("", false, photoMeta, true);
 
         var formData = new FormData();
         formData.append("photo", photo.file);
@@ -1349,6 +1409,7 @@
         Api.postForm("CHAT_PHOTO", formData, { timeout: requestBudget() })
             .then(function (data) {
                 if (viewVersion !== state.viewVersion) {
+                    hidePending();
                     state.busy = false;
                     setSendBusy(false);
                     return null;
@@ -1359,8 +1420,8 @@
                     emptyErr.body = { error_code: "no_photo_text" };
                     throw emptyErr;
                 }
+                photoMeta.ocrText = parsed;
                 var finalPrompt = text ? (text + "\n\n" + parsed) : parsed;
-                var photoMeta = { name: photo.name, dataUrl: photo.dataUrl };
                 nodes.input.value = "";
                 autoGrow();
                 clearPhoto();
@@ -1369,9 +1430,11 @@
                 return send(finalPrompt, false, null, finalPrompt, false, photoMeta);
             })
             .catch(function (err) {
+                hidePending();
                 state.busy = false;
                 setSendBusy(false);
                 if (viewVersion !== state.viewVersion) return;
+                if (!nodes.stream.children.length) renderMessages();
                 showChatError(err);
                 if (nodes.input) nodes.input.focus();
             });
@@ -1606,6 +1669,15 @@
             clearPhoto();
             clearChatError();
             if (nodes.input) nodes.input.focus();
+        });
+    }
+
+    if (nodes.photoPreview) {
+        Dom.on(nodes.photoPreview, "error", function () {
+            if (state.photo) state.photo.dataUrl = null;
+            nodes.photoPreview.removeAttribute("src");
+            nodes.photoPreview.hidden = true;
+            if (nodes.photoChipIcon) nodes.photoChipIcon.hidden = false;
         });
     }
 

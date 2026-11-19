@@ -162,26 +162,28 @@ def _get_rapidocr():
     with _rapidocr_lock:
         if _rapidocr_engine is not None:
             return _rapidocr_engine
-        try:
-            from rapidocr import RapidOCR
-            _rapidocr_engine = RapidOCR()
-            return _rapidocr_engine
-        except ImportError:
-            pass
-        try:
-            from rapidocr_onnxruntime import RapidOCR
-            _rapidocr_engine = RapidOCR()
-            return _rapidocr_engine
-        except ImportError:
-            return None
+        for mod_name in ("rapidocr", "rapidocr_onnxruntime"):
+            try:
+                mod = __import__(mod_name, fromlist=["RapidOCR"])
+                _rapidocr_engine = mod.RapidOCR()
+                return _rapidocr_engine
+            except ImportError:
+                continue
+            except Exception:
+                _rapidocr_engine = None
+                return None
+        return None
 
 
 def _rapidocr_extract(png_bytes):
     engine = _get_rapidocr()
     if engine is None:
         return None
-    with _rapidocr_lock:
-        result = engine(png_bytes)
+    try:
+        with _rapidocr_lock:
+            result = engine(png_bytes)
+    except Exception:
+        return None
     if result is None:
         return ""
     if hasattr(result, "txts"):
