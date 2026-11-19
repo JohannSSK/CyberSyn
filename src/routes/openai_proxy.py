@@ -8,7 +8,6 @@ prompt-injection guardrails, redaction/restoration, and audit logging.
 
 import secrets
 import time
-from collections import Counter
 
 from flask import Blueprint, jsonify, request
 
@@ -22,8 +21,8 @@ from errors import ChatError
 from members import get_settings, provider_and_base
 from policy import action_settings, redaction_only
 from providers import get as get_provider
-from redaction import Redaction, _substitute, apply_redactions, restore
-from scanning import screen
+from redaction import _substitute, restore
+from scanning import apply_redactions, screen
 from secret_store import decrypt_secret
 from shadow_ai import resolved_provider, unapproved_destination
 from web import get_json_dict
@@ -176,7 +175,7 @@ def proxy_chat_completions():
     screened_messages = []
     combined_mapping = {}
     combined_private = {}
-    redaction_counts = Counter()
+    redaction_categories = set()
     redaction_total = 0
 
     for msg in normalized:
@@ -230,7 +229,7 @@ def proxy_chat_completions():
                 prompt_out = _substitute(prompt_out, token_remap)
             for raw, tok in redaction.private_values.items():
                 combined_private.setdefault(raw, token_remap.get(tok, tok))
-            redaction_counts.update(redaction.info.get("categories") or {})
+            redaction_categories.update(redaction.info.get("categories") or ())
             redaction_total += redaction.info.get("count", 0)
             screened_messages.append({"role": msg["role"], "content": prompt_out})
         else:
@@ -259,16 +258,21 @@ def proxy_chat_completions():
         return _openai_error(exc.message, exc.status, err_type="upstream_error",
                              code=exc.payload.get("error_code"))
 
-    stored_answer = Redaction("", combined_mapping, combined_private, {}).un_restored_reply(answer) if combined_private else answer
+    stored_answer = _substitute(answer, combined_private) if combined_private else answer
     reply = restore(stored_answer, combined_mapping) if (combined_mapping and saved["restore_redactions"]) else stored_answer
     restored = reply != stored_answer
-    redaction_info = {"count": redaction_total, "categories": dict(redaction_counts)} if redaction_total else None
+    redaction_info = {
+        "count": redaction_total,
+        "categories": sorted(redaction_categories),
+        "placeholders": sorted(combined_mapping),
+        "restored": restored,
+    } if redaction_total else None
     del combined_mapping, combined_private
 
     bump_answered(DB_FILE, pid, eid)
     record_activity(DB_FILE, pid, eid, "prompt", f"proxy ({total_chars} chars)")
     if redaction_info:
-        cats = ", ".join(f"{k}×{v}" for k, v in sorted(redaction_info["categories"].items()))
+        cats = ", ".join(redaction_info["categories"])
         record_activity(DB_FILE, pid, eid, "redacted", f"proxy ({redaction_info['count']}: {cats})")
 
     return jsonify({
