@@ -14,7 +14,7 @@ import os
 import sys
 import threading
 
-from flask import Flask, jsonify
+from flask import Flask, abort, jsonify, request
 from werkzeug.exceptions import HTTPException
 from werkzeug.serving import is_running_from_reloader
 
@@ -32,7 +32,18 @@ def create_app():
                 template_folder=str(TEMPLATES_DIR))
     app.jinja_env.globals["api_routes"] = ROUTES
     app.json.ensure_ascii = False
-    app.config["MAX_CONTENT_LENGTH"] = int(os.environ.get("CYBERSYN_MAX_BODY_BYTES", 256 * 1024))
+    default_max_body = int(os.environ.get("CYBERSYN_MAX_BODY_BYTES", 256 * 1024))
+    max_photo_body = int(os.environ.get("CYBERSYN_MAX_PHOTO_BODY_BYTES", 12 * 1024 * 1024))
+    app.config["MAX_CONTENT_LENGTH"] = max(default_max_body, max_photo_body)
+
+    @app.before_request
+    def _enforce_body_limit():
+        limit = max_photo_body if request.path == ROUTES["CHAT_PHOTO"] else default_max_body
+        if request.content_length is not None and request.content_length > limit:
+            abort(413)
+        if request.content_length is None and request.path != ROUTES["CHAT_PHOTO"]:
+            if len(request.get_data(cache=True)) > limit:
+                abort(413)
 
     # ---- schema ----
     db.init_db()

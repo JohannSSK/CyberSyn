@@ -251,6 +251,17 @@ class Rules(unittest.TestCase):
             self.assertTrue(verdict["blocked"], inj)
             self.assertEqual(verdict["main_cause"], "PROMPT_INJECTION")
 
+        # Ordinary UI/OCR metadata lines must not trip the injection check when
+        # classified under the ordinary-document/UI label (or below THRESHOLD).
+        self.assertIn("user interface label", injection.LABELS[-1])
+        self.assertFalse(injection.analyze("commented 1 hour aqo (Owner) Reviewers ©")["blocked"])
+        with patch.object(
+            injection,
+            "classify_batched",
+            return_value=[{"labels": [injection.INJECTION_LABEL], "scores": [0.65]}],
+        ):
+            self.assertFalse(injection.analyze("commented 1 hour aqo (Owner) Reviewers ©")["blocked"])
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

@@ -127,7 +127,7 @@ check("API examples cover every registered endpoint", documented == set(ROUTES.v
 # The browser uses symbolic keys; the template serializes this same registry.
 js_routes = set()
 for path in (ROOT / "src/static/js").rglob("*.js"):
-    js_routes.update(re.findall(r'Api\.post\(\s*"([^"]+)"', read(path)))
+    js_routes.update(re.findall(r'Api\.(?:post|postForm)\(\s*"([^"]+)"', read(path)))
 check("every browser call uses a route key from constants.json", js_routes <= ROUTES.keys(), js_routes - ROUTES.keys())
 check("every API route is wired into the browser", js_routes == ROUTES.keys(), ROUTES.keys() - js_routes)
 

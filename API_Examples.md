@@ -191,6 +191,7 @@ Each request below needs the **member body**. Edits affect local history only; i
 | `POST /api/admin/employee/chats/message/edit` | `{"chat_id":7,"message_id":"<id>","text":"Review the sum."}` | `messages`: updated list (edited message has `edited:true,edited_at`). |
 | `POST /api/admin/employee/chats/message/delete` | `{"chat_id":7,"message_id":"<id>"}` | `messages`: remaining messages. Missing messages return `404`. |
 | `POST /api/admin/employee/chat/regenerate` | `{"chat_id":7,"message_id":"<id>"}` with optional `prompt`, `confirm_warn`, `bypass`, `admin_token` | Same send envelope; on success includes updated `messages` (history-safe, even when `reply_message` is locally restored). If `prompt` is provided it is screened as a draft and saved only after a successful answer; otherwise the stored prompt is re-screened. |
+| `POST /api/admin/employee/chat/photo` | Multipart form upload `photo` (or base64 `photo` string) with member session | `{"error":false,"error_message":"NULL","text":"<extracted text>"}`. Extracts text locally via OCR; returns `400` with `error_code:"no_photo_text"` (`"There's no text to parse in this prompt."`) if no text is found. |
 
 ## `POST /api/admin/team`
 

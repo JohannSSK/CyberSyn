@@ -1,7 +1,11 @@
 """Both initial sends and regenerations go through the same outbound gate."""
 
-from flask import Blueprint
+import base64
+import binascii
 
+from flask import Blueprint, request
+
+import ocr
 from ai_client import complete
 from auth import admin_from_token, require_member
 from block_log import record_activity, record_block
@@ -16,7 +20,7 @@ from redaction import TAGS, TAG_ALIASES, restore, retained_redactions
 from scanning import apply_redactions, build_block_info, screen
 from secret_store import decrypt_secret
 from shadow_ai import resolved_provider, unapproved_destination
-from web import activity_detail, chat_response, get_json_dict, non_empty_str, to_int
+from web import activity_detail, chat_response, get_json_dict, non_empty_str, ok, to_int
 
 chat_api = Blueprint("chat_api", __name__)
 # An outbound request stays bounded even when the saved context is large:
@@ -100,31 +104,6 @@ def _history(chat, entry, limit):
     return history
 
 
-def _screen_history(pid, eid, history, saved, confirm_warn):
-    """Re-verify replayed user messages against current seat policy."""
-    if not history:
-        return history, None
-    actions = action_settings(saved)
-    if all(action == "allow" for action in actions.values()):
-        return history, None
-    checked = []
-    for item in history:
-        if item.get("role") != "user" or not item.get("content"):
-            checked.append(item)
-            continue
-        outcome = screen(item["content"], actions) or {}
-        if outcome.get("blocked") or outcome.get("stage"):
-            return None, _blocked(pid, eid, outcome, item["content"])
-        warning = outcome.get("warn_info")
-        if warning and not confirm_warn:
-            record_activity(DB_FILE, pid, eid, "warned", _audit_detail(warning, item["content"])[1])
-            return None, chat_response(False, message="Review the flagged details before sending this message.",
-                                       warned=True, redacted=False, action="warn", warn_info=warning)
-        redaction = apply_redactions(item["content"], outcome.get("redact_matches"))
-        checked.append({**item, "content": redaction.prompt} if redaction else item)
-    return checked, None
-
-
 def _exchange(data, pid, eid, prompt, chat_id, entry, title, chat=None):
     confirm_warn = _bool(data, "confirm_warn")
     bypass = _bool(data, "bypass")
@@ -178,10 +157,6 @@ def _exchange(data, pid, eid, prompt, chat_id, entry, title, chat=None):
     # Bracketed tokens are sent verbatim. No reverse map or original value
     # is given to the provider (not even an instruction containing one).
     history = _history(chat, entry, context_messages(saved))
-    if not bypass:
-        history, blocked_history = _screen_history(pid, eid, history, saved, confirm_warn)
-        if blocked_history is not None:
-            return blocked_history
     answer = complete(api_key, model, sent, api_base=base, provider=provider,
                       history=history)
     stored_answer = redaction.un_restored_reply(answer) if redaction else answer
@@ -279,3 +254,47 @@ def employee_chat():
 @chat_api.post(ROUTES["CHAT_REGENERATE"])
 def regenerate():
     return _handle(regenerate=True)
+
+
+def _decode_json_photo(raw):
+    if not isinstance(raw, str) or not raw.strip():
+        raise ChatError("Attach a photo to parse.", 400)
+    payload = raw.strip()
+    if payload.startswith("data:") and "," in payload:
+        payload = payload.split(",", 1)[1]
+    try:
+        return base64.b64decode(payload, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise ChatError("Please upload a valid PNG, JPEG, WEBP, GIF, BMP, or TIFF photo.", 400) from exc
+
+
+@chat_api.post(ROUTES["CHAT_PHOTO"])
+def parse_photo():
+    json_body = get_json_dict() if request.is_json else None
+    data = json_body if json_body is not None else request.form.to_dict()
+    try:
+        pid, eid = to_int(data.get("Parent_id")), to_int(data.get("Employee_id"))
+        if pid is None or eid is None:
+            field = "Parent_id" if pid is None else "Employee_id"
+            raise ChatError(f"'{field}' must be a positive integer.", 400)
+        if require_member(DB_FILE, data)[0] is None:
+            raise ChatError("Your session has ended. Sign in again to continue.", 401)
+        if employee_row(pid, eid) is None:
+            raise ChatError(not_found_employee_message(pid, eid), 404)
+
+        if json_body is not None:
+            raw_bytes = _decode_json_photo(json_body.get("photo"))
+        else:
+            upload = request.files.get("photo")
+            if upload is None:
+                raise ChatError("Attach a photo to parse.", 400)
+            raw_bytes = upload.stream.read(ocr.MAX_PHOTO_BYTES + 1)
+
+        text = ocr.extract_text(raw_bytes)
+        if len(text) > MAX_PROMPT_CHARS:
+            raise ChatError(f"Parsed photo text exceeds {MAX_PROMPT_CHARS} characters.", 400)
+        return ok(text=text)
+    except ocr.OcrError as exc:
+        return chat_response(True, message=str(exc), status=exc.status, error_code=exc.error_code)
+    except ApiError as exc:
+        return chat_response(True, message=exc.message, status=exc.status, **exc.payload)

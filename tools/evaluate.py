@@ -6,21 +6,27 @@ Runs every scanner over a labelled corpus and reports precision, recall, F1 and
 latency per check, so the blocking thresholds are defended by measurements
 instead of intuition.
 
-Usage:
-    python tools/evaluate.py            # all checks
-    python tools/evaluate.py --in-process  # reuse the loaded models
-    python tools/evaluate.py check1     # a single check
-    python tools/evaluate.py --json     # machine-readable output
+By default, scanners run in-process (loading each model once and using all
+CPU cores per batched forward pass). Use --subprocess to exercise the
+cold-start stdin fallback protocol instead.
 
-The default also exercises the fallback protocol: a separate process reading the prompt on stdin and printing a JSON verdict. A scanner that
-crashes, times out, or prints no verdict is reported as UNAVAILABLE and excluded
-from the metrics rather than silently counted as a miss.
+Usage:
+    python tools/evaluate.py            # all checks (in-process, single model load)
+    python tools/evaluate.py check1     # a single check
+    python tools/evaluate.py --workers 2
+    python tools/evaluate.py --subprocess
+    python tools/evaluate.py --json     # machine-readable output
 """
 
+import argparse
+import importlib
 import json
+import multiprocessing
+import os
 import subprocess
 import sys
 import time
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -304,36 +310,102 @@ def metrics(tp, fp, fn, tn):
     }
 
 
-def evaluate(selected, in_process=False):
+_WORKER_MODULES = {}
+
+
+def _default_workers():
+    return 1
+
+
+def _init_worker(threads):
+    for var in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"):
+        os.environ[var] = str(threads)
+    try:
+        import torch
+        torch.set_num_threads(threads)
+    except (ImportError, RuntimeError):
+        pass
+
+
+def _run_in_process_case(script, prompt, block_code):
+    key = str(script)
+    mod = _WORKER_MODULES.get(key)
+    if mod is None:
+        parent = str(script.parent)
+        if parent not in sys.path:
+            sys.path.insert(0, parent)
+        mod = importlib.import_module(script.stem)
+        _WORKER_MODULES[key] = mod
+    started = time.perf_counter()
+    try:
+        policy = {"block_code": True} if block_code else {}
+        verdict, err = mod.analyze(prompt, **policy), None
+    except Exception as exc:
+        verdict, err = None, str(exc)
+    return verdict, time.perf_counter() - started, err
+
+
+def _eval_task(task):
+    name, script_str, idx, prompt, block_code, in_process = task
+    script = Path(script_str)
+    if in_process:
+        verdict, elapsed, err = _run_in_process_case(script, prompt, block_code)
+    else:
+        verdict, elapsed, err = run_scanner(script, prompt, block_code)
+    return name, idx, verdict, elapsed, err
+
+
+def evaluate(selected, in_process=True, workers=None):
+    scripts = {}
     report = {}
+    tasks = []
+
     for name in selected:
         meta = CHECKS[name]
         script = resolve_script(meta["script"])
         if script is None:
             report[name] = {"label": meta["label"], "unavailable": f"script not found: {meta['script']}"}
             continue
+        scripts[name] = script
+        for idx, case in enumerate(CASES):
+            if case["expect"].get(name) is None:
+                continue
+            block_code = name == "check2" and case.get("block_code", False)
+            tasks.append((name, str(script), idx, case["text"], block_code, in_process))
 
+    worker_count = max(1, workers if workers is not None else _default_workers())
+    if tasks:
+        worker_count = min(worker_count, len(tasks))
+
+    outcomes = {name: [] for name in scripts}
+    if worker_count == 1 or not tasks:
+        if in_process and tasks:
+            _init_worker(max(1, os.cpu_count() or 1))
+        for task in tasks:
+            name, idx, verdict, elapsed, err = _eval_task(task)
+            outcomes[name].append((idx, verdict, elapsed, err))
+    else:
+        threads_per_worker = max(1, (os.cpu_count() or 1) // worker_count)
+        ctx = multiprocessing.get_context("spawn")
+        with ProcessPoolExecutor(
+            max_workers=worker_count,
+            mp_context=ctx,
+            initializer=_init_worker,
+            initargs=(threads_per_worker,),
+        ) as pool:
+            for name, idx, verdict, elapsed, err in pool.map(_eval_task, tasks):
+                outcomes[name].append((idx, verdict, elapsed, err))
+
+    for name in selected:
+        if name in report:
+            continue
+        meta = CHECKS[name]
         counts = {"tp": 0, "fp": 0, "fn": 0, "tn": 0}
         errors, misclassified, latencies = [], [], []
 
-        for case in CASES:
-            expected = case["expect"].get(name)
-            if expected is None:
-                continue
-            block_code = name == "check2" and case.get("block_code", False)
-            if in_process:
-                import importlib
-                if str(script.parent) not in sys.path:
-                    sys.path.insert(0, str(script.parent))
-                started = time.perf_counter()
-                try:
-                    policy = {"block_code": True} if block_code else {}
-                    verdict, err = importlib.import_module(script.stem).analyze(case["text"], **policy), None
-                except Exception as exc:
-                    verdict, err = None, str(exc)
-                elapsed = time.perf_counter() - started
-            else:
-                verdict, elapsed, err = run_scanner(script, case["text"], block_code)
+        for idx, verdict, elapsed, err in sorted(outcomes[name], key=lambda item: item[0]):
+            case = CASES[idx]
+            expected = case["expect"][name]
             latencies.append(elapsed)
             if err is not None:
                 errors.append(f"{case['name']}: {err}")
@@ -373,16 +445,31 @@ def evaluate(selected, in_process=False):
 
 
 def main(argv):
-    args = [a for a in argv[1:] if not a.startswith("--")]
-    selected = [a for a in args if a in CHECKS] or list(CHECKS)
-    unknown = [a for a in args if a not in CHECKS]
+    parser = argparse.ArgumentParser(description="CyberSyn detection-quality harness")
+    parser.add_argument("checks", nargs="*", help=f"Checks to run ({', '.join(CHECKS)})")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--in-process", action="store_true",
+                      help="Reuse loaded models in-process (default)")
+    mode.add_argument("--subprocess", action="store_true",
+                      help="Run each case in a fresh stdin subprocess")
+    parser.add_argument("--workers", type=int, default=None,
+                        help="Parallel worker processes (default: 1 for in-process single model load)")
+    parser.add_argument("--json", action="store_true", help="Machine-readable JSON output")
+    ns = parser.parse_args(argv[1:])
+
+    if ns.workers is not None and ns.workers < 1:
+        print("--workers must be >= 1.")
+        return 2
+
+    unknown = [a for a in ns.checks if a not in CHECKS]
     if unknown:
         print(f"Unknown check(s): {', '.join(unknown)}. Choose from {', '.join(CHECKS)}.")
         return 2
+    selected = [a for a in ns.checks if a in CHECKS] or list(CHECKS)
 
-    report = evaluate(selected, "--in-process" in argv)
+    report = evaluate(selected, in_process=not ns.subprocess, workers=ns.workers)
 
-    if "--json" in argv:
+    if ns.json:
         print(json.dumps(report, indent=2, ensure_ascii=False))
         return 0
 

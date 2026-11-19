@@ -61,7 +61,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     CYBERSYN_DEBUG=0 \
     PATH="/opt/venv/bin:${PATH}"
 
-RUN useradd --create-home --shell /bin/bash cybersyn \
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-ell \
+ && rm -rf /var/lib/apt/lists/* \
+ && useradd --create-home --shell /bin/bash cybersyn \
  && install -d -o cybersyn -g cybersyn -m 700 /app/src/backend /app/secrets
 
 COPY --from=builder /opt/venv /opt/venv

@@ -136,11 +136,31 @@
                     </div>
                     <p id="chat-error" class="composer-error" role="alert" hidden></p>
                     <form id="form-send" class="composer-row">
-                        <div class="composer-box">
-                            <textarea id="prompt-input" rows="1"
-                                      placeholder="Type a message…"
-                                      aria-label="Message"></textarea>
-                            <kbd class="kbd composer-chip">Shift + Enter for a new line</kbd>
+                        <div class="composer-box" id="composer-box">
+                            <div class="composer-attachments" id="photo-attachments" hidden>
+                                <div class="photo-chip" id="photo-chip">
+                                    <img class="photo-chip-thumb" id="photo-preview" alt="" hidden>
+                                    <span class="photo-chip-icon" id="photo-chip-icon"><span data-icon="photo"></span></span>
+                                    <span class="photo-chip-name" id="photo-name" data-no-i18n></span>
+                                    <button type="button" class="photo-chip-remove" id="btn-remove-photo"
+                                            title="Remove photo" aria-label="Remove photo">
+                                        <span data-icon="close"></span>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="composer-input-row">
+                                <button type="button" class="composer-attach" id="btn-add-photo"
+                                        title="Add photo" aria-label="Add photo">
+                                    <span data-icon="photo"></span>
+                                </button>
+                                <input type="file" id="photo-input"
+                                       accept="image/png,image/jpeg,image/webp,image/gif,image/bmp,image/tiff,image/*"
+                                       hidden>
+                                <textarea id="prompt-input" rows="1"
+                                          placeholder="Type a message…"
+                                          aria-label="Message"></textarea>
+                                <kbd class="kbd composer-chip">Shift + Enter for a new line</kbd>
+                            </div>
                         </div>
                         <button type="submit" class="composer-send" id="btn-send"
                                 title="Send message" aria-label="Send message">

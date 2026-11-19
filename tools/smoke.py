@@ -164,6 +164,29 @@ def main():
             check("a single message can be deleted",
                   status == 200 and "messages" in removed, removed)
 
+    # ---- photo OCR route ----------------------------------------------
+    import base64
+    import struct
+    import zlib
+
+    def _png_chunk(tag, data):
+        body = tag + data
+        return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body) & 0xFFFFFFFF)
+
+    ihdr = struct.pack(">IIBBBBB", 8, 8, 8, 2, 0, 0, 0)
+    raw_scanlines = b"\x00" + b"\xff" * (8 * 3)
+    tiny_png = (
+        b"\x89PNG\r\n\x1a\n"
+        + _png_chunk(b"IHDR", ihdr)
+        + _png_chunk(b"IDAT", zlib.compress(raw_scanlines * 8))
+        + _png_chunk(b"IEND", b"")
+    )
+    status, photo_res = member("CHAT_PHOTO", photo=base64.b64encode(tiny_png).decode("ascii"))
+    check("photo upload rejects blank image with exact no-text message",
+          status == 400 and photo_res.get("error_code") == "no_photo_text" and
+          photo_res.get("error_message") == "There's no text to parse in this prompt.",
+          (status, photo_res))
+
     # ---- authorisation still holds ------------------------------------
     status, _ = call("CHATS",
                      {"Parent_id": parent_id, "Employee_id": employee_id})

@@ -853,6 +853,17 @@
         "Could not reach the gateway. Check that the server is running and try again.":
             "Δεν ήταν δυνατή η επικοινωνία με την πύλη. Βεβαιωθείτε ότι ο διακομιστής λειτουργεί και δοκιμάστε ξανά.",
         "Type a message first.": "Γράψτε πρώτα ένα μήνυμα.",
+        "Add photo": "Προσθήκη φωτογραφίας",
+        "Remove photo": "Αφαίρεση φωτογραφίας",
+        "Reading photo…": "Ανάγνωση φωτογραφίας…",
+        "Parsed text": "Αναγνωρισμένο κείμενο",
+        "There's no text to parse in this prompt.": "Δεν υπάρχει κείμενο προς ανάλυση σε αυτό το μήνυμα.",
+        "Attach a photo to parse.": "Επισυνάψτε μια φωτογραφία για ανάλυση.",
+        "Please upload a valid PNG, JPEG, WEBP, GIF, BMP, or TIFF photo.":
+            "Ανεβάστε μια έγκυρη φωτογραφία PNG, JPEG, WEBP, GIF, BMP ή TIFF.",
+        "Photo exceeds the 10 MiB upload limit.": "Η φωτογραφία υπερβαίνει το όριο των 10 MiB.",
+        "Photo text parsing is not available on this server. Install the OCR dependencies and try again.":
+            "Η ανάγνωση κειμένου από φωτογραφίες δεν είναι διαθέσιμη σε αυτόν τον διακομιστή. Εγκαταστήστε τις εξαρτήσεις OCR και δοκιμάστε ξανά.",
         "Answer copied.": "Η απάντηση αντιγράφηκε.",
         "Clipboard access was blocked — select the text to copy it.":
             "Δεν επιτράπηκε η πρόσβαση στο πρόχειρο — επιλέξτε το κείμενο για αντιγραφή.",

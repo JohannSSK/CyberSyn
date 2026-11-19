@@ -623,13 +623,14 @@ class Gateway(unittest.TestCase):
                                  message_id=first["message_id"], text="My API key is sk-proj-" + "x" * 22)
         self.assertEqual(blocked_edit.status_code, 403, blocked_edit.json)
 
-        # Simulate a legacy unscreened entry stored before policy tightened.
+        # Previous messages in context must not block a clean new prompt.
         chat_store.edit_message(DB_FILE, self.pid, self.eid, first["chat_id"], first["message_id"],
                                 "Leaked key sk-proj-" + "y" * 22)
-        with patch.object(chat_api, "complete", return_value="should not send") as complete:
+        with patch.object(chat_api, "complete", return_value="ok") as complete:
             follow = self.post("CHAT", **self.ids, chat_id=first["chat_id"], prompt="Continue")
-            self.assertTrue(follow.json.get("blocked"), follow.json)
-            complete.assert_not_called()
+            self.assertEqual(follow.status_code, 200, follow.json)
+            self.assertFalse(follow.json.get("blocked"), follow.json)
+            complete.assert_called_once()
 
     def test_openai_compatible_proxy_routes(self):
         import ai_client
@@ -667,6 +668,50 @@ class Gateway(unittest.TestCase):
         reply_text = res.json["choices"][0]["message"]["content"]
         self.assertIn("alice@example.com", reply_text)
         self.assertIn("bob@example.com", reply_text)
+
+    def test_chat_photo_ocr_route(self):
+        import io
+        import ocr
+        # Unauthenticated upload fails with 401.
+        anon = self.api.post(ROUTES["CHAT_PHOTO"], data={
+            "Parent_id": str(self.pid),
+            "Employee_id": str(self.eid),
+            "photo": (io.BytesIO(b"not-an-image"), "bad.png"),
+        }, content_type="multipart/form-data")
+        self.assertEqual(anon.status_code, 401)
+
+        # Missing/invalid image fails cleanly with 400.
+        bad = self.api.post(ROUTES["CHAT_PHOTO"], data={
+            "Parent_id": str(self.pid),
+            "Employee_id": str(self.eid),
+            "session_token": self.ids["session_token"],
+            "photo": (io.BytesIO(b"not-an-image"), "bad.png"),
+        }, content_type="multipart/form-data")
+        self.assertEqual(bad.status_code, 400)
+        self.assertEqual(bad.json.get("error_code"), "invalid_photo")
+
+        # Empty OCR returns exact "There's no text to parse in this prompt." message.
+        with patch.object(ocr, "extract_text", side_effect=ocr.OcrNoTextError(ocr.NO_TEXT_ERROR)):
+            no_text = self.api.post(ROUTES["CHAT_PHOTO"], data={
+                "Parent_id": str(self.pid),
+                "Employee_id": str(self.eid),
+                "session_token": self.ids["session_token"],
+                "photo": (io.BytesIO(b"\x89PNG\r\n\x1a\n"), "blank.png"),
+            }, content_type="multipart/form-data")
+        self.assertEqual(no_text.status_code, 400)
+        self.assertEqual(no_text.json.get("error_code"), "no_photo_text")
+        self.assertEqual(no_text.json.get("error_message"), "There's no text to parse in this prompt.")
+
+        # Successful OCR returns extracted text.
+        with patch.object(ocr, "extract_text", return_value="Hello from image"):
+            good = self.api.post(ROUTES["CHAT_PHOTO"], data={
+                "Parent_id": str(self.pid),
+                "Employee_id": str(self.eid),
+                "session_token": self.ids["session_token"],
+                "photo": (io.BytesIO(b"\x89PNG\r\n\x1a\n"), "note.png"),
+            }, content_type="multipart/form-data")
+        self.assertEqual(good.status_code, 200)
+        self.assertEqual(good.json.get("text"), "Hello from image")
 
 
 if __name__ == '__main__':
