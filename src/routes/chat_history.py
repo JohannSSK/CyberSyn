@@ -14,7 +14,7 @@ from config import DB_FILE, DEFAULT_MODEL, MAX_PROMPT_CHARS, ROUTES
 from db import get_db
 from errors import ApiError
 from members import get_settings, provider_and_base
-from policy import redaction_only, rule_actions
+from policy import action_settings, rule_actions
 from scanning import apply_redactions, screen
 from shadow_ai import unapproved_destination
 from web import activity_detail, fail, get_json_dict, ok, to_int
@@ -130,11 +130,16 @@ def message_edit():
     if not text:
         return fail("The message cannot be empty.", 400)
 
-    # A local edit is not a send. Still, never introduce a raw value that
-    # this seat's redaction rules already require us to keep out of history.
+    # Screen edits against active seat rules so unscreened or disallowed
+    # content can never be slipped into history for later context replay.
     saved = get_settings(*ids)
-    rules = redaction_only(saved)
-    outcome = screen(text, rules) if "redact" in rules.values() else None
+    actions = action_settings(saved)
+    outcome = screen(text, actions) if any(action != "allow" for action in actions.values()) else None
+    if outcome and (outcome.get("blocked") or outcome.get("stage")):
+        cause = outcome.get("main_cause") or "policy"
+        return fail(f"Edited message violates workspace safety policy ({cause}). Remove the flagged details before saving.", 403)
+    if outcome and outcome.get("warn_info") and not data.get("confirm_warn"):
+        return fail("Edited message triggered a safety warning. Remove the flagged details before saving.", 403)
     redaction = apply_redactions(text, (outcome or {}).get("redact_matches"))
     messages = chat_store.edit_message(DB_FILE, *ids, chat_id, message_id, text, redaction=redaction)
     del redaction

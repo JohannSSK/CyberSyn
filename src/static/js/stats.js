@@ -517,6 +517,35 @@
         Loading.toast("CSV downloaded.", "success");
     }
 
+    function exportJson() {
+        if (!latestData) {
+            Loading.toast("Load statistics before exporting.", "warn");
+            return;
+        }
+        var nowIso = new Date().toISOString();
+        var report = {
+            generated_at_utc: nowIso,
+            window_days: activeDays,
+            stats: latestData.stats || {},
+            stages: latestData.stages || [],
+            reasons: latestData.reasons || [],
+            members: latestData.members || [],
+            trend: sliceTrend(latestData.trend || []),
+            timeline: latestData.timeline || []
+        };
+        var blob = new Blob([JSON.stringify(report, null, 2) + "\n"],
+            { type: "application/json;charset=utf-8" });
+        var url = URL.createObjectURL(blob);
+        var link = document.createElement("a");
+        link.href = url;
+        link.download = "cybersyn-statistics-" + nowIso.slice(0, 10) + ".json";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+        Loading.toast("JSON downloaded.", "success");
+    }
+
     /* ------------------------------------------------------------------
        Render & load
        ------------------------------------------------------------------ */
@@ -597,6 +626,7 @@
 
     Dom.on($("#btn-refresh"), "click", function () { load($("#btn-refresh")); });
     Dom.on($("#btn-export-csv"), "click", exportCsv);
+    if ($("#btn-export-json")) Dom.on($("#btn-export-json"), "click", exportJson);
     Dom.on(window, "beforeprint", updatePrintFooter);
 
     Dom.$$("#range-bar button").forEach(function (button) {

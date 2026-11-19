@@ -34,6 +34,7 @@
     var contextDirty = false;
     var connectionDirty = false;
     var savedConnection = { provider: "auto", base: "", hasKey: false };
+    var providerMeta = {};
     var discoveryVersion = 0;
 
     var nodes = {
@@ -54,6 +55,7 @@
         saveChecks: $("#btn-save-checks"),
         checksState: $("#checks-state"),
         model: $("#setting-model"),
+        modelCustom: $("#setting-model-custom"),
         refresh: $("#btn-refresh-models"),
         key: $("#setting-api-key"),
         keyState: $("#key-state"),
@@ -349,10 +351,17 @@
        Provider choice & model discovery
        ------------------------------------------------------------------ */
 
+    function providerNeedsKey(key) {
+        var meta = providerMeta[key || "auto"];
+        return !meta || meta.needs_key !== false;
+    }
+
     function loadProviders() {
         return Api.post("PROVIDERS", {}).then(function (data) {
             var current = nodes.provider.value;
+            providerMeta = {};
             nodes.provider.innerHTML = (data.providers || []).map(function (item) {
+                providerMeta[item.key] = item;
                 var label = item.key === "auto" ? t("Detect automatically") : item.label;
                 return '<option value="' + Dom.esc(item.key) + '">' +
                     Dom.esc(label) + "</option>";
@@ -399,12 +408,12 @@
         };
         var version = ++discoveryVersion;
         if (key) body.API_KEY = key;
-        if (!key && !savedConnection.hasKey) {
+        if (!key && !savedConnection.hasKey && providerNeedsKey(body.provider)) {
             setModelState(t("Paste a key first to load the models it can reach."));
             return Promise.resolve(null);
         }
 
-        var changed = !key && (
+        var changed = !key && savedConnection.hasKey && (
             body.API_BASE !== savedConnection.base ||
             body.provider !== savedConnection.provider
         );
@@ -511,7 +520,22 @@
     Dom.on(nodes.saveContext, "click", saveContext);
     Dom.on(nodes.saveConnection, "click", saveConnection);
     Dom.on(nodes.refresh, "click", function () { refreshModels({ button: true }); });
-    Dom.on(nodes.model, "change", markConnectionDirty);
+    Dom.on(nodes.model, "change", function () {
+        if (nodes.modelCustom) nodes.modelCustom.value = "";
+        markConnectionDirty();
+    });
+    if (nodes.modelCustom) {
+        Dom.on(nodes.modelCustom, "input", function () {
+            var typed = nodes.modelCustom.value.trim();
+            if (!typed) return;
+            var exists = Array.prototype.some.call(nodes.model.options, function (opt) {
+                return opt.value === typed;
+            });
+            if (!exists) nodes.model.appendChild(modelOption(typed));
+            nodes.model.value = typed;
+            markConnectionDirty();
+        });
+    }
     Dom.on(nodes.provider, "change", function () {
         nodes.base.value = nodes.provider.value === savedConnection.provider
             ? savedConnection.base
@@ -549,7 +573,7 @@
     loadProviders()
         .then(load)
         .then(function (data) {
-            if (data && data.API_KEY_MASK) refreshModels();
+            if (data && (data.API_KEY_MASK || !providerNeedsKey(data.PROVIDER))) refreshModels();
         })
         .catch(function (err) { Loading.toast(err.message, "error"); });
 })();

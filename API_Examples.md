@@ -247,10 +247,21 @@ Same write credentials as policy changes. Send exactly one operation:
 - Bounds: 2,000 physical lines and 192 KiB of UTF-8 text per import. Malformed or binary content returns `400` without partially persisting an import. Only allowlisted metadata is stored; scheme, credentials, paths, queries, fragments and prompt columns are dropped. The parser never resolves or contacts destinations.
 - Returns `lines_scanned` (nonblank data records, excluding the CSV header), `ai_events_added`, `non_ai_ignored`, `events_cleared`, `sample_events_replaced`, and a refreshed unfiltered seven-day `summary`. File and paste imports append; repeated file and paste imports are not deduplicated.
 
+## OpenAI-compatible proxy (`POST /v1/chat/completions`, `GET /v1/models`)
+
+External tools, IDE assistants and in-house AI applications can point their OpenAI base URL at `http://<host>:<port>/v1` and pass a member's `session_token` as the `Authorization: Bearer <token>` key (or `X-CyberSyn-Token`).
+
+- `GET /v1/models`: returns the seat's active model ID in standard OpenAI `list` format.
+- `POST /v1/chat/completions`: screens every `system`, `developer` and `user` message against the seat's Shadow AI tool policy and active safety checks (`allow`, `redact`, `warn`, `block`) before forwarding `stream=false` completions to the seat's configured upstream provider.
+  - Blocked tool or prompt → `403` OpenAI error payload (`cybersyn.blocked: true`, `stage`, `main_cause`), logged to `BLOCK_LOG`.
+  - Warning triggered → `409` (`cybersyn.warned: true`, `warn_info`); re-send with `X-CyberSyn-Confirm-Warn: true` (or `"cybersyn_confirm_warn": true`) to proceed.
+  - One-off admin override → pass `X-CyberSyn-Bypass-Token: <admin_token>` (or `"cybersyn_bypass_token"` from `/api/admin/approve` with `scope="once"`).
+  - Redacted prompts mask spans across all messages in the request and restore placeholders in memory on the reply when `restore_redactions` is enabled.
+
 ## Known gaps
 
-- Only prompts submitted through this gateway are screened. No interception of other AI sites, multi-turn provider memory or OpenAI-compatible proxy is implied.
+- Only prompts submitted through CyberSyn (the web workspace or `/v1/chat/completions` proxy) are screened. Browser extensions or transparent OS/network interception of arbitrary third-party websites are not included.
 - Screeners are heuristics plus local models, not proof of confidentiality or of source-code ownership. Code policy blocks recognized source, not a particular licence. Missing models fail closed.
-- A saved key is currently required even for the Ollama chat/discovery routes. Discovery pins validated socket addresses; completion uses an administrator-approved base and LiteLLM's transport. Restrict network egress on shared or cloud gateways.
+- Discovery pins validated socket addresses; completion uses an administrator-approved base and LiteLLM's transport. Restrict network egress on shared or cloud gateways.
 - SQLite chat content is not encrypted. Protect the data volume and backups. Audit events/statistics survive offboarding; deleting rows is not secure erasure from backups. Explicit preview opt-in exposes ordinary prompt/edit prefixes on the admin timeline.
 - Shadow AI reports supplied logs and current workspace policy, not live interception or proof of what was disclosed. Restricted tools can be used through the screened gateway; direct-access findings rely on the source of the uploaded logs.

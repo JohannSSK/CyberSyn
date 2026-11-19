@@ -1,3 +1,4 @@
+import base64
 import json
 import re
 import sys
@@ -49,6 +50,39 @@ except ImportError:
     from .text_chunks import embedded, lines
 
 
+_ZERO_WIDTH = frozenset("\u200b\u200c\u200d\u200e\u200f\u2060\ufeff\u00ad")
+_HOMOGLYPHS = str.maketrans({
+    # Cyrillic lookalikes
+    "а": "a", "А": "A", "е": "e", "Е": "E", "ё": "e", "Ё": "E",
+    "і": "i", "І": "I", "ї": "i", "Ї": "I", "о": "o", "О": "O",
+    "р": "p", "Р": "P", "с": "c", "С": "C", "у": "y", "У": "Y",
+    "х": "x", "Х": "X", "к": "k", "К": "K", "м": "m", "М": "M",
+    "н": "h", "Н": "H", "т": "t", "Т": "T", "в": "b", "В": "B",
+    # Greek lookalikes (for Latin-script obfuscation pass)
+    "α": "a", "Α": "A", "ε": "e", "Ε": "E", "ζ": "z", "Ζ": "Z",
+    "η": "n", "Η": "H", "ι": "i", "Ι": "I", "κ": "k", "Κ": "K",
+    "μ": "m", "Μ": "M", "ν": "v", "Ν": "N", "ο": "o", "Ο": "O",
+    "ρ": "p", "Ρ": "P", "τ": "t", "Τ": "T", "υ": "u", "Υ": "Y",
+    "χ": "x", "Χ": "X", "β": "b", "Β": "B",
+})
+_B64_TOKEN = re.compile(r"(?<![A-Za-z0-9+/=])[A-Za-z0-9+/]{20,}={0,2}(?![A-Za-z0-9+/=])")
+
+
+def _strip_zero_width(text, base_offset=0, map_homoglyphs=False):
+    chars = []
+    positions = []
+    for idx, ch in enumerate(text):
+        if ch in _ZERO_WIDTH:
+            continue
+        if ch in ("_", "-"):
+            ch = " "
+        elif map_homoglyphs:
+            ch = ch.translate(_HOMOGLYPHS)
+        chars.append(ch)
+        positions.append(base_offset + idx)
+    return "".join(chars), positions
+
+
 def _already_blocked(matches):
     """True when the injection regex has already decided the prompt is blocked.
 
@@ -83,29 +117,52 @@ def analyze(raw_text, stop=None, full_detail=False):
     matches = []
     spans = set()
 
+    def add_match(start, end, score=REGEX_SCORE):
+        if (start, end) not in spans:
+            spans.add((start, end))
+            matches.append({"cause": "PROMPT_INJECTION", "score": score,
+                            "line": raw_text.count("\n", 0, start) + 1, "start_offset": start,
+                            "end_offset": end, "snippet": raw_text[start:end]})
+
     def inspect(clean, offset):
         # All separators in the pattern use \s+: adjacent lines are treated
         # like spaces without losing the original line numbers or offsets.
-        for hit in INJECTION_PATTERNS.finditer(re.sub(r"[_-]", " ", clean)):
-            start, end = offset + hit.start(), offset + hit.end()
-            if (start, end) not in spans:
-                spans.add((start, end))
-                matches.append({"cause": "PROMPT_INJECTION", "score": REGEX_SCORE,
-                                "line": raw_text.count("\n", 0, start) + 1, "start_offset": start,
-                                "end_offset": end, "snippet": raw_text[start:end]})
+        for map_homoglyphs in (False, True):
+            norm, pos = _strip_zero_width(clean, offset, map_homoglyphs=map_homoglyphs)
+            if not norm:
+                continue
+            for hit in INJECTION_PATTERNS.finditer(norm):
+                if hit.end() <= hit.start():
+                    continue
+                add_match(pos[hit.start()], pos[hit.end() - 1] + 1)
 
     inspect(raw_text, 0)  # includes individual lines and cross-line phrases
+
+    # Inspect base64-encoded override attempts.
+    for token in _B64_TOKEN.finditer(raw_text):
+        raw_tok = token.group()
+        if len(raw_tok) % 4 != 0:
+            continue
+        try:
+            decoded = base64.b64decode(raw_tok, validate=True).decode("utf-8", errors="ignore")
+        except Exception:
+            continue
+        if decoded and INJECTION_PATTERNS.search(_strip_zero_width(decoded, map_homoglyphs=True)[0]):
+            add_match(token.start(), token.end())
+
     nl_chunks = []
     remainder = list(raw_text)
     for part in embedded(raw_text):
         inspect(part["clean"], part["start_offset"])
-        nl_chunks.append(part)
+        clean_ml = "".join(ch for ch in part["clean"] if ch not in _ZERO_WIDTH)
+        nl_chunks.append({**part, "clean": clean_ml})
         for pos in range(part["start_offset"], part["end_offset"]):
             if remainder[pos] != "\n":
                 remainder[pos] = " "
     for part in lines("".join(remainder)):
-        if len(part["clean"]) > 3 and not CODE_SYNTAX.fullmatch(part["clean"]):
-            nl_chunks.append(part)
+        clean_ml = "".join(ch for ch in part["clean"] if ch not in _ZERO_WIDTH)
+        if len(clean_ml) > 3 and not CODE_SYNTAX.fullmatch(clean_ml):
+            nl_chunks.append({**part, "clean": clean_ml})
 
     classifier_ran = False
     if nl_chunks:

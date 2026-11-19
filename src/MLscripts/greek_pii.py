@@ -3,13 +3,44 @@ import re
 import sys
 
 try:
-    from identifiers import CARD, GREEK_ID, IBAN, credential_matches, iban_score, id_score, is_valid_luhn, valid_amka
+    from identifiers import (
+        CARD,
+        GREEK_ID,
+        IBAN,
+        INTL_PHONE,
+        IPV4,
+        PASSPORT,
+        credential_matches,
+        iban_score,
+        id_score,
+        ipv4_score,
+        is_valid_intl_phone,
+        is_valid_luhn,
+        passport_score,
+        valid_amka,
+    )
     from model_cache import DETAIL_CHARS, run_ner
 except ImportError:  # pragma: no cover - standalone use from another cwd
-    from .identifiers import CARD, GREEK_ID, IBAN, credential_matches, iban_score, id_score, is_valid_luhn, valid_amka
+    from .identifiers import (
+        CARD,
+        GREEK_ID,
+        IBAN,
+        INTL_PHONE,
+        IPV4,
+        PASSPORT,
+        credential_matches,
+        iban_score,
+        id_score,
+        ipv4_score,
+        is_valid_intl_phone,
+        is_valid_luhn,
+        passport_score,
+        valid_amka,
+    )
     from .model_cache import DETAIL_CHARS, run_ner
 
 PATTERNS = {
+    "PASSPORT": PASSPORT,
     "GREEK_AFM": r"\b\d{9}\b",
     "GREEK_AMKA": r"\b(0[1-9]|[12]\d|3[01])(0[1-9]|1[0-2])\d{7}\b",
     "GREEK_PHONE": (
@@ -21,10 +52,12 @@ PATTERNS = {
         r"|6[\s.-]*9(?:[\s.-]*\d){8})"
         r"\b(?![ \t.-]*\d)"
     ),
+    "INTL_PHONE": INTL_PHONE,
     "GREEK_ID": GREEK_ID,
     "IBAN": IBAN,
     "EMAIL": r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b",
     "CARD": CARD,
+    "IPV4": IPV4,
     "COMPANY": r"\b[Α-ΩΆΈΉΊΌΎΏA-Z][α-ωάέήίόύώa-zA-Z0-9\s\-&]{2,35}\s+(?:Ε\.?Π\.?Ε\.?|Α\.?Ε\.?|Ι\.?Κ\.?Ε\.?|Ο\.?Ε\.?|Ε\.?Ε\.?|Ltd\.?|Inc\.?|Corp\.?|LLC)",
 }
 
@@ -69,14 +102,17 @@ BLOCKING_CAUSES = (
     "GREEK_AFM",
     "GREEK_AMKA",
     "GREEK_PHONE",
+    "INTL_PHONE",
     "GREEK_ID",
     "GREEK_ID_CARD",
     "ID_CARD",
+    "PASSPORT",
     "IBAN",
     "GREEK_IBAN",
     "EMAIL",
     "API_KEY",
     "CARD",
+    "IPV4",
     "COMPANY",
     "PERSON",
 )
@@ -84,17 +120,26 @@ BLOCK_SCORE = 0.8
 
 TITLE_NAME_PATTERN = re.compile(
     r"\b(?:(?:[Ηη]|[Οο])\s+)?(?:[Κκ]α|[Κκ]|[Κκ]ος|[Κκ]υρία|[Κκ]ύριος|[Δδ]ις|[Δδ]ρ|Dr|Mr|Mrs|Ms|Prof)\.?\s+"
-    r"([Α-ΩΆΈΉΊΌΎΏ][α-ωάέήίόύώϊϋΐΰ]+(?:\s+[Α-ΩΆΈΉΊΌΎΏ][α-ωάέήίόύώϊϋΐΰ]+)*)\b"
+    r"((?:[Α-ΩΆΈΉΊΌΎΏ]\.\s+)?[Α-ΩΆΈΉΊΌΎΏ][α-ωάέήίόύώϊϋΐΰ]+(?:-[Α-ΩΆΈΉΊΌΎΏ][α-ωάέήίόύώϊϋΐΰ]+)*"
+    r"(?:\s+[Α-ΩΆΈΉΊΌΎΏ][α-ωάέήίόύώϊϋΐΰ]+(?:-[Α-ΩΆΈΉΊΌΎΏ][α-ωάέήίόύώϊϋΐΰ]+)*)*)\b"
 )
 
 GREEK_SURNAME_REGEX = re.compile(
     r"\b[Α-ΩΆΈΉΊΌΎΏ][α-ωάέήίόύώϊϋΐΰ]*(?:"
-    r"όπουλος|οπούλου|οπουλος|οπουλου|"
-    r"ίδης|ίδου|ιδης|ιδου|"
-    r"άδης|άδου|αδης|αδου|"
+    r"όπουλος|οπούλου|όπουλου|όπουλο|οπουλος|οπουλου|οπουλο|"
+    r"ίδης|ίδου|ίδη|ιδης|ιδου|ιδη|"
+    r"άδης|άδου|άδη|αδης|αδου|αδη|"
     r"άκης|άκη|ακης|ακη|"
-    r"άκος|άκου|ακος|ακου|όγλου|ογλου"
+    r"άκος|άκου|άκο|ακος|ακου|ακο|"
+    r"όγλου|ογλου|"
+    r"έας|εας|"
+    r"ούλης|ούλη|ουλης|ουλη|"
+    r"άτος|άτου|άτο|ατος|ατου|ατο"
     r")\b"
+)
+
+INITIAL_SURNAME_PATTERN = re.compile(
+    r"\b([Α-ΩΆΈΉΊΌΎΏ]\.\s+[Α-ΩΆΈΉΊΌΎΏ][α-ωάέήίόύώϊϋΐΰ]{2,}(?:-[Α-ΩΆΈΉΊΌΎΏ][α-ωάέήίόύώϊϋΐΰ]+)*)\b"
 )
 
 TITLE_STRIP_REGEX = re.compile(
@@ -135,12 +180,20 @@ def analyze(raw_text, stop=None, full_detail=False):
     ]
 
     # 1. Check Regex + Greek Math & Context Rules
+    claimed_spans = set()
     for label, pattern in PATTERNS.items():
         for match in re.finditer(pattern, raw_text):
             val = match.group().strip()
             start, end = match.start(), match.end()
 
-            if label == "GREEK_AFM":
+            if label == "PASSPORT":
+                score = passport_score(raw_text, match)
+                if not score:
+                    continue
+                claimed_spans.add((start, end))
+            elif label == "GREEK_AFM":
+                if (start, end) in claimed_spans:
+                    continue
                 if is_valid_afm(val):
                     score = 1.0
                 elif has_afm_context(raw_text, start, end):
@@ -152,7 +205,17 @@ def analyze(raw_text, stop=None, full_detail=False):
                 if not score:
                     continue
             elif label == "GREEK_ID":
+                if (start, end) in claimed_spans:
+                    continue
                 score = id_score(raw_text, match)
+            elif label == "INTL_PHONE":
+                if not is_valid_intl_phone(val):
+                    continue
+                score = 0.90
+            elif label == "IPV4":
+                score = ipv4_score(raw_text, match)
+                if not score:
+                    continue
             elif label == "CARD":
                 if not is_valid_luhn(val):
                     continue
@@ -202,6 +265,24 @@ def analyze(raw_text, stop=None, full_detail=False):
                 }
             )
 
+    for match in INITIAL_SURNAME_PATTERN.finditer(raw_text):
+        val = match.group(1).strip()
+        start, end = match.start(1), match.end(1)
+        span = (start, end)
+        surname = val.split()[-1]
+        if not seen(start, end) and not _not_private_name(val, raw_text) and not _not_private_name(surname, raw_text):
+            seen_spans.add(span)
+            matches.append(
+                {
+                    "cause": "PERSON",
+                    "score": 0.85,
+                    "line": get_line_number(raw_text, start),
+                    "start_offset": start,
+                    "end_offset": end,
+                    "snippet": val,
+                }
+            )
+
     for match in GREEK_SURNAME_REGEX.finditer(raw_text):
         val = match.group().strip()
         start, end = match.start(), match.end()
@@ -238,10 +319,11 @@ def analyze(raw_text, stop=None, full_detail=False):
     classifier_ran = False
     if not settled:
         for model, script_regex in [
-            ("en_core_web_sm", r"^[A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)+$"),
+            ("en_core_web_sm", r"^[A-Z][a-zA-Z-]+(?:\s+[A-Z][a-zA-Z-]+)+$"),
             (
                 "el_core_news_sm",
-                r"^[Α-ΩΆΈΉΊΌΎΏ][α-ωάέήίόύώϊϋΐΰ]+(?:\s+[Α-ΩΆΈΉΊΌΎΏ][α-ωάέήίόύώϊϋΐΰ]+)+$",
+                r"^[Α-ΩΆΈΉΊΌΎΏ][α-ωάέήίόύώϊϋΐΰ]+(?:-[Α-ΩΆΈΉΊΌΎΏ][α-ωάέήίόύώϊϋΐΰ]+)*"
+                r"(?:\s+[Α-ΩΆΈΉΊΌΎΏ][α-ωάέήίόύώϊϋΐΰ]+(?:-[Α-ΩΆΈΉΊΌΎΏ][α-ωάέήίόύώϊϋΐΰ]+)*)+$",
             ),
         ]:
             if stop is not None and stop():
