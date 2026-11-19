@@ -208,15 +208,15 @@
     --icon-md: 20px;
     --icon-lg: 24px;
 
-    /* Motion — quick feedback, short control transitions, and a slightly
-       longer entrance for the drawer. Loading loops keep their own tempo. */
+    /* Motion — quick feedback for UI chrome and sidebar; loading spin is
+       reserved for login. */
     --ease: cubic-bezier(0.2, 0, 0, 1);
     --ease-enter: cubic-bezier(0.22, 1, 0.36, 1);
     --ease-exit: cubic-bezier(0.4, 0, 1, 1);
-    --fast: 120ms;
-    --med: 160ms;
-    --drawer-enter: 220ms;
-    --drawer-exit: 170ms;
+    --fast: 90ms;
+    --med: 120ms;
+    --drawer-enter: 140ms;
+    --drawer-exit: 110ms;
     --spin-period: 720ms;
 
     --sidebar-w: 240px;

@@ -26,11 +26,6 @@
             : text;
     }
 
-    function reducedMotion() {
-        return !!(window.matchMedia &&
-            window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-    }
-
     var DRAFT_CHAT_KEY = "__draft__";
 
     var state = {
@@ -164,7 +159,7 @@
         if (typeof nodes.input.scrollIntoView === "function") {
             nodes.input.scrollIntoView({
                 block: "nearest",
-                behavior: reducedMotion() ? "auto" : "smooth"
+                behavior: "auto"
             });
         }
     }
@@ -190,15 +185,10 @@
         nodes.chatError.textContent = "";
     }
 
-    function scrollToEnd(smooth) {
+    function scrollToEnd() {
         requestAnimationFrame(function () {
             var viewport = nodes.viewport;
-            var top = viewport.scrollHeight;
-            var height = viewport.clientHeight;
-            var distance = top - height - viewport.scrollTop;
-            // Glide for nearby updates, but don't sweep through long chats.
-            var animate = smooth && distance > 0 && distance <= Math.min(height, 360) && !reducedMotion();
-            viewport.scrollTo({ top: top, behavior: animate ? "smooth" : "auto" });
+            viewport.scrollTo({ top: viewport.scrollHeight, behavior: "auto" });
         });
     }
 
