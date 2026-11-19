@@ -83,14 +83,13 @@
         var username = $("#new-admin-username");
         var password = $("#new-admin-password");
         var confirmField = $("#new-admin-confirm");
-        var signupToken = $("#signup-token");
         var msg = "#create-admin-msg";
 
         $("#admin-password-rule").textContent = t(
             "At least 8 characters, with at least one letter and one number."
         );
 
-        onSubmit(button, [username, password, confirmField, signupToken], function () {
+        onSubmit(button, [username, password, confirmField], function () {
             message(msg, "");
             var name = username.value.trim();
             if (!name) {
@@ -101,8 +100,7 @@
             if (!passwordsMatch(password, confirmField, msg)) return Promise.resolve();
 
             return Api.post("ADMIN",
-                { method: "add", username: name, password: password.value,
-                  signup_token: signupToken ? signupToken.value : "" },
+                { method: "add", username: name, password: password.value },
                 { member: false, onUnauthorised: false }
             ).then(function () {
                 Loading.toast("Administrator account created. You can sign in now.", "success");

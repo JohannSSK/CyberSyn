@@ -1,7 +1,5 @@
 """Administrator accounts, primary sessions and purpose-limited approvals."""
 
-import hmac
-import os
 import sqlite3
 
 from flask import Blueprint
@@ -64,10 +62,6 @@ def _sign_in(approval):
 def signup_allowed(db, data):
     if not db.execute("SELECT 1 FROM ADMINS LIMIT 1").fetchone() or _env_flag("CYBERSYN_ALLOW_OPEN_SIGNUP"):
         return True
-    configured = os.environ.get("CYBERSYN_ADMIN_SIGNUP_TOKEN")
-    supplied = data.get("signup_token")
-    if configured and isinstance(supplied, str) and hmac.compare_digest(configured.encode(), supplied.encode()):
-        return True
     return admin_from_token(DB_FILE, data.get("admin_token", data.get("token")), consume=True, con=db) is not None
 
 
@@ -89,7 +83,7 @@ def admin_manage():
         if method == "add":
             if not signup_allowed(db, data):
                 return fail_admin("An administrator already exists on this gateway. Sign in as an administrator "
-                                  "or provide the registration token to add another.", 403)
+                                  "to add another.", 403)
             problem = admin_password_problem(password)
             if problem:
                 return fail_admin(problem, 400)

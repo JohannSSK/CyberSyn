@@ -970,10 +970,6 @@
             "Ο νέος κωδικός πρέπει να διαφέρει από τον τρέχοντα. Επιλέξτε νέο κωδικό.",
 
         // ---- Merged security & workspace features ----
-        "Registration token (if required)":
-            "Κωδικός εγγραφής (αν απαιτείται)",
-        "Leave empty for the first administrator.":
-            "Αφήστε το πεδίο κενό για τον πρώτο διαχειριστή.",
         "Block proprietary source code":
             "Αποκλεισμός ιδιόκτητου πηγαίου κώδικα",
         "Block source-code pastes from this member. Off allows code review; other enabled checks still apply.":
@@ -1048,10 +1044,6 @@
         "Clear saved API key": "Απαλοιφή αποθηκευμένου κλειδιού API",
         "Removed: this workspace loses access until another key is saved. Kept: past chats stay untouched.":
             "Αφαιρείται: ο χώρος εργασίας χάνει την πρόσβαση μέχρι να αποθηκευτεί άλλο κλειδί. Διατηρείται: οι παλαιές συνομιλίες μένουν ανέπαφες.",
-        "Signup token": "Διακριτικό εγγραφής",
-        "Optional invite token": "Προαιρετικό διακριτικό πρόσκλησης",
-        "Required only when your organisation locks administrator creation with CYBERSYN_ADMIN_SIGNUP_TOKEN.":
-            "Απαιτείται μόνο όταν ο οργανισμός σας κλειδώνει τη δημιουργία διαχειριστή με CYBERSYN_ADMIN_SIGNUP_TOKEN.",
         "Select a team member": "Επιλέξτε μέλος ομάδας",
         "Pick the team member whose account should be removed.":
             "Επιλέξτε το μέλος ομάδας του οποίου ο λογαριασμός θα αφαιρεθεί.",
