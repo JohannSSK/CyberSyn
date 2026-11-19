@@ -41,7 +41,7 @@ OR
 git clone https://github.com/JohannSSK/CyberSyn.git
 cd CyberSyn
 ./setup.sh
-./run.sh or cybersyn -p 5000 # to launch
+./run.sh # or cybersyn -p 5000 to launch
 ```
 
 ## Backend
