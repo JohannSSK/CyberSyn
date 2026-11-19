@@ -115,7 +115,7 @@ CyberSyn ships with a catalogue of common AI tools — assistants, coding tools,
 
 ### Statuses
 
-- **Approved** and **restricted** can be reached through the gateway; restricted direct access is flagged in discovery.
+- **Approved** and **restricted** can be reached through the gateway (CyberSyn LocalHost); restricted direct access is flagged in discovery (admin can see who used those restricted websites outside the gateway).
 - **Unapproved** blocks gateway sends to the tool unless an administrator approves an exception. {This AI tool is unapproved, message was not sent}
 
 ### Finding shadow AI
