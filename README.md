@@ -1,5 +1,7 @@
 # CyberSyn — AI Security Gateway
 
+[![CI](https://github.com/JohannSSK/CyberSyn/actions/workflows/ci.yml/badge.svg)](https://github.com/JohannSSK/CyberSyn/actions/workflows/ci.yml)
+
 CyberSyn is a self-hosted AI gateway that screens every prompt using local Machine Learning models ( before it reaches an AI model), enforcing per-member allow, warn, redact or block policies while giving administrators visibility into shadow AI usage.
 
 ### Why MLs? 
