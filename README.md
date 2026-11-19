@@ -120,7 +120,8 @@ CyberSyn ships with a catalogue of common AI tools — assistants, coding tools,
 
 ### Finding shadow AI
 
-Import CSV, proxy (Squid) or DNS logs. The parser works offline and keeps only the destination host and structured metadata — team, actor, method, bytes and a data category such as client data, source code or credentials. It never stores message contents. A synthetic **sample week** is available for a demo.
+What happens if employees just... use an ai chatbot through it's website?
+Import CSV, proxy (Squid) or DNS logs. You instantly see which ip joined which approved, unapproved, and restricted ai chatbot websites. The parser works offline and keeps only the destination host and structured metadata — team, actor, method, bytes and a data category such as client data, source code or credentials. It never stores message contents. A synthetic **sample week** is available for a demo.
 
 ### Reports
 
