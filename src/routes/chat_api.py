@@ -104,31 +104,6 @@ def _history(chat, entry, limit):
     return history
 
 
-def _screen_history(pid, eid, history, saved, confirm_warn):
-    """Re-verify replayed user messages against current seat policy."""
-    if not history:
-        return history, None
-    actions = action_settings(saved)
-    if all(action == "allow" for action in actions.values()):
-        return history, None
-    checked = []
-    for item in history:
-        if item.get("role") != "user" or not item.get("content"):
-            checked.append(item)
-            continue
-        outcome = screen(item["content"], actions) or {}
-        if outcome.get("blocked") or outcome.get("stage"):
-            return None, _blocked(pid, eid, outcome, item["content"])
-        warning = outcome.get("warn_info")
-        if warning and not confirm_warn:
-            record_activity(DB_FILE, pid, eid, "warned", _audit_detail(warning, item["content"])[1])
-            return None, chat_response(False, message="Review the flagged details before sending this message.",
-                                       warned=True, redacted=False, action="warn", warn_info=warning)
-        redaction = apply_redactions(item["content"], outcome.get("redact_matches"))
-        checked.append({**item, "content": redaction.prompt} if redaction else item)
-    return checked, None
-
-
 def _exchange(data, pid, eid, prompt, chat_id, entry, title, chat=None):
     confirm_warn = _bool(data, "confirm_warn")
     bypass = _bool(data, "bypass")
@@ -182,10 +157,6 @@ def _exchange(data, pid, eid, prompt, chat_id, entry, title, chat=None):
     # Bracketed tokens are sent verbatim. No reverse map or original value
     # is given to the provider (not even an instruction containing one).
     history = _history(chat, entry, context_messages(saved))
-    if not bypass:
-        history, blocked_history = _screen_history(pid, eid, history, saved, confirm_warn)
-        if blocked_history is not None:
-            return blocked_history
     answer = complete(api_key, model, sent, api_base=base, provider=provider,
                       history=history)
     stored_answer = redaction.un_restored_reply(answer) if redaction else answer
