@@ -425,7 +425,7 @@ errors, they simply never checked who was calling. A test is what stops that fro
 Detection quality is measured with the labelled harness in `tools/`:
 
 ```bash
-python tools/evaluate.py --in-process  # all checks; reuse the loaded models
+python tools/evaluate.py            # all checks (in-process, parallel across cores)
 python tools/evaluate.py check1     # one check
 ```
 
