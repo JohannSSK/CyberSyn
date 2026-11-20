@@ -528,41 +528,6 @@ def arch() -> Image.Image:
     return img
 
 
-def flow() -> Image.Image:
-    """prompt → three scanners → four outcomes."""
-    w, h = 1440, 780
-    img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    d = ImageDraw.Draw(img)
-    d.rounded_rectangle([40, 120, 330, 250], radius=18, fill=SURFACE3, outline=BORDER_STRONG, width=3)
-    d.text((185, 172), "prompt", font=f(32, 600), fill=TEXT_STRONG, anchor="mm")
-    d.text((185, 212), "from a member", font=f(19), fill=TEXT_MUTED, anchor="mm")
-
-    rows = [
-        ("1", "Personal & Greek identifiers", "AFM · AMKA · passports · IBAN · names"),
-        ("2", "Confidential company context", "secrets · contracts · payroll · code"),
-        ("3", "Prompt injection", "overrides · obfuscation · hidden instructions"),
-    ]
-    ys = [90, 320, 550]
-    for (num, name, det), y in zip(rows, ys):
-        d.rounded_rectangle([470, y, 880, y + 150], radius=18, fill=SURFACE2, outline=BORDER, width=3)
-        d.ellipse([496, y + 34, 552, y + 90], fill=SURFACE4, outline=BORDER_STRONG, width=2)
-        d.text((524, y + 62), num, font=f(28, 600), fill=ACCENT, anchor="mm")
-        d.text((578, y + 48), name, font=f(24, 600), fill=TEXT_STRONG)
-        d.text((578, y + 86), det, font=f(18), fill=TEXT_MUTED)
-        d.line([(330, 185), (470, y + 75)], fill=BORDER_STRONG, width=3)
-
-    outs = [("BLOCK", DANGER, "never sent"), ("WARN", WARN, "review first"),
-            ("REDACT", ACCENT_DEEP, "masked, then sent"), ("ALLOW", SUCCESS, "sent as-is")]
-    for i, (name, col, sub) in enumerate(outs):
-        x = 1000 + i * 108
-        d.rounded_rectangle([x, 290, x + 92, 470], radius=16, fill=SURFACE2, outline=col, width=3)
-        d.text((x + 46, 344), name, font=f(19, 600), fill=col, anchor="mm")
-        d.text((x + 46, 392), sub, font=f(13), fill=TEXT_MUTED, anchor="mm")
-        d.line([(880, 405), (x + 46, 405)], fill=col, width=2)
-    d.text((1000, 230), "the four outcomes", font=f(20), fill=TEXT_MUTED)
-    return img
-
-
 def s_end():
     sl = Slide()
     sl.brand((W / 2 - 84, 240), 168)
@@ -639,71 +604,71 @@ def build():
         kicker="03 · THREE SCANNERS")
 
     # ---- actions ------------------------------------------------------
-    add("16_section_actions", s_section, "04", "Four actions",
+    add("13_section_actions", s_section, "04", "Four actions",
         "block, warn, redact, allow")
-    add("17_four_cards", s_card_row, [
+    add("14_four_cards", s_card_row, [
         dict(title="Block", color=DANGER, lines=[("bad", "never sent"), ("dim", "admin can release")]),
         dict(title="Warn", color=WARN, lines=[("warn", "member reviews"), ("dim", "confirm re-runs checks")]),
         dict(title="Redact", color=ACCENT_DEEP, lines=[("ok", "masked, then sent"), ("dim", "only masked text stored")]),
         dict(title="Allow", color=SUCCESS, lines=[("ok", "sent as-is"), ("dim", "destination still checked")]),
     ], y=270, h=380)
-    add("18_small_print", s_bullets, "Small print",
+    add("15_small_print", s_bullets, "Small print",
         ["Repeated values share one token.", "Overlapping matches are masked together.",
          "Prompt injection cannot be redacted.", "Admins set defaults; members override."],
-        kicker="05 · FOUR ACTIONS")
+        kicker="04 · FOUR ACTIONS")
 
     # ---- running ------------------------------------------------------
-    add("19_section_running", s_section, "05", "Running it", "Docker, or native")
-    add("20_docker", s_terminal, "Docker, the recommended way",
+    add("16_section_running", s_section, "05", "Running it", "Docker, or native")
+    add("17_docker", s_terminal, "Docker, the recommended way",
         [("cmd", "git clone https://github.com/JohannSSK/CyberSyn.git"),
          ("cmd", "cd CyberSyn"),
          ("cmd", "docker compose up --build"),
          ("out", "  ✔ Container cybersyn-app-1  Started"),
          ("acc", "→ http://localhost:5000")], h=430)
-    add("21_native", s_terminal, "Native, from source",
+    add("18_native", s_terminal, "Native, from source",
         [("cmd", "./setup.sh"),
          ("out", "  ==> Python 3.11–3.13"),
          ("out", "  ==> dependencies installed"),
          ("cmd", "./run.sh"),
          ("acc", "→ serving on http://localhost:5000")], h=430)
-    add("22_seed", s_terminal, "Create the first administrator",
+    add("19_seed", s_terminal, "Create the first administrator",
         [("cmd", "./run.sh seed admin"),
          ("out", "  administrator created"),
          ("ok", "  done")], h=300)
-    add("23_login", s_screenshot, "Login-Page.png", ("06 · RUNNING IT", "the sign-in page"))
+    add("20_login", s_screenshot, "Login-Page.png", ("05 · RUNNING IT", "the sign-in page"))
 
     # ---- backend ------------------------------------------------------
-    add("24_section_backend", s_section, "06", "Under the hood",
+    add("21_section_backend", s_section, "06", "Under the hood",
         "Flask, Gunicorn, SQLite, Fernet")
-    add("25_arch", s_image, arch(), None, y=190, h=620)
-    add("26_backend_cards", s_card_row, [
+    add("22_arch", s_image, arch(), None, y=190, h=620)
+    add("23_backend_cards", s_card_row, [
         dict(title="Web app", color=ACCENT_DEEP, lines=[("dot", "Flask, UI and JSON API"), ("dim", "one process")]),
         dict(title="Server", color=ACCENT_DEEP, lines=[("dot", "Gunicorn 1 worker × 8 threads"), ("dim", "models stay warm")]),
         dict(title="Storage", color=ACCENT_DEEP, lines=[("dot", "SQLite, no external DB"), ("dim", "chats · policy · logs")]),
         dict(title="Secrets", color=ACCENT_DEEP, lines=[("dot", "Fernet, separate key file"), ("dim", "keys never shown again")]),
     ], y=250, h=400)
-    add("27_warm", s_bullets, "Models load once, in the background",
+    add("24_warm", s_bullets, "Models load once, in the background",
         ["Warm at start-up, stay warm.", "The worker keeps them in memory.",
          "Threads share the scanner locks."],
-        kicker="07 · UNDER THE HOOD")
+        kicker="06 · UNDER THE HOOD")
 
     # ---- providers ----------------------------------------------------
-    add("28_section_providers", s_section, "07", "Bring your own model",
+    add("25_section_providers", s_section, "07", "Bring your own model",
         "LiteLLM, twelve providers")
-    add("29_provider_logos", s_logo_grid, "08 · PROVIDERS",
+    add("26_provider_logos", s_logo_grid, "07 · PROVIDERS",
         ["anthropic", "deepseek", "googlegemini", "mistralai", "ollama",
          "openrouter", "x", "flask"])
-    add("30_byok", s_statement, "You bring the key. CyberSyn brings the guardrail.",
+    add("27_byok", s_statement, "You bring the key. CyberSyn brings the guardrail.",
         None, big_size=50)
-    add("31_seat_model", s_bullets, "How a seat gets a model",
+    add("28_seat_model", s_bullets, "How a seat gets a model",
         ["Settings → paste an API key.", "Pick a model from the provider's list.",
          "Save. The key is encrypted at rest."],
-        kicker="08 · PROVIDERS")
+        kicker="07 · PROVIDERS")
 
     # ---- team ---------------------------------------------------------
-    add("32_section_team", s_section, "08", "How a team uses it",
+    add("29_section_team", s_section, "08", "How a team uses it",
         "administrators and members")
-    add("33_roles", s_card_row, [
+    add("30_roles", s_card_row, [
         dict(title="Administrator", color=ACCENT,
              lines=[("dot", "adds and removes members"), ("dot", "sets workspace policy"),
                     ("dot", "approves keys and releases"), ("dot", "reads statistics and reports")]),
@@ -711,23 +676,23 @@ def build():
              lines=[("dot", "chats through the gateway"), ("dot", "sees findings and reasons"),
                     ("dot", "sets their own model"), ("dot", "manages chats and account")]),
     ], y=270, h=420)
-    add("34_workspace", s_statement, "One administrator, one workspace.",
+    add("31_workspace", s_statement, "One administrator, one workspace.",
         "Members sign in with username, password and workspace name.", big_size=54)
-    add("35_typical_chat", s_screenshot, "Typical-chat.png",
-        ("09 · A DAY IN THE LIFE", "a normal conversation, screened"))
-    add("36_new_chat", s_screenshot, "New-chat.png",
-        ("09 · A DAY IN THE LIFE", "a fresh chat"))
-    add("37_blocked", s_screenshot, "Blocked-message.png",
-        ("05 · FOUR ACTIONS", "when a prompt is blocked"))
+    add("32_typical_chat", s_screenshot, "Typical-chat.png",
+        ("08 · A DAY IN THE LIFE", "a normal conversation, screened"))
+    add("33_new_chat", s_screenshot, "New-chat.png",
+        ("08 · A DAY IN THE LIFE", "a fresh chat"))
+    add("34_blocked", s_screenshot, "Blocked-message.png",
+        ("04 · FOUR ACTIONS", "when a prompt is blocked"))
 
     # ---- shadow AI ----------------------------------------------------
-    add("38_section_shadow", s_section, "09", "Shadow AI discovery",
+    add("35_section_shadow", s_section, "09", "Shadow AI discovery",
         "CSV, proxy and DNS logs")
-    add("39_what_if", s_statement, "What if they just… use the website?",
+    add("36_what_if", s_statement, "What if they just… use the website?",
         "Import the logs. See who talked to what.", big_size=52)
-    add("40_shadow_dash", s_screenshot, "Shadow-Ai.png",
-        ("10 · SHADOW AI", "the discovery dashboard"))
-    add("41b_tool_inventory", s_table, "The tool inventory",
+    add("37_shadow_dash", s_screenshot, "Shadow-Ai.png",
+        ("09 · SHADOW AI", "the discovery dashboard"))
+    add("38b_tool_inventory", s_table, "The tool inventory",
         ["Tool", "Vendor", "Risk", "Status"],
         [["OpenAI / ChatGPT", "OpenAI", "48", "+approved"],
          ["Anthropic / Claude", "Anthropic", "44", "+approved"],
@@ -736,59 +701,59 @@ def build():
          ["xAI Grok", "xAI", "82", "!unapproved"],
          ["Ollama (local)", "Ollama", "10", "+approved"]],
         y=230, col_w=[420, 320, 160, 440], size=23)
-    add("41c_reports", s_bullets, "Reports",
+    add("39c_reports", s_bullets, "Reports",
         ["Filter by 7 days, 30 days or all time.",
          "Narrow by status, team or data category.",
          "Export as CSV or JSON.",
          "Ranked team view answers: who sent client data?"],
-        kicker="10 · SHADOW AI")
-    add("41_statuses", s_card_row, [
+        kicker="09 · SHADOW AI")
+    add("40_statuses", s_card_row, [
         dict(title="Approved", color=SUCCESS, lines=[("ok", "reachable through the gateway")]),
         dict(title="Restricted", color=WARN, lines=[("warn", "reachable, direct use flagged")]),
         dict(title="Unapproved", color=DANGER, lines=[("bad", "blocked unless approved")]),
     ], y=280, h=340)
-    add("42_parser_keeps", s_bullets, "What the parser keeps",
+    add("41_parser_keeps", s_bullets, "What the parser keeps",
         ["destination host · team · actor", "method · bytes · data category",
          "never the message contents"],
-        kicker="10 · SHADOW AI")
-    add("43_sample_week", s_statement, "A synthetic sample week is built in.",
+        kicker="09 · SHADOW AI")
+    add("42_sample_week", s_statement, "A synthetic sample week is built in.",
         "No real data needed for the demo.", big_size=48)
 
     # ---- statistics ---------------------------------------------------
-    add("44_section_stats", s_section, "10", "Statistics and audit",
+    add("43_section_stats", s_section, "10", "Statistics and audit",
         "metadata, never message text")
-    add("45_team_stats", s_screenshot, "Team-stats.png",
-        ("11 · STATISTICS", "the team view"))
-    add("46_what_admins_see", s_bullets, "What admins can see",
+    add("44_team_stats", s_screenshot, "Team-stats.png",
+        ("10 · STATISTICS", "the team view"))
+    add("45_what_admins_see", s_bullets, "What admins can see",
         ["Per member: sent, blocked, overridden.",
          "Trends: 30 days of blocks and overrides.",
          "Activity log: sign-ins, sends, warnings.", "Exports as CSV or JSON."],
-        kicker="11 · STATISTICS")
-    add("47_metadata_only", s_statement, "Audit is metadata-only.",
+        kicker="10 · STATISTICS")
+    add("46_metadata_only", s_statement, "Audit is metadata-only.",
         "Stage, reason, actor, time. Never the prompt.", big_size=50)
-    add("48_append_only", s_bullets, "Append-only",
+    add("47_append_only", s_bullets, "Append-only",
         ["Block and override decisions are never pruned.",
          "Deleting a chat does not remove them."],
-        kicker="11 · STATISTICS")
+        kicker="10 · STATISTICS")
 
     # ---- proxy --------------------------------------------------------
-    add("49_section_proxy", s_section, "11", "An OpenAI-compatible proxy",
+    add("48_section_proxy", s_section, "11", "An OpenAI-compatible proxy",
         "any client, one base URL")
-    add("50_proxy_term", s_terminal, "Point any client at /v1",
+    add("49_proxy_term", s_terminal, "Point any client at /v1",
         [("cmd", "curl http://localhost:5000/v1/chat/completions \\"),
          ("cmd", "  -H \"Authorization: Bearer <seat-token>\" \\"),
          ("cmd", "  -d '{\"model\":\"default\",\"messages\":[...]}'"),
          ("ok", "  200 OK"),
          ("out", "  screened · redacted · audited")], h=430)
-    add("51_why_proxy", s_bullets, "Why it matters",
+    add("50_why_proxy", s_bullets, "Why it matters",
         ["Screened under the member's own policy.", "Redacted on the way out.",
          "Reply restored on the way back.", "Audited like any other send."],
-        kicker="12 · PROXY")
+        kicker="11 · PROXY")
 
     # ---- security -----------------------------------------------------
-    add("52_section_security", s_section, "12", "Security and privacy",
+    add("51_section_security", s_section, "12", "Security and privacy",
         "fail-closed by default")
-    add("53_security_table", s_table, "How CyberSyn handles it",
+    add("52_security_table", s_table, "How CyberSyn handles it",
         ["Area", "What it does"],
         [["Secrets", "Fernet-encrypted, key stored separately"],
          ["Passwords", "salted hashes; uniform errors; rate-limited"],
@@ -797,35 +762,35 @@ def build():
          ["Audit", "metadata only — never the prompt"],
          ["Isolation", "+members see only their own chats"]],
         y=230, col_w=[280, 1060], size=22)
-    add("54_fail_closed", s_statement,
+    add("53_fail_closed", s_statement,
         "If a check cannot run, the prompt is refused.",
         "Not sent. Never sent.", big_size=50, accent=True)
 
     # ---- extras -------------------------------------------------------
-    add("55_section_extras", s_section, "13", "And the extras",
+    add("54_section_extras", s_section, "13", "And the extras",
         "bilingual, responsive, searchable")
-    add("56_also_in_box", s_bullets, "Also in the box",
+    add("55_also_in_box", s_bullets, "Also in the box",
         ["English and Greek, switched at runtime.",
          "Dates and numbers follow the locale.",
          "Responsive and minimal, on any screen.", "Multiple chats per member.",
          "Keyword search inside a chat."],
-        kicker="14 · EXTRAS")
-    add("57_honest_limits", s_bullets, "Honest limits",
+        kicker="13 · EXTRAS")
+    add("56_honest_limits", s_bullets, "Honest limits",
         ["It is not perfect. It can never be.",
          "Blocks can be released by an administrator.",
          "Context per member is capped."],
-        kicker="14 · EXTRAS")
+        kicker="13 · EXTRAS")
 
     # ---- links --------------------------------------------------------
-    add("58_section_links", s_section, "14", "Good to know", "where to look next")
-    add("59_useful_places", s_table, "Useful places",
+    add("57_section_links", s_section, "14", "Good to know", "where to look next")
+    add("58_useful_places", s_table, "Useful places",
         ["Link", "What is there"],
         [["API_Examples.md", "the full JSON API, with runnable examples"],
          ["includes/constants.json", "route registry and feature flags"],
          ["src/templates/help.html", "in-app help and third-party licences"],
          ["LICENSE", "MIT — CyberSyn Attica 2026"]],
         y=250, col_w=[380, 960], size=23)
-    add("60_end", s_end)
+    add("59_end", s_end)
 
     print(f"{len(made)} slides written to {out}")
     for m in made:
