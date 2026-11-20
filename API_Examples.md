@@ -1,6 +1,44 @@
 # CyberSyn JSON API
 
-All endpoints below are **POST**, with `Content-Type: application/json`. The route registry is [`includes/constants.json`](includes/constants.json). Accounts, identifiers, keys, and event data in these examples are synthetic; substitute values actually returned by your gateway.
+Unless noted otherwise, API endpoints use **POST** with a JSON object body and `Content-Type: application/json`. Exceptions: `GET /v1/models` has no request body; `/api/admin/employee/chat/photo` accepts either JSON with a base64 `photo` value or multipart form data. The route registry for the `/api/...` endpoints is [`includes/constants.json`](includes/constants.json). The HTML page routes and static asset routes are not JSON APIs and are outside this guide. Accounts, identifiers, keys, and event data in these examples are synthetic; substitute values actually returned by your gateway.
+
+## Endpoint index
+
+Every JSON API route registered by the application is listed here; detailed request/response behavior follows. The photo endpoint also accepts multipart form data, and the OpenAI-compatible routes use their standard paths.
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/api/admin/login` | Administrator login |
+| POST | `/api/admin/approve` | Issue a one-use or page approval |
+| POST | `/api/admin` | Create or remove an administrator |
+| POST | `/api/admin/password` | Change administrator password |
+| POST | `/api/admin/session` | Validate/restore an administrator session |
+| POST | `/api/admin/logout` | Revoke an administrator session or page grant |
+| POST | `/api/admin/team/list` | List workspace members |
+| POST | `/api/admin/team` | Workspace statistics and activity timeline |
+| POST | `/api/admin/employee` | Add or offboard a member |
+| POST | `/api/admin/employee/login` | Member login |
+| POST | `/api/admin/employee/logout` | Member logout |
+| POST | `/api/admin/employee/account` | Change member username or password |
+| POST | `/api/admin/employee/settings` | Read or update member/workspace settings |
+| POST | `/api/admin/employee/models` | Discover models available from a provider |
+| POST | `/api/admin/employee/providers` | List configured provider choices |
+| POST | `/api/admin/employee/override/check` | Check an administrator session/approval |
+| POST | `/api/admin/employee/chat` | Submit a prompt |
+| POST | `/api/admin/employee/chat/regenerate` | Regenerate a saved answer |
+| POST | `/api/admin/employee/chat/photo` | Extract text from a photo (JSON or multipart) |
+| POST | `/api/admin/employee/chats` | List the caller's chats |
+| POST | `/api/admin/employee/chats/open` | Open a chat |
+| POST | `/api/admin/employee/chats/delete` | Delete a chat |
+| POST | `/api/admin/employee/chats/rename` | Rename a chat |
+| POST | `/api/admin/employee/chats/search` | Search the caller's chat history |
+| POST | `/api/admin/employee/chats/message/edit` | Edit a saved prompt |
+| POST | `/api/admin/employee/chats/message/delete` | Delete a saved prompt/answer |
+| POST | `/api/admin/shadow-ai` | Read Shadow AI inventory and discovery data |
+| POST | `/api/admin/shadow-ai/policy` | Add/update/remove a workspace tool policy |
+| POST | `/api/admin/shadow-ai/import` | Import, sample, or clear discovery logs |
+| GET | `/v1/models` | OpenAI-compatible model list |
+| POST | `/v1/chat/completions` | OpenAI-compatible text completion proxy |
 
 ## Authentication conventions
 
@@ -8,7 +46,7 @@ All endpoints below are **POST**, with `Content-Type: application/json`. The rou
 - **API clients:** you may ignore cookies and pass the returned `session_token` explicitly. Admin actions generally call this field `token`; settings/overrides call the approval `admin_token`. An explicit invalid token does not become a valid session simply because a cookie exists.
 - **Member body:** in the history/action tables below, merge the listed fields into `{"Parent_id":"1","Employee_id":"2","session_token":"<member>"}`. Omit `session_token` when using the member cookie. An administrator cannot read a member's chat history with an administrator credential.
 - Login, account creation and settings return **strings** for `Parent_id`/`Employee_id`. Chat IDs and roster `id`s are numbers. Positive digit strings are accepted as IDs; booleans are not. Zero is reserved for the workspace-default settings row.
-- Ordinary success responses commonly include `"error":false,"error_message":"NULL"` (the literal string). Login and model discovery have their own shapes. Examples below show response fields rather than every field where indicated. Validation failures are `400`, expired/invalid credentials `401`, CSRF or closed signup `403`, missing chats `404`, and duplicate usernames `409`. Repeated failed credential operations return `429` and `Retry-After`. Bodies over the configured limit return `413`.
+- Ordinary success responses commonly include `"error":false,"error_message":"NULL"` (the literal string). Login and model discovery have their own shapes. Examples below show response fields rather than every field where indicated. Common status codes are `400` for malformed or invalid requests, `401` for missing/invalid/expired credentials, `403` for cookie-request CSRF checks or certain policy/approval denials, `404` for missing resources, `409` for duplicate names or policy conflicts, `413` for oversized request bodies/uploads, and `429` with `Retry-After` when a rate-limited credential operation is throttled. Exact error bodies differ by endpoint; see the endpoint-specific notes below. There is no signup-closed response for administrator creation: administrator accounts may be created at any time.
 
 ## 1. `POST /api/admin/login`
 
@@ -130,7 +168,7 @@ Response, assuming a previously saved connection:
 | `POST /api/admin/employee/providers` | Member session (or primary administrator session) | `{"providers":[…],"message":null}`. Entries carry `key`, `label` and, for named providers, hints and key/base requirements. |
 | `POST /api/admin/employee/models` | Member session plus optional `{"provider":"groq","API_KEY":"<pasted key>"}` or `API_BASE` | `{"models":["groq/example"],"provider":"groq","provider_label":"Groq","message":null}` (model names vary). |
 
-With no pasted key, discovery uses the saved provider/base/key. A changed destination requires workspace admin approval; a new HTTP base must first be saved. Auto only probes the service matching a recognized prefix. For ambiguous keys, **choose the provider before entering the key**. Unknown formats return `400` without probing unrelated providers. A provider refusal returns `502` with `models:[]`, `message`, and `tried`. Redirects across origins lose all provider authentication headers.
+With no pasted key, discovery uses the saved provider/base/key. When using that saved connection, changing the provider or destination requires workspace administrator approval; an HTTP custom base must be saved/approved before use. A pasted `API_KEY` is used only for this discovery request (it is not saved); an explicitly supplied provider/base can be used to probe that pasted key after URL validation. Auto only probes the service matching a recognized key prefix. For ambiguous keys, **choose the provider before entering the key**. Unknown formats return `400` without probing unrelated providers. A provider refusal returns `502` with `models:[]`, `message`, and `tried`. Redirects across origins lose all provider authentication headers.
 
 ## 6. `POST /api/admin/employee/chat`
 
@@ -191,7 +229,7 @@ Each request below needs the **member body**. Edits affect local history only; i
 | `POST /api/admin/employee/chats/message/edit` | `{"chat_id":7,"message_id":"<id>","text":"Review the sum."}` | `messages`: updated list (edited message has `edited:true,edited_at`). |
 | `POST /api/admin/employee/chats/message/delete` | `{"chat_id":7,"message_id":"<id>"}` | `messages`: remaining messages. Missing messages return `404`. |
 | `POST /api/admin/employee/chat/regenerate` | `{"chat_id":7,"message_id":"<id>"}` with optional `prompt`, `confirm_warn`, `bypass`, `admin_token` | Same send envelope; on success includes updated `messages` (history-safe, even when `reply_message` is locally restored). If `prompt` is provided it is screened as a draft and saved only after a successful answer; otherwise the stored prompt is re-screened. |
-| `POST /api/admin/employee/chat/photo` | Multipart form upload `photo` (or base64 `photo` string) with member session | `{"error":false,"error_message":"NULL","text":"<extracted text>"}`. Extracts text locally via OCR; returns `400` with `error_code:"no_photo_text"` (`"There's no text to parse in this prompt."`) if no text is found. |
+| `POST /api/admin/employee/chat/photo` | Multipart form field `photo` (file) plus `Parent_id`, `Employee_id` and member `session_token`/cookie; alternatively JSON with those fields and `photo` as base64 (a `data:` URL is also accepted) | `{"error":false,"error_message":"NULL","text":"<extracted text>"}`. OCR runs locally. Supported image formats: PNG, JPEG, WEBP, GIF, BMP and TIFF. No text → `400` with `error_code:"no_photo_text"`; invalid image → `400`; photo too large → `413` (`photo_too_large`); unavailable OCR → `503`. Extracted text is limited by `CYBERSYN_MAX_PROMPT_CHARS` (default 16,000). Upload limits are configurable (`CYBERSYN_MAX_PHOTO_BYTES`, default 10 MiB for image bytes; multipart request limit defaults to 12 MiB via `CYBERSYN_MAX_PHOTO_BODY_BYTES`). |
 
 ## `POST /api/admin/team`
 
@@ -252,12 +290,14 @@ Same write credentials as policy changes. Send exactly one operation:
 
 External tools, IDE assistants and in-house AI applications can point their OpenAI base URL at `http://<host>:<port>/v1` and pass a member's `session_token` as the `Authorization: Bearer <token>` key (or `X-CyberSyn-Token`).
 
-- `GET /v1/models`: returns the seat's active model ID in standard OpenAI `list` format.
-- `POST /v1/chat/completions`: screens every `system`, `developer` and `user` message against the seat's Shadow AI tool policy and active safety checks (`allow`, `redact`, `warn`, `block`) before forwarding `stream=false` completions to the seat's configured upstream provider.
-  - Blocked tool or prompt → `403` OpenAI error payload (`cybersyn.blocked: true`, `stage`, `main_cause`), logged to `BLOCK_LOG`.
-  - Warning triggered → `409` (`cybersyn.warned: true`, `warn_info`); re-send with `X-CyberSyn-Confirm-Warn: true` (or `"cybersyn_confirm_warn": true`) to proceed.
-  - One-off admin override → pass `X-CyberSyn-Bypass-Token: <admin_token>` (or `"cybersyn_bypass_token"` from `/api/admin/approve` with `scope="once"`).
-  - Redacted prompts mask spans across all messages in the request and restore placeholders in memory on the reply when `restore_redactions` is enabled.
+- `GET /v1/models`: requires a member bearer token and returns the seat's configured model ID in standard OpenAI `list` format. This is the configured model, not a live list of every model available upstream.
+- `POST /v1/chat/completions`: requires a JSON object with a non-empty `messages` array. Message roles accepted are `system`, `developer`, `user`, `assistant` and `tool`; each message's `content` must be a string or a list containing text items. Only `system`, `developer` and `user` text is screened. Combined message text is limited by `CYBERSYN_MAX_PROMPT_CHARS` (default 16,000). `stream:true` is rejected with `400`; streaming is not supported. Optional `model` defaults to the seat model; `default` and `cybersyn` also select that model. A different `model` is accepted, but tool policy is checked for its resolved destination. The request is sent to the seat's configured upstream using its saved provider, API base and key; clients cannot replace those connection settings in the request.
+  - A blocked tool or prompt returns `403` in an OpenAI error envelope, with details under the top-level `cybersyn` object (for example `blocked`, `stage`, `main_cause`); blocks are recorded in the audit/block log. A missing configured key returns `400`; malformed requests return `400`; invalid/missing member credentials return `401`; upstream errors are returned as `upstream_error` with their mapped status.
+  - A warning returns `409` with `cybersyn.warned:true` and `cybersyn.warn_info`; re-send with `X-CyberSyn-Confirm-Warn: true` (or `"cybersyn_confirm_warn": true`) to proceed. All checks run again on the retry.
+  - A one-off administrator override can be passed as `X-CyberSyn-Bypass-Token: <admin_token>` or `"cybersyn_bypass_token"` from `/api/admin/approve` with `scope:"once"`. The token is consumed on use. It can bypass a destination/prompt block and warning, but does not bypass redaction rules.
+  - Redaction placeholders are applied across screened messages and may be restored in the response only when `restore_redactions` is enabled. This proxy does not save the full conversation as a chat; successful completions increment the member's answered statistics and write audit metadata.
+
+A successful completion uses the standard `chat.completion` envelope (`id`, `object`, `created`, `model`, `choices`) plus a `cybersyn` object describing action/redaction. It does not return token-usage accounting. The proxy does not implement the full OpenAI API (for example, streaming, tools/function calls, image input or arbitrary completion parameters).
 
 ## Known gaps
 
