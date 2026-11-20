@@ -41,7 +41,11 @@ WARN = "#bfa273"
 DANGER = "#bd8a80"
 CODE_BG = "#0d1015"
 
-W, H = 1600, 900
+# Author every slide at 1600x900 and render at SSx, so text and lines stay
+# crisp when the slide is shown full-screen.
+SS = 2
+W, H = 1600, 900          # authoring space; every coordinate below is in it
+DW, DH = W * SS, H * SS   # device space, what actually gets rasterised
 MARGIN = 96
 
 _fonts: dict[tuple[str, int], ImageFont.FreeTypeFont] = {}
@@ -70,20 +74,70 @@ MONO = {
 
 
 def f(size: int, weight: int = 400, mono: bool = False) -> ImageFont.FreeTypeFont:
+    """Font for a size given in 1600x900 authoring space (scaled by SS)."""
     key = ("mono" if mono else "sans", weight, size)
     if key not in _fonts:
         src = MONO.get(weight, MONO[400]) if mono else SANS.get(weight, SANS[400])
-        _fonts[key] = ImageFont.truetype(str(src), size)
+        _fonts[key] = ImageFont.truetype(str(src), int(size * SS))
     return _fonts[key]
+
+
+class ScaledDraw:
+    """ImageDraw proxy that turns 1600x900 authoring coordinates into device px."""
+
+    def __init__(self, draw, ss):
+        self._d = draw
+        self._ss = ss
+
+    def _p(self, xy):
+        return (xy[0] * self._ss, xy[1] * self._ss)
+
+    def _box(self, b):
+        return [b[0] * self._ss, b[1] * self._ss, b[2] * self._ss, b[3] * self._ss]
+
+    def _pts(self, pts):
+        return [(x * self._ss, y * self._ss) for x, y in pts]
+
+    def _w(self, w):
+        return max(1, int(round(w * self._ss)))
+
+    def text(self, xy, s, font=None, fill=None, anchor=None, spacing=4, joint=None):
+        return self._d.text(self._p(xy), s, font=font, fill=fill, anchor=anchor,
+                            spacing=spacing * self._ss, joint=joint)
+
+    def rounded_rectangle(self, b, radius=None, **kw):
+        return self._d.rounded_rectangle(self._box(b), radius=radius * self._ss, **kw)
+
+    def rectangle(self, b, **kw):
+        return self._d.rectangle(self._box(b), **kw)
+
+    def line(self, pts, **kw):
+        kw["width"] = self._w(kw.get("width", 1))
+        return self._d.line(self._pts(pts), **kw)
+
+    def ellipse(self, b, **kw):
+        return self._d.ellipse(self._box(b), **kw)
+
+    def polygon(self, pts, **kw):
+        return self._d.polygon(self._pts(pts), **kw)
+
+    def __getattr__(self, name):
+        return getattr(self._d, name)
 
 
 # --------------------------------------------------------------------------
 # Canvas
 # --------------------------------------------------------------------------
+RAIL_W = 20          # the cream rail, always on the left edge
+RAIL_INK = ACCENT_DEEP
+
+
 class Slide:
     def __init__(self, bg: str = BG):
-        self.img = Image.new("RGBA", (W, H), bg)
-        self.d = ImageDraw.Draw(self.img)
+        self.img = Image.new("RGBA", (DW, DH), bg)
+        self.d = ScaledDraw(ImageDraw.Draw(self.img), SS)
+        # One rail, left edge, every slide — it never alternates or moves.
+        self.d.rectangle([0, 0, RAIL_W, 900], fill=RAIL_INK)
 
     def text(self, xy, s, size=24, color=TEXT, weight=400, mono=False, anchor="la", spacing=6):
         self.d.text(xy, s, font=f(size, weight, mono), fill=color, anchor=anchor,
@@ -117,19 +171,27 @@ class Slide:
         return self
 
     def paste(self, im, xy):
-        self.img.paste(im, (int(xy[0]), int(xy[1])), im)
+        self.img.paste(im, (int(xy[0] * SS), int(xy[1] * SS)), im)
         return self
 
     def logo(self, slug, xy, size, color=TEXT_DIM):
         import svgrender
 
-        p = HERE / "logo_png" / f"{slug}.png"
+        if not (HERE / "logos" / f"{slug}.svg").exists():
+            return self
+        im = svgrender.render_svg((HERE / "logos" / f"{slug}.svg").read_text(),
+                                  int(size * SS), color)
+        return self.paste(im, xy)
+
+    def brand(self, xy, size):
+        """The CyberSyn badge, cropped and keyed out of its tile."""
+        p = HERE / "brand" / "cybersyn-mark.png"
         if not p.exists():
             return self
         im = Image.open(p).convert("RGBA")
-        im = svgrender.render_svg((HERE / "logos" / f"{slug}.svg").read_text(), size, color)
-        self.paste(im, xy)
-        return self
+        w = int(size * SS)
+        h = int(im.height * (w / im.width))
+        return self.paste(im.resize((w, h), Image.LANCZOS), xy)
 
     def chip(self, b, text, color=TEXT_DIM, fill=SURFACE2, size=22, weight=500,
              outline=BORDER, pad=18, radius=14, mono=False):
@@ -160,7 +222,7 @@ def wrap(d: ImageDraw.ImageDraw, s: str, font, max_w: int) -> list[str]:
     words, lines, cur = s.split(), [], ""
     for w in words:
         t = (cur + " " + w).strip()
-        if d.textlength(t, font=font) <= max_w:
+        if d.textlength(t, font=font) <= max_w * SS:
             cur = t
         else:
             if cur:
@@ -190,7 +252,9 @@ def shot(name: str) -> Image.Image:
 
 def framed(img: Image.Image, bw: int, bh: int, radius=20, frame=SURFACE,
            outline=BORDER, width=3) -> Image.Image:
-    """Fit `img` inside a bw x bh frame, centred, with a border."""
+    """Fit `img` inside a bw x bh frame (1600-space), centred, with a border."""
+    bw, bh = bw * SS, bh * SS
+    radius, width = radius * SS, width * SS
     s = min((bw - 2 * width) / img.width, (bh - 2 * width) / img.height)
     nw, nh = int(img.width * s), int(img.height * s)
     im = img.resize((nw, nh), Image.LANCZOS)
@@ -237,12 +301,13 @@ def terminal(sl: Slide, box, lines, title="terminal", prompt="$"):
 # ==========================================================================
 def s_title():
     sl = Slide()
-    sl.rect([0, 0, W, 8], ACCENT_DEEP)
-    import svgrender
-    shield = svgrender.render_file(HERE / "logos" / "x.svg", 1, TEXT)  # warm cache
-    # CyberSyn mark: use the app's shield path
-    mark = _shield(170)
-    sl.paste(mark, (MARGIN, 210))
+    sl.brand((MARGIN, 200), 190)
+    sl.text((MARGIN, 428), "NETCOMPANY ATHENS HACKATHON 2026", size=22, color=TEXT_MUTED, weight=500)
+    sl.text((MARGIN, 478), "CyberSyn", size=96, color=TEXT_STRONG, weight=600)
+    sl.text((MARGIN, 588), "an AI security gateway", size=30, color=TEXT_DIM)
+    sl.line([(MARGIN, 668), (MARGIN + 620, 668)], fill=BORDER, width=2)
+    sl.text((MARGIN, 698), "CYBERSYN ATTICA", size=20, color=TEXT_MUTED, weight=500, mono=True)
+    return sl
     sl.text((MARGIN, 420), "NETCOMPANY ATHENS HACKATHON 2026", size=22, color=TEXT_MUTED, weight=500)
     sl.text((MARGIN, 470), "CyberSyn", size=96, color=TEXT_STRONG, weight=600)
     sl.text((MARGIN, 580), "an AI security gateway", size=30, color=TEXT_DIM)
@@ -251,17 +316,8 @@ def s_title():
     return sl
 
 
-def _shield(size: int) -> Image.Image:
-    import svgrender
-    svg = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">'
-           '<path d="M12 3l7 3v5.5c0 4.6-3.1 8.4-7 9.5-3.9-1.1-7-4.9-7-9.5V6l7-3z"/>'
-           '<path d="M9 12l2 2 4-4"/></svg>')
-    return svgrender.render_svg(svg, size, ACCENT)
-
-
 def s_section(num, title, sub):
     sl = Slide()
-    sl.rect([0, 0, 20, H], ACCENT_DEEP)
     sl.text((MARGIN + 40, 300), num, size=150, color=SURFACE4, weight=600)
     sl.text((MARGIN + 40, 452), title, size=58, color=TEXT_STRONG, weight=600)
     sl.text((MARGIN + 40, 540), sub, size=24, color=TEXT_MUTED)
@@ -270,7 +326,6 @@ def s_section(num, title, sub):
 
 def s_statement(big, small=None, big_size=72, accent=False):
     sl = Slide()
-    sl.rect([0, 0, 20, H], ACCENT_DEEP)
     y = 330
     for ln in wrap(sl.d, big, f(big_size, 600), 1300):
         sl.text((MARGIN + 40, y), ln, size=big_size,
@@ -299,11 +354,11 @@ def s_two_col(left_title, left_lines, right_title, right_lines, y=250):
 
 def s_image(im, caption=None, cap_color=TEXT_MUTED, y=170, h=600, bw=None):
     sl = Slide()
-    s = min((W - 2 * MARGIN) / im.width, h / im.height)
+    s = min((W - 2 * MARGIN) / im.width, h / im.height) * SS
     im = im.resize((int(im.width * s), int(im.height * s)), Image.LANCZOS)
-    sl.paste(im, ((W - im.width) // 2, y))
+    sl.paste(im, ((W - im.width / SS) // 2, y))
     if caption:
-        sl.ctext((W / 2, y + im.height + 44), caption, size=22, color=cap_color)
+        sl.ctext((W / 2, y + im.height / SS + 44), caption, size=22, color=cap_color)
     return sl
 
 
@@ -510,13 +565,11 @@ def flow() -> Image.Image:
 
 def s_end():
     sl = Slide()
-    sl.rect([0, 0, W, 8], ACCENT_DEEP)
-    mark = _shield(150)
-    sl.paste(mark, (W / 2 - 75, 250))
-    sl.ctext((W / 2, 470), "Thanks.", size=88, color=ACCENT, weight=600)
-    sl.ctext((W / 2, 590), "Made for NETCOMPANY ATHENS HACKATHON 2026",
+    sl.brand((W / 2 - 84, 240), 168)
+    sl.ctext((W / 2, 480), "Thanks.", size=88, color=ACCENT, weight=600)
+    sl.ctext((W / 2, 600), "Made for NETCOMPANY ATHENS HACKATHON 2026",
              size=24, color=TEXT_DIM)
-    sl.ctext((W / 2, 634), "by CYBERSYN ATTICA", size=24, color=TEXT_MUTED)
+    sl.ctext((W / 2, 644), "by CYBERSYN ATTICA", size=24, color=TEXT_MUTED)
     return sl
 
 
@@ -585,15 +638,8 @@ def build():
          ("Scanner 3 — ", "attack patterns plus a zero-shot classifier.")],
         kicker="03 · THREE SCANNERS")
 
-    # ---- anatomy ------------------------------------------------------
-    add("13_section_anatomy", s_section, "04", "Anatomy of a prompt",
-        "what happens in the 45 seconds")
-    add("14_flow", s_image, flow(), "block → warn → redact → allow", y=170, h=600)
-    add("15_budget", s_big_number, "45s", "the screening budget",
-        "180s ceiling, then fail closed", color=ACCENT)
-
     # ---- actions ------------------------------------------------------
-    add("16_section_actions", s_section, "05", "Four actions",
+    add("16_section_actions", s_section, "04", "Four actions",
         "block, warn, redact, allow")
     add("17_four_cards", s_card_row, [
         dict(title="Block", color=DANGER, lines=[("bad", "never sent"), ("dim", "admin can release")]),
@@ -607,7 +653,7 @@ def build():
         kicker="05 · FOUR ACTIONS")
 
     # ---- running ------------------------------------------------------
-    add("19_section_running", s_section, "06", "Running it", "Docker, or native")
+    add("19_section_running", s_section, "05", "Running it", "Docker, or native")
     add("20_docker", s_terminal, "Docker, the recommended way",
         [("cmd", "git clone https://github.com/JohannSSK/CyberSyn.git"),
          ("cmd", "cd CyberSyn"),
@@ -627,7 +673,7 @@ def build():
     add("23_login", s_screenshot, "Login-Page.png", ("06 · RUNNING IT", "the sign-in page"))
 
     # ---- backend ------------------------------------------------------
-    add("24_section_backend", s_section, "07", "Under the hood",
+    add("24_section_backend", s_section, "06", "Under the hood",
         "Flask, Gunicorn, SQLite, Fernet")
     add("25_arch", s_image, arch(), None, y=190, h=620)
     add("26_backend_cards", s_card_row, [
@@ -642,7 +688,7 @@ def build():
         kicker="07 · UNDER THE HOOD")
 
     # ---- providers ----------------------------------------------------
-    add("28_section_providers", s_section, "08", "Bring your own model",
+    add("28_section_providers", s_section, "07", "Bring your own model",
         "LiteLLM, twelve providers")
     add("29_provider_logos", s_logo_grid, "08 · PROVIDERS",
         ["anthropic", "deepseek", "googlegemini", "mistralai", "ollama",
@@ -655,7 +701,7 @@ def build():
         kicker="08 · PROVIDERS")
 
     # ---- team ---------------------------------------------------------
-    add("32_section_team", s_section, "09", "How a team uses it",
+    add("32_section_team", s_section, "08", "How a team uses it",
         "administrators and members")
     add("33_roles", s_card_row, [
         dict(title="Administrator", color=ACCENT,
@@ -675,7 +721,7 @@ def build():
         ("05 · FOUR ACTIONS", "when a prompt is blocked"))
 
     # ---- shadow AI ----------------------------------------------------
-    add("38_section_shadow", s_section, "10", "Shadow AI discovery",
+    add("38_section_shadow", s_section, "09", "Shadow AI discovery",
         "CSV, proxy and DNS logs")
     add("39_what_if", s_statement, "What if they just… use the website?",
         "Import the logs. See who talked to what.", big_size=52)
@@ -709,7 +755,7 @@ def build():
         "No real data needed for the demo.", big_size=48)
 
     # ---- statistics ---------------------------------------------------
-    add("44_section_stats", s_section, "11", "Statistics and audit",
+    add("44_section_stats", s_section, "10", "Statistics and audit",
         "metadata, never message text")
     add("45_team_stats", s_screenshot, "Team-stats.png",
         ("11 · STATISTICS", "the team view"))
@@ -726,7 +772,7 @@ def build():
         kicker="11 · STATISTICS")
 
     # ---- proxy --------------------------------------------------------
-    add("49_section_proxy", s_section, "12", "An OpenAI-compatible proxy",
+    add("49_section_proxy", s_section, "11", "An OpenAI-compatible proxy",
         "any client, one base URL")
     add("50_proxy_term", s_terminal, "Point any client at /v1",
         [("cmd", "curl http://localhost:5000/v1/chat/completions \\"),
@@ -740,7 +786,7 @@ def build():
         kicker="12 · PROXY")
 
     # ---- security -----------------------------------------------------
-    add("52_section_security", s_section, "13", "Security and privacy",
+    add("52_section_security", s_section, "12", "Security and privacy",
         "fail-closed by default")
     add("53_security_table", s_table, "How CyberSyn handles it",
         ["Area", "What it does"],
@@ -756,7 +802,7 @@ def build():
         "Not sent. Never sent.", big_size=50, accent=True)
 
     # ---- extras -------------------------------------------------------
-    add("55_section_extras", s_section, "14", "And the extras",
+    add("55_section_extras", s_section, "13", "And the extras",
         "bilingual, responsive, searchable")
     add("56_also_in_box", s_bullets, "Also in the box",
         ["English and Greek, switched at runtime.",
@@ -771,7 +817,7 @@ def build():
         kicker="14 · EXTRAS")
 
     # ---- links --------------------------------------------------------
-    add("58_section_links", s_section, "15", "Good to know", "where to look next")
+    add("58_section_links", s_section, "14", "Good to know", "where to look next")
     add("59_useful_places", s_table, "Useful places",
         ["Link", "What is there"],
         [["API_Examples.md", "the full JSON API, with runnable examples"],
