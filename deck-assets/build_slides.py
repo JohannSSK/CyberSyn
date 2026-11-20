@@ -491,14 +491,18 @@ def s_table(title, headers, rows, y=240, col_w=None, size=23, head_size=21):
 # Diagrams
 # --------------------------------------------------------------------------
 def arch() -> Image.Image:
-    """Browser <-> Flask <-> 3 scanners <-> provider, plus SQLite."""
+    """Browser <-> Flask <-> 3 scanners <-> provider, plus SQLite.
+
+    Drawn on a 2x canvas through ScaledDraw, so the shared f() fonts land at
+    their intended size (previously the 1x canvas made every label double).
+    """
     w, h = 1440, 700
-    img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    d = ImageDraw.Draw(img)
+    img = Image.new("RGBA", (w * SS, h * SS), (0, 0, 0, 0))
+    d = ScaledDraw(ImageDraw.Draw(img), SS)
 
     def node(cx, cy, rw, rh, fill, outline, label, sub=None, color=TEXT_STRONG):
         d.rounded_rectangle([cx - rw / 2, cy - rh / 2, cx + rw / 2, cy + rh / 2],
-                            radius=18, fill=fill, outline=outline, width=3)
+                            radius=18, fill=fill, outline=outline, width=6)
         d.text((cx, cy - (10 if sub else 0)), label, font=f(30, 600), fill=color, anchor="mm")
         if sub:
             d.text((cx, cy + 30), sub, font=f(19), fill=TEXT_MUTED, anchor="mm")
@@ -522,8 +526,8 @@ def arch() -> Image.Image:
     arrow(700, y, 800, y)
     arrow(1100, y, 1176, y)
     arrow(540, y + 66, 540, 512)
-    d.text((330, y - 34), "HTTP", font=f(18), fill=TEXT_MUTED)
-    d.text((1120, y - 34), "LiteLLM", font=f(18), fill=TEXT_MUTED)
+    d.text((303, y - 34), "HTTP", font=f(18), fill=TEXT_MUTED)
+    d.text((1103, y - 34), "LiteLLM", font=f(18), fill=TEXT_MUTED)
     d.text((560, 470), "chats · policy · logs", font=f(17), fill=TEXT_MUTED)
     return img
 
@@ -643,7 +647,7 @@ def build():
     add("22_arch", s_image, arch(), None, y=190, h=620)
     add("23_backend_cards", s_card_row, [
         dict(title="Web app", color=ACCENT_DEEP, lines=[("dot", "Flask, UI and JSON API"), ("dim", "one process")]),
-        dict(title="Server", color=ACCENT_DEEP, lines=[("dot", "Gunicorn 1 worker × 8 threads"), ("dim", "models stay warm")]),
+        dict(title="Server", color=ACCENT_DEEP, lines=[("dot", "Gunicorn 1×8 threads"), ("dim", "models stay warm")]),
         dict(title="Storage", color=ACCENT_DEEP, lines=[("dot", "SQLite, no external DB"), ("dim", "chats · policy · logs")]),
         dict(title="Secrets", color=ACCENT_DEEP, lines=[("dot", "Fernet, separate key file"), ("dim", "keys never shown again")]),
     ], y=250, h=400)
