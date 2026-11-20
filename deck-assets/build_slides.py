@@ -571,13 +571,13 @@ def build():
     add("11_three_cards", s_card_row, [
         dict(title="1 · Personal & Greek", color=ACCENT_DEEP,
              lines=[("dot", "AFM, checksum-validated"), ("dot", "AMKA · passports · ID cards"),
-                    ("dot", "phones · emails · IBANs"), ("dot", "company and person names")]),
+                    ("dot", "phones · emails · IBANs"), ("dot", "names")]),
         dict(title="2 · Company context", color=ACCENT_DEEP,
              lines=[("dot", "credentials and secrets"), ("dot", "contracts and NDAs"),
                     ("dot", "financials · payroll · CRM"), ("dot", "source code")]),
         dict(title="3 · Prompt injection", color=ACCENT_DEEP,
              lines=[("dot", "instruction overrides"), ("dot", "obfuscated payloads"),
-                    ("dot", "attacks hidden in comments"), ("dim", "regex + zero-shot")]),
+                    ("dot", "attacks hidden in comments")]),
     ], y=250, h=430)
     add("12_how_each_thinks", s_bullets, "How each one thinks",
         [("Scanner 1 — ", "regex rules plus English and Greek language models."),
@@ -681,6 +681,21 @@ def build():
         "Import the logs. See who talked to what.", big_size=52)
     add("40_shadow_dash", s_screenshot, "Shadow-Ai.png",
         ("10 · SHADOW AI", "the discovery dashboard"))
+    add("41b_tool_inventory", s_table, "The tool inventory",
+        ["Tool", "Vendor", "Risk", "Status"],
+        [["OpenAI / ChatGPT", "OpenAI", "48", "+approved"],
+         ["Anthropic / Claude", "Anthropic", "44", "+approved"],
+         ["Google Gemini", "Google", "55", "+approved"],
+         ["DeepSeek", "DeepSeek", "91", "!unapproved"],
+         ["xAI Grok", "xAI", "82", "!unapproved"],
+         ["Ollama (local)", "Ollama", "10", "+approved"]],
+        y=230, col_w=[420, 320, 160, 440], size=23)
+    add("41c_reports", s_bullets, "Reports",
+        ["Filter by 7 days, 30 days or all time.",
+         "Narrow by status, team or data category.",
+         "Export as CSV or JSON.",
+         "Ranked team view answers: who sent client data?"],
+        kicker="10 · SHADOW AI")
     add("41_statuses", s_card_row, [
         dict(title="Approved", color=SUCCESS, lines=[("ok", "reachable through the gateway")]),
         dict(title="Restricted", color=WARN, lines=[("warn", "reachable, direct use flagged")]),
@@ -729,12 +744,12 @@ def build():
         "fail-closed by default")
     add("53_security_table", s_table, "How CyberSyn handles it",
         ["Area", "What it does"],
-        [["Secrets", "Fernet-encrypted; key stored separately from the DB"],
+        [["Secrets", "Fernet-encrypted, key stored separately"],
          ["Passwords", "salted hashes; uniform errors; rate-limited"],
-         ["Sessions", "HttpOnly, SameSite; only hashes stored; revoked on change"],
+         ["Sessions", "HttpOnly, SameSite, hashed, revoked on change"],
          ["Fail-closed", "!a scanner failure refuses the prompt"],
          ["Audit", "metadata only — never the prompt"],
-         ["Isolation", "+members reach only their own chats and settings"]],
+         ["Isolation", "+members see only their own chats"]],
         y=230, col_w=[280, 1060], size=22)
     add("54_fail_closed", s_statement,
         "If a check cannot run, the prompt is refused.",
