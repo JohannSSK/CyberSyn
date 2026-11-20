@@ -692,7 +692,7 @@ def build():
         "Import the logs. See who talked to what.", big_size=52)
     add("37_shadow_dash", s_screenshot, "Shadow-Ai.png",
         ("09 · SHADOW AI", "the discovery dashboard"))
-    add("38b_tool_inventory", s_table, "The tool inventory",
+    add("38_tool_inventory", s_table, "The tool inventory",
         ["Tool", "Vendor", "Risk", "Status"],
         [["OpenAI / ChatGPT", "OpenAI", "48", "+approved"],
          ["Anthropic / Claude", "Anthropic", "44", "+approved"],
@@ -701,7 +701,7 @@ def build():
          ["xAI Grok", "xAI", "82", "!unapproved"],
          ["Ollama (local)", "Ollama", "10", "+approved"]],
         y=230, col_w=[420, 320, 160, 440], size=23)
-    add("39c_reports", s_bullets, "Reports",
+    add("39_reports", s_bullets, "Reports",
         ["Filter by 7 days, 30 days or all time.",
          "Narrow by status, team or data category.",
          "Export as CSV or JSON.",
