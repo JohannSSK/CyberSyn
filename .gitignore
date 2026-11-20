@@ -30,3 +30,6 @@ secrets/
 
 # Generated submission bundles (see tools/ to rebuild)
 *.patch
+
+# Arena connector downloads (exported deck files)
+google_drive/
