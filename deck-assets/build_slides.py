@@ -411,8 +411,19 @@ def s_logo_grid(title, slugs, cols=6, size=74, y=250, cw=220, ch=150, color=TEXT
         yy = y + r * ch
         sl.box([x, yy, x + cw - 20, yy + ch - 20], radius=16, fill=SURFACE,
                outline=BORDER, width=2)
-        sl.logo(slug, (x + (cw - 20) / 2 - size / 2, yy + 22), size, color)
-        sl.ctext((x + (cw - 20) / 2, yy + ch - 58), slug, size=17, color=TEXT_MUTED)
+        # Centre the logo's ink (not its square canvas) in the space above the
+        # label, so tall marks clear the label and wide ones stay in the box.
+        import svgrender
+        im = svgrender.render_svg((HERE / "logos" / f"{slug}.svg").read_text(),
+                                  int(size * SS), color)
+        bb = im.getchannel("A").getbbox()
+        iw, ih = bb[2] - bb[0], bb[3] - bb[1]
+        cx = x + (cw - 20) / 2
+        top = yy + 16
+        bottom = yy + ch - 20 - 64          # leave room for the label
+        sl.paste(im, (cx - (bb[0] + iw / 2) / SS,
+                      top + (bottom - top - ih / SS) / 2 - bb[1] / SS))
+        sl.ctext((cx, yy + ch - 58), slug, size=17, color=TEXT_MUTED)
     return sl
 
 
@@ -665,7 +676,7 @@ def build():
     add("27_byok", s_statement, "You bring the key. CyberSyn brings the guardrail.",
         None, big_size=50)
     add("28_seat_model", s_bullets, "How a seat gets a model",
-        ["Settings → paste an API key.", "Pick a model from the provider's list.",
+        ["Settings > paste an API key.", "Pick a model from the provider's list.",
          "Save. The key is encrypted at rest."],
         kicker="07 · PROVIDERS")
 
