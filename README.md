@@ -65,7 +65,7 @@ CyberSyn does not provide a model — you bring your own. In **Settings**, paste
 - Ollama, for models running on your own machine
 - Any OpenAI-compatible endpoint, through a custom base URL
 
-CyberSyn detects the provider from the key format, or you can choose it yourself. Saved keys are encrypted at rest and never shown again;
+CyberSyn detects the provider from the key format, or you can choose it yourself. Saved keys are encrypted at rest and never shown again.
 
 ```mermaid
 flowchart TB
@@ -151,6 +151,8 @@ curl http://localhost:5000/v1/chat/completions \
   -d '{"model":"default","messages":[{"role":"user","content":"Hello"}]}'
 ```
 
+The seat token is issued to a member by the administrator, and is the same credential used for every other member endpoint. The full JSON API — accounts, identifiers, providers, chats and admin operations — is documented with runnable examples in [`API_Examples.md`](API_Examples.md).
+
 ## Security and privacy
 
 | Area | How CyberSyn handles it |
@@ -169,10 +171,16 @@ The interface is available in **English and Greek**. A language toggle in the he
 ## Additional features
 
 - Most blocks are bypassable with admin credentials.
-- Image parser, no face recognition. Simple.
-- Ai context (in messages) can be changed by admin for each team member individually. Max is 10 messages.
+- AI context (in messages) can be changed by admin for each team member individually. Max is 10 messages.
 - Modern responsive and minimalistic UI that's easy to use for employees, and powerful when mastered by admins.
 - Multiple chats per Team-member.
 - Search in chat for keywords.
+
+## Useful places
+
+- [`API_Examples.md`](API_Examples.md) — the full JSON API with runnable examples for every endpoint.
+- [`includes/constants.json`](includes/constants.json) — the route registry and the feature flags; editing it is enough to change host, port and paths.
+- [`src/templates/help.html`](src/templates/help.html) — the in-app help page, including the full third-party licence list.
+- [`LICENSE`](LICENSE) — MIT, CyberSyn Attica 2026.
 
 This project was made for NETCOMPANY ATHENS HACKATHON 2026 By CYBERSYN ATTICA
